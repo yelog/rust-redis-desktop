@@ -2,6 +2,8 @@
 
 A Redis desktop manager written in Rust.
 
+> In experimental and development stages, please do not use in production environments
+
 # ✨ Features
 
 - 🗄️ **Database Management**: Easily connect to and manage multiple Redis instances.
@@ -19,14 +21,14 @@ A Redis desktop manager written in Rust.
 
 # 📦 Installation
 
-To install `rust-redis-desktop`, you can download the pre-built binaries from the [releases page](https://github.com/yourusername/rust-redis-desktop/releases) or build from source.
+To install `rust-redis-desktop`, you can download the pre-built binaries from the [releases page](https://github.com/yelog/rust-redis-desktop/releases) or build from source.
 
 ### Building from Source
 
 1. Ensure you have Rust installed. If not, you can install it from [rustup.rs](https://rustup.rs/).
 2. Clone the repository:
     ```sh
-    git clone https://github.com/yourusername/rust-redis-desktop.git
+    git clone https://github.com/yelog/rust-redis-desktop.git
     cd rust-redis-desktop
     ```
 3. Build the project:
@@ -61,12 +63,12 @@ default_connection = "redis://localhost:6379"
 
 # 🤝 Contributing
 
-Contributions are welcome! Please read the [CONTRIBUTING.md](https://github.com/yourusername/rust-redis-desktop/blob/main/CONTRIBUTING.md) for guidelines on how to contribute to this project.
+Contributions are welcome! Please read the [CONTRIBUTING.md](https://github.com/yelog/rust-redis-desktop/blob/main/CONTRIBUTING.md) for guidelines on how to contribute to this project.
 
 # 🔑 License
 
-**rust-redis-desktop** is licensed under the `MIT License`. See the [LICENSE](https://github.com/yourusername/rust-redis-desktop/blob/main/LICENSE) file for more details.
+**rust-redis-desktop** is licensed under the `MIT License`. See the [LICENSE](https://github.com/yelog/rust-redis-desktop/blob/main/LICENSE) file for more details.
 
 # 📞 Contact
 
-For any questions or feedback, please open an issue on GitHub or contact us at [your-email@example.com](mailto:your-email@example.com).
+For any questions or feedback, please open an issue on GitHub or contact us at [yelogeek@gmail.com](mailto:yelogeek@gmail.com).
