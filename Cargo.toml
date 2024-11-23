@@ -1,0 +1,10 @@
+[package]
+name = "rust-redis-desktop"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+floem = "0.2.0"
+syntect = "5.2.0"
+lazy_static = "1.4.0"
+
