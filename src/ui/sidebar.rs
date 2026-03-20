@@ -13,6 +13,7 @@ pub fn Sidebar(
     on_delete_connection: EventHandler<Uuid>,
     on_reconnect_connection: EventHandler<Uuid>,
     on_close_connection: EventHandler<Uuid>,
+    on_open_settings: EventHandler<()>,
 ) -> Element {
     let mut context_menu = use_signal(|| None::<(Uuid, (i32, i32))>);
     let mut hover_edit = use_signal(|| false);
@@ -135,6 +136,35 @@ pub fn Sidebar(
                             }
                         }
                     }
+                }
+            }
+
+            div {
+                margin_top: "12px",
+                padding_top: "12px",
+                border_top: "1px solid #3c3c3c",
+
+                button {
+                    width: "100%",
+                    padding: "10px",
+                    background: "#2d2d2d",
+                    color: "#888",
+                    border: "none",
+                    border_radius: "4px",
+                    cursor: "pointer",
+                    font_size: "13px",
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "center",
+                    gap: "8px",
+                    onclick: move |_| on_open_settings.call(()),
+
+                    onmouseenter: move |evt: Event<MouseData>| {
+                        let target = evt.data().client_coordinates();
+                        let _ = target;
+                    },
+
+                    "⚙️ 设置"
                 }
             }
         }

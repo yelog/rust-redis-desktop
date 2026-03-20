@@ -1,6 +1,8 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
-use crate::ui::{ConnectionForm, KeyBrowser, ServerInfoPanel, Sidebar, Terminal, ValueViewer};
+use crate::ui::{
+    ConnectionForm, KeyBrowser, ServerInfoPanel, SettingsDialog, Sidebar, Terminal, ValueViewer,
+};
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -32,6 +34,7 @@ pub fn App() -> Element {
     let mut connection_versions = use_signal(HashMap::<Uuid, u32>::new);
     let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
     let mut app_settings = use_signal(AppSettings::default);
+    let mut show_settings = use_signal(|| false);
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -48,12 +51,9 @@ pub fn App() -> Element {
         let _ = document::eval("document.body.style.margin = '0'; document.body.style.padding = '0'; document.documentElement.style.margin = '0'; document.documentElement.style.padding = '0';");
     });
 
-    let on_settings_change = {
+    let save_settings = {
         let config_storage = config_storage.clone();
-        move |interval: u32| {
-            let settings = AppSettings {
-                auto_refresh_interval: interval,
-            };
+        move |settings: AppSettings| {
             app_settings.set(settings.clone());
             if let Some(storage) = config_storage.read().as_ref() {
                 let _ = storage.save_settings(&settings);
@@ -68,6 +68,13 @@ pub fn App() -> Element {
             background: "#1e1e1e",
             color: "white",
             overflow: "hidden",
+            onkeydown: move |e| {
+                let key = e.data().key();
+                let modifiers = e.data().modifiers();
+                if key == Key::Character(",".to_string()) && modifiers.contains(Modifiers::SUPER) {
+                    show_settings.set(true);
+                }
+            },
 
             Sidebar {
                 connections: connections(),
@@ -180,6 +187,7 @@ pub fn App() -> Element {
                         }
                     });
                 },
+                on_open_settings: move |_| show_settings.set(true),
             }
 
             if let Some(conn_id) = selected_connection() {
@@ -287,7 +295,6 @@ pub fn App() -> Element {
                                         connection_pool: pool,
                                         connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
                                         auto_refresh_interval: app_settings.read().auto_refresh_interval,
-                                        on_settings_change: on_settings_change,
                                     }
                                 }
                             } else {
@@ -374,6 +381,19 @@ pub fn App() -> Element {
                     });
                 },
                 on_cancel: move |_| form_mode.set(None),
+            }
+        }
+
+        if show_settings() {
+            SettingsDialog {
+                settings: app_settings.read().clone(),
+                on_save: {
+                    let mut save_settings = save_settings.clone();
+                    move |settings: AppSettings| {
+                        save_settings(settings);
+                    }
+                },
+                on_close: move |_| show_settings.set(false),
             }
         }
     }

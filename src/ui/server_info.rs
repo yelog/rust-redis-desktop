@@ -573,14 +573,12 @@ pub fn ServerInfoPanel(
     connection_pool: ConnectionPool,
     connection_version: u32,
     auto_refresh_interval: u32,
-    on_settings_change: EventHandler<u32>,
 ) -> Element {
     let server_info = use_signal(|| None::<ServerInfo>);
     let raw_info = use_signal(String::new);
     let loading = use_signal(|| true);
     let error_msg = use_signal(String::new);
     let mut refresh_trigger = use_signal(|| 0u32);
-    let mut show_settings = use_signal(|| false);
     
     let pool = connection_pool.clone();
     
@@ -658,21 +656,7 @@ pub fn ServerInfoPanel(
                 div {
                     display: "flex",
                     justify_content: "flex_end",
-                    gap: "8px",
                     margin_bottom: "16px",
-                    
-                    button {
-                        padding: "6px 12px",
-                        background: if auto_refresh_interval > 0 { "#0e639c" } else { "#3c3c3c" },
-                        color: "white",
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "12px",
-                        onclick: move |_| show_settings.set(!show_settings()),
-                        
-                        "⚙️ 设置"
-                    }
                     
                     button {
                         padding: "6px 12px",
@@ -685,60 +669,6 @@ pub fn ServerInfoPanel(
                         onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
                         
                         if is_loading { "刷新中..." } else { "🔄 刷新" }
-                    }
-                }
-                
-                if show_settings() {
-                    div {
-                        padding: "12px",
-                        background: "#252526",
-                        border: "1px solid #3c3c3c",
-                        border_radius: "8px",
-                        margin_bottom: "16px",
-                        
-                        div {
-                            color: "#888",
-                            font_size: "12px",
-                            margin_bottom: "8px",
-                            
-                            "自动刷新间隔"
-                        }
-                        
-                        div {
-                            display: "flex",
-                            gap: "8px",
-                            align_items: "center",
-                            
-                            select {
-                                padding: "6px 10px",
-                                background: "#1e1e1e",
-                                border: "1px solid #3c3c3c",
-                                border_radius: "4px",
-                                color: "white",
-                                font_size: "13px",
-                                value: "{auto_refresh_interval}",
-                                onchange: move |e| {
-                                    if let Ok(v) = e.value().parse() {
-                                        on_settings_change.call(v);
-                                    }
-                                },
-                                
-                                option { value: "0", "关闭" }
-                                option { value: "5", "5 秒" }
-                                option { value: "10", "10 秒" }
-                                option { value: "30", "30 秒" }
-                                option { value: "60", "60 秒" }
-                            }
-                            
-                            if auto_refresh_interval > 0 {
-                                span {
-                                    color: "#4ec9b0",
-                                    font_size: "12px",
-                                    
-                                    "每 {auto_refresh_interval} 秒自动刷新"
-                                }
-                            }
-                        }
                     }
                 }
                 
