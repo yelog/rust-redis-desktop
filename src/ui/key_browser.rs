@@ -1,7 +1,9 @@
 use dioxus::prelude::*;
 use crate::connection::ConnectionPool;
 use crate::redis::{TreeBuilder, TreeNode};
+use crate::ui::lazy_tree_node::{LazyTreeNode, TreeState};
 use uuid::Uuid;
+use std::collections::HashSet;
 
 #[component]
 pub fn KeyBrowser(
@@ -14,6 +16,7 @@ pub fn KeyBrowser(
     let mut search_pattern = use_signal(String::new);
     let mut loading = use_signal(|| false);
     let mut keys_count = use_signal(|| 0usize);
+    let mut tree_state = use_signal(TreeState::default);
     
     let load_keys = {
         let pool = connection_pool.clone();
@@ -27,22 +30,18 @@ pub fn KeyBrowser(
             
             spawn(async move {
                 loading.set(true);
-                tree_nodes.set(Vec::new()); // Clear before loading
+                tree_nodes.set(Vec::new());
                 
                 match pool.scan_keys(&pattern, 500).await {
                     Ok(keys) => {
                         keys_count.set(keys.len());
                         
-                        // Build tree in chunks if many keys
-                        if keys.len() > 10000 {
-                            let builder = TreeBuilder::new(":");
-                            let tree = builder.build(keys);
-                            tree_nodes.set(tree);
-                        } else {
-                            let builder = TreeBuilder::new(":");
-                            let tree = builder.build(keys);
-                            tree_nodes.set(tree);
-                        }
+                        let builder = TreeBuilder::new(":");
+                        let tree = builder.build(keys);
+                        tree_nodes.set(tree);
+                        
+                        // Reset tree state
+                        tree_state.set(TreeState::default());
                     }
                     Err(e) => {
                         tracing::error!("Failed to load keys: {}", e);
@@ -55,6 +54,15 @@ pub fn KeyBrowser(
     };
     
     use_effect(load_keys.clone());
+    
+    let toggle_expand = move |path: String| {
+        let mut state = tree_state.write();
+        if state.expanded_nodes.contains(&path) {
+            state.expanded_nodes.remove(&path);
+        } else {
+            state.expanded_nodes.insert(path);
+        }
+    };
     
     rsx! {
         div {
@@ -127,7 +135,8 @@ pub fn KeyBrowser(
             
             div {
                 flex: "1",
-                overflow: "hidden",
+                overflow_y: "auto",
+                padding: "4px 0",
                 
                 if tree_nodes.read().is_empty() {
                     if loading() {
@@ -148,11 +157,25 @@ pub fn KeyBrowser(
                         }
                     }
                 } else {
-                    crate::ui::VirtualKeyList {
-                        nodes: tree_nodes(),
-                        selected_key: selected_key(),
-                        on_select: on_key_select.clone(),
-                        on_toggle: move |_path| {},
+                    for node in tree_nodes.read().iter() {
+                        LazyTreeNode {
+                            key: "{node.full_path}",
+                            node: node.clone(),
+                            depth: 0,
+                            selected_key: selected_key(),
+                            tree_state: tree_state,
+                            on_select: on_key_select.clone(),
+                            on_expand: {
+                                move |path: String| {
+                                    let mut state = tree_state.write();
+                                    if state.expanded_nodes.contains(&path) {
+                                        state.expanded_nodes.remove(&path);
+                                    } else {
+                                        state.expanded_nodes.insert(path);
+                                    }
+                                }
+                            },
+                        }
                     }
                 }
             }

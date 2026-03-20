@@ -7,6 +7,7 @@ mod value_viewer;
 mod virtual_key_list;
 mod editable_field;
 mod terminal;
+mod lazy_tree_node;
 
 pub use app::*;
 pub use sidebar::*;
@@ -17,4 +18,5 @@ pub use value_viewer::*;
 pub use virtual_key_list::*;
 pub use editable_field::*;
 pub use terminal::*;
+pub use lazy_tree_node::*;
 pub use sidebar::*;
