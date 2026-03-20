@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ConnectionMode {
+    #[default]
     Direct,
     Cluster,
     Sentinel,
@@ -76,11 +77,18 @@ pub struct ConnectionConfig {
     pub password: Option<String>,
     pub username: Option<String>,
     pub db: u8,
+    #[serde(default)]
     pub connection_timeout: u64,
+    #[serde(default)]
     pub mode: ConnectionMode,
+    #[serde(default)]
     pub ssh: Option<SSHConfig>,
+    #[serde(default)]
     pub ssl: SSLConfig,
+    #[serde(default)]
     pub sentinel: Option<SentinelConfig>,
+    #[serde(default, skip_serializing)]
+    pub use_ssl: bool, // Deprecated, for backward compatibility
 }
 
 impl Default for ConnectionConfig {
@@ -98,6 +106,7 @@ impl Default for ConnectionConfig {
             ssh: None,
             ssl: SSLConfig::default(),
             sentinel: None,
+            use_ssl: false,
         }
     }
 }
