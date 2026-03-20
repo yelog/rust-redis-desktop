@@ -36,6 +36,44 @@ impl ConnectionPool {
         }
     }
     
+    pub async fn scan_keys_with_progress<F>(&self, pattern: &str, batch_size: usize, mut on_batch: F) -> Result<usize>
+    where
+        F: FnMut(usize) + Send,
+    {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            let mut total_count = 0;
+            let mut cursor: u64 = 0;
+            
+            loop {
+                let result: (u64, Vec<String>) = redis::cmd("SCAN")
+                    .arg(cursor)
+                    .arg("MATCH")
+                    .arg(pattern)
+                    .arg("COUNT")
+                    .arg(batch_size)
+                    .query_async(conn)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                
+                cursor = result.0;
+                let batch_len = result.1.len();
+                total_count += batch_len;
+                
+                on_batch(total_count);
+                
+                if cursor == 0 {
+                    break;
+                }
+            }
+            
+            Ok(total_count)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+    
     pub async fn get_key_type(&self, key: &str) -> Result<KeyType> {
         let mut connection = self.connection.lock().await;
         
