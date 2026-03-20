@@ -82,6 +82,9 @@ pub fn ValueViewer(
     let str_val = string_value();
     let hash_val = hash_value();
     let display_key = selected_key.read().clone();
+    let ttl_display = info.as_ref().map(|i| {
+        i.ttl.map(|t| format!("{}s", t)).unwrap_or_else(|| "∞".to_string())
+    });
     
     rsx! {
         div {
@@ -131,9 +134,11 @@ if let Some(ref info) = info {
                                 "Type: {info.key_type}"
                             }
                             
-                            if let Some(ttl) = info.ttl {
-                                span {
-                                    "TTL: {ttl}s"
+                            span {
+                                if let Some(ttl) = ttl_display.as_ref() {
+                                    "TTL: {ttl}"
+                                } else {
+                                    "TTL: ∞"
                                 }
                             }
                         }
