@@ -1,7 +1,7 @@
-use arboard::Clipboard;
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
 use crate::ui::editable_field::EditableField;
+use arboard::Clipboard;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
@@ -21,28 +21,28 @@ fn is_binary_data(data: &[u8]) -> bool {
     if data.is_empty() {
         return false;
     }
-    
+
     if data.len() >= 2 && data[0] == 0xAC && data[1] == 0xED {
         return true;
     }
-    
-    let non_printable_count = data.iter().filter(|&&b| {
-        b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D
-    }).count();
-    
+
+    let non_printable_count = data
+        .iter()
+        .filter(|&&b| b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D)
+        .count();
+
     non_printable_count > data.len() / 10
 }
 
 fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
     match format {
-        BinaryFormat::Hex => {
-            data.iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<Vec<_>>()
-                .join(" ")
-        }
+        BinaryFormat::Hex => data
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<Vec<_>>()
+            .join(" "),
         BinaryFormat::Base64 => {
-            use base64::{Engine as _, engine::general_purpose};
+            use base64::{engine::general_purpose, Engine as _};
             general_purpose::STANDARD.encode(data)
         }
     }
@@ -62,6 +62,81 @@ fn sorted_hash_entries(fields: &HashMap<String, String>) -> Vec<(String, String)
         .collect();
     entries.sort_by(|left, right| left.0.cmp(&right.0));
     entries
+}
+
+#[component]
+fn CopyIcon() -> Element {
+    rsx! {
+        svg {
+            width: "15",
+            height: "15",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "currentColor",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            rect {
+                x: "9",
+                y: "9",
+                width: "13",
+                height: "13",
+                rx: "2",
+                ry: "2",
+            }
+
+            path {
+                d: "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
+            }
+        }
+    }
+}
+
+#[component]
+fn EditIcon() -> Element {
+    rsx! {
+        svg {
+            width: "15",
+            height: "15",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "currentColor",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            path {
+                d: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7",
+            }
+
+            path {
+                d: "M18.375 2.625a1.5 1.5 0 1 1 3 3L12 15l-4 1 1-4Z",
+            }
+        }
+    }
+}
+
+#[component]
+fn DeleteIcon() -> Element {
+    rsx! {
+        svg {
+            width: "15",
+            height: "15",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "currentColor",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            path { d: "M3 6h18" }
+            path { d: "M8 6V4h8v2" }
+            path { d: "M19 6l-1 14H6L5 6" }
+            path { d: "M10 11v6" }
+            path { d: "M14 11v6" }
+        }
+    }
 }
 
 async fn load_key_data(
@@ -100,9 +175,9 @@ async fn load_key_data(
                     .get_string_bytes(&key)
                     .await
                     .map_err(|e| format!("读取字符串值失败: {e}"))?;
-                
+
                 tracing::info!("String value loaded: {} bytes", bytes.len());
-                
+
                 if is_binary_data(&bytes) {
                     is_binary.set(true);
                     let formatted = format_bytes(&bytes, binary_format());
@@ -253,7 +328,11 @@ pub fn ValueViewer(
     let display_key = selected_key.read().clone();
 
     let status_message = hash_status_message();
-    let status_color = if hash_status_error() { "#f87171" } else { "#4ec9b0" };
+    let status_color = if hash_status_error() {
+        "#f87171"
+    } else {
+        "#4ec9b0"
+    };
     let active_hash_action = hash_action();
     let editing_field_name = editing_hash_field();
     let delete_target = deleting_hash_field();
@@ -553,7 +632,7 @@ pub fn ValueViewer(
                                                 }
 
                                                 th {
-                                                    width: "240px",
+                                                    width: "156px",
                                                     padding: "12px",
                                                     color: "#888",
                                                     font_size: "12px",
@@ -938,18 +1017,24 @@ pub fn ValueViewer(
 
                                                             div {
                                                                 display: "flex",
-                                                                gap: "8px",
+                                                                gap: "6px",
                                                                 align_items: "center",
-                                                                flex_wrap: "wrap",
+                                                                flex_wrap: "nowrap",
 
                                                                 button {
-                                                                    padding: "6px 10px",
-                                                                    background: "#2f855a",
-                                                                    color: "white",
-                                                                    border: "none",
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(47, 133, 90, 0.16)",
+                                                                    color: "#68d391",
+                                                                    border: "1px solid rgba(104, 211, 145, 0.28)",
                                                                     border_radius: "6px",
                                                                     cursor: "pointer",
                                                                     disabled: active_hash_action.is_some(),
+                                                                    title: "复制值",
+                                                                    aria_label: "复制值",
                                                                     onclick: {
                                                                         let value = value.clone();
                                                                         move |_| {
@@ -967,17 +1052,23 @@ pub fn ValueViewer(
                                                                         }
                                                                     },
 
-                                                                    "复制值"
+                                                                    CopyIcon {}
                                                                 }
 
                                                                 button {
-                                                                    padding: "6px 10px",
-                                                                    background: "#3182ce",
-                                                                    color: "white",
-                                                                    border: "none",
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(49, 130, 206, 0.18)",
+                                                                    color: "#63b3ed",
+                                                                    border: "1px solid rgba(99, 179, 237, 0.30)",
                                                                     border_radius: "6px",
                                                                     cursor: "pointer",
                                                                     disabled: active_hash_action.is_some(),
+                                                                    title: "编辑 key-value",
+                                                                    aria_label: "编辑 key-value",
                                                                     onclick: {
                                                                         let field = field.clone();
                                                                         let value = value.clone();
@@ -993,15 +1084,18 @@ pub fn ValueViewer(
                                                                         }
                                                                     },
 
-                                                                    "编辑key-value"
+                                                                    EditIcon {}
                                                                 }
 
                                                                 button {
                                                                     width: "32px",
                                                                     height: "32px",
-                                                                    background: "#c53030",
-                                                                    color: "white",
-                                                                    border: "none",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(197, 48, 48, 0.18)",
+                                                                    color: "#f87171",
+                                                                    border: "1px solid rgba(248, 113, 113, 0.30)",
                                                                     border_radius: "6px",
                                                                     cursor: "pointer",
                                                                     disabled: active_hash_action.is_some(),
@@ -1012,8 +1106,9 @@ pub fn ValueViewer(
                                                                         }
                                                                     },
                                                                     title: "删除",
+                                                                    aria_label: "删除",
 
-                                                                    "🗑"
+                                                                    DeleteIcon {}
                                                                 }
                                                             }
                                                         }
