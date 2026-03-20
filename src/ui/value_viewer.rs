@@ -1,20 +1,15 @@
 use dioxus::prelude::*;
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
-use crate::ui::{StringEditor, TTLEditor, KeyActions};
 
 #[component]
 pub fn ValueViewer(
     connection_pool: ConnectionPool,
     selected_key: String,
-    on_key_deleted: EventHandler<()>,
-    on_key_renamed: EventHandler<String>,
 ) -> Element {
     let mut key_info = use_signal(|| None::<KeyInfo>);
     let mut value = use_signal(|| String::new());
     let mut loading = use_signal(|| false);
-    let mut editing = use_signal(|| false);
-    let mut show_ttl_editor = use_signal(|| false);
     
     let key = selected_key.clone();
     let pool = connection_pool.clone();
@@ -87,7 +82,6 @@ pub fn ValueViewer(
             display: "flex",
             flex_direction: "column",
             
-            // Header
             div {
                 padding: "12px 16px",
                 border_bottom: "1px solid #3c3c3c",
@@ -98,7 +92,6 @@ pub fn ValueViewer(
                         display: "flex",
                         justify_content: "space_between",
                         align_items: "center",
-                        margin_bottom: "8px",
                         
                         div {
                             span {
@@ -120,7 +113,7 @@ pub fn ValueViewer(
                         
                         div {
                             display: "flex",
-                            gap: "8px",
+                            gap: "16px",
                             font_size: "12px",
                             color: "#888",
                             
@@ -135,47 +128,6 @@ pub fn ValueViewer(
                             }
                         }
                     }
-                    
-                    // Action buttons
-                    div {
-                        display: "flex",
-                        gap: "8px",
-                        
-                        if info.key_type == KeyType::String && !editing() {
-                            button {
-                                padding: "4px 12px",
-                                background: "#0e639c",
-                                color: "white",
-                                border: "none",
-                                border_radius: "4px",
-                                cursor: "pointer",
-                                font_size: "12px",
-                                onclick: move |_| editing.set(true),
-                                
-                                "✏️ Edit"
-                            }
-                        }
-                        
-                        button {
-                            padding: "4px 12px",
-                            background: "#3182ce",
-                            color: "white",
-                            border: "none",
-                            border_radius: "4px",
-                            cursor: "pointer",
-                            font_size: "12px",
-                            onclick: move |_| show_ttl_editor.set(true),
-                            
-                            "⏱️ TTL"
-                        }
-                        
-                        KeyActions {
-                            connection_pool: connection_pool.clone(),
-                            key: selected_key.clone(),
-                            on_delete: move |_| on_key_deleted.call(()),
-                            on_rename: move |new_key| on_key_renamed.call(new_key),
-                        }
-                    }
                 } else {
                     div {
                         color: "#888",
@@ -185,7 +137,6 @@ pub fn ValueViewer(
                 }
             }
             
-            // Content
             div {
                 flex: "1",
                 overflow: "auto",
@@ -207,21 +158,6 @@ pub fn ValueViewer(
                         
                         "No key selected"
                     }
-                } else if editing() {
-                    if let Some(info) = key_info() {
-                        if info.key_type == KeyType::String {
-                            StringEditor {
-                                connection_pool: connection_pool.clone(),
-                                key: selected_key.clone(),
-                                initial_value: value(),
-                                on_save: move |new_value| {
-                                    value.set(new_value);
-                                    editing.set(false);
-                                },
-                                on_cancel: move |_| editing.set(false),
-                            }
-                        }
-                    }
                 } else if value().is_empty() {
                     div {
                         color: "#888",
@@ -241,42 +177,6 @@ pub fn ValueViewer(
                         
                         "{value}"
                     }
-                }
-            }
-        }
-        
-        // TTL Editor Dialog
-        if show_ttl_editor() {
-            div {
-                position: "fixed",
-                top: "0",
-                left: "0",
-                right: "0",
-                bottom: "0",
-                background: "rgba(0, 0, 0, 0.7)",
-                display: "flex",
-                align_items: "center",
-                justify_content: "center",
-                z_index: "1000",
-                
-                TTLEditor {
-                    connection_pool: connection_pool.clone(),
-                    key: selected_key.clone(),
-                    current_ttl: key_info().and_then(|i| i.ttl).unwrap_or(3600).to_string(),
-                    has_ttl: key_info().and_then(|i| i.ttl).is_some(),
-                    on_save: move |ttl_str| {
-                        if let Some(mut info) = key_info.write().as_mut() {
-                            info.ttl = Some(ttl_str.parse::<i64>().unwrap_or(3600));
-                        }
-                        show_ttl_editor.set(false);
-                    },
-                    on_persist: move |_| {
-                        if let Some(mut info) = key_info.write().as_mut() {
-                            info.ttl = None;
-                        }
-                        show_ttl_editor.set(false);
-                    },
-                    on_cancel: move |_| show_ttl_editor.set(false),
                 }
             }
         }

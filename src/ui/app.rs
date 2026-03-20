@@ -61,12 +61,6 @@ pub fn App() -> Element {
                         ValueViewer {
                             connection_pool: pool,
                             selected_key: selected_key(),
-                            on_key_deleted: move |_| {
-                                selected_key.set(String::new());
-                            },
-                            on_key_renamed: move |new_key| {
-                                selected_key.set(new_key);
-                            },
                         }
                     } else {
                         div {
