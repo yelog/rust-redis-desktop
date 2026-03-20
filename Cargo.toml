@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # GUI
-dioxus = "0.7"
+dioxus = { version = "0.7", features = ["desktop"] }
 freya = "0.3"
 
 # Async
