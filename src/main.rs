@@ -1,5 +1,6 @@
 mod connection;
 mod config;
+mod redis;
 mod ui;
 
 use ui::App;

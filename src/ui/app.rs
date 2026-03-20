@@ -1,6 +1,6 @@
 use crate::config::ConfigStorage;
-use crate::connection::{ConnectionConfig, ConnectionManager};
-use crate::ui::{ConnectionForm, Sidebar};
+use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool};
+use crate::ui::{ConnectionForm, KeyBrowser, Sidebar, ValueViewer};
 use dioxus::prelude::*;
 use uuid::Uuid;
 
@@ -8,8 +8,11 @@ use uuid::Uuid;
 pub fn App() -> Element {
     let mut connections = use_signal(Vec::new);
     let mut show_form = use_signal(|| false);
+    let mut selected_connection = use_signal(|| None::<Uuid>);
     let connection_manager = use_signal(ConnectionManager::new);
     let config_storage = use_signal(|| ConfigStorage::new().ok());
+    let mut selected_key = use_signal(String::new);
+    let mut connection_pools = use_signal(std::collections::HashMap::<Uuid, ConnectionPool>::new);
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -23,24 +26,71 @@ pub fn App() -> Element {
         div {
             display: "flex",
             height: "100vh",
-            background: "#252526",
+            background: "#1e1e1e",
             color: "white",
 
             Sidebar {
                 connections: connections(),
                 on_add_connection: move |_| show_form.set(true),
                 on_select_connection: move |id: Uuid| {
-                    tracing::info!("Selected connection: {}", id);
+                    selected_connection.set(Some(id));
+
+                    spawn(async move {
+                        if !connection_pools.read().contains_key(&id) {
+                            if let Some(pool) = connection_manager.read().get_connection(id).await {
+                                connection_pools.write().insert(id, pool);
+                            }
+                        }
+                    });
                 },
             }
 
-            div {
-                flex: "1",
-                display: "flex",
-                align_items: "center",
-                justify_content: "center",
+            if let Some(conn_id) = selected_connection() {
+                if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
+                    KeyBrowser {
+                        connection_id: conn_id,
+                        connection_pool: pool.clone(),
+                        selected_key: selected_key,
+                        on_key_select: move |key: String| {
+                            selected_key.set(key);
+                        },
+                    }
 
-                if show_form() {
+                    if !selected_key().is_empty() {
+                        ValueViewer {
+                            connection_pool: pool,
+                            selected_key: selected_key(),
+                        }
+                    } else {
+                        div {
+                            flex: "1",
+                            display: "flex",
+                            align_items: "center",
+                            justify_content: "center",
+                            color: "#888",
+                            font_size: "18px",
+
+                            "Select a key to view its value"
+                        }
+                    }
+                } else {
+                    div {
+                        flex: "1",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        color: "#888",
+
+                        "Loading connection..."
+                    }
+                }
+            } else if show_form() {
+                div {
+                    flex: "1",
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "center",
+
                     ConnectionForm {
                         on_save: move |config: ConnectionConfig| {
                             let id = config.id;
@@ -60,13 +110,17 @@ pub fn App() -> Element {
                         },
                         on_cancel: move |_| show_form.set(false),
                     }
-                } else {
-                    div {
-                        color: "#888",
-                        font_size: "24px",
+                }
+            } else {
+                div {
+                    flex: "1",
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "center",
+                    color: "#888",
+                    font_size: "24px",
 
-                        "Select a connection or create a new one"
-                    }
+                    "Select a connection or create a new one"
                 }
             }
         }

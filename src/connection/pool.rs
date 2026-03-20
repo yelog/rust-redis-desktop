@@ -4,9 +4,25 @@ use redis::AsyncCommands;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[derive(Debug)]
 pub struct ConnectionPool {
-    config: ConnectionConfig,
-    connection: Arc<Mutex<Option<ConnectionManager>>>,
+    pub(crate) config: ConnectionConfig,
+    pub(crate) connection: Arc<Mutex<Option<ConnectionManager>>>,
+}
+
+impl PartialEq for ConnectionPool {
+    fn eq(&self, other: &Self) -> bool {
+        self.config.id == other.config.id
+    }
+}
+
+impl Clone for ConnectionPool {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            connection: Arc::clone(&self.connection),
+        }
+    }
 }
 
 impl ConnectionPool {
@@ -59,14 +75,5 @@ impl ConnectionPool {
     
     pub fn config(&self) -> &ConnectionConfig {
         &self.config
-    }
-}
-
-impl Clone for ConnectionPool {
-    fn clone(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            connection: Arc::clone(&self.connection),
-        }
     }
 }
