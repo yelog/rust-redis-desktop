@@ -11,6 +11,7 @@ mod lazy_tree_node;
 mod context_menu;
 mod delete_confirm_dialog;
 mod json_viewer;
+mod server_info;
 
 pub use app::*;
 pub use sidebar::*;
@@ -25,3 +26,4 @@ pub use lazy_tree_node::*;
 pub use context_menu::*;
 pub use delete_confirm_dialog::*;
 pub use json_viewer::*;
+pub use server_info::*;

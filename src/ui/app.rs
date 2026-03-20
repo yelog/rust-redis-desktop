@@ -1,6 +1,6 @@
 use crate::config::ConfigStorage;
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool};
-use crate::ui::{ConnectionForm, KeyBrowser, Sidebar, Terminal, ValueViewer};
+use crate::ui::{ConnectionForm, KeyBrowser, ServerInfoPanel, Sidebar, Terminal, ValueViewer};
 use dioxus::prelude::*;
 use uuid::Uuid;
 
@@ -183,15 +183,8 @@ pub fn App() -> Element {
                                                         },
                                                     }
                                                 } else {
-                                                    div {
-                                                        height: "100%",
-                                                        display: "flex",
-                                                        align_items: "center",
-                                                        justify_content: "center",
-                                                        color: "#888",
-                                                        font_size: "18px",
-
-                                                        "Select a key to view its value"
+                                                    ServerInfoPanel {
+                                                        connection_pool: pool,
                                                     }
                                                 }
                                             } else {

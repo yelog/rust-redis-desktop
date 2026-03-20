@@ -3,6 +3,39 @@ use crate::connection::{ConnectionError, ConnectionPool, Result};
 use redis::AsyncCommands;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ServerInfo {
+    pub redis_version: Option<String>,
+    pub redis_mode: Option<String>,
+    pub os: Option<String>,
+    pub arch_bits: Option<String>,
+    pub process_id: Option<u32>,
+    pub tcp_port: Option<u16>,
+    pub uptime_in_seconds: Option<u64>,
+    pub uptime_in_days: Option<u64>,
+    pub connected_clients: Option<u64>,
+    pub max_clients: Option<u64>,
+    pub total_connections_received: Option<u64>,
+    pub total_commands_processed: Option<u64>,
+    pub instantaneous_ops_per_sec: Option<u64>,
+    pub total_net_input_bytes: Option<u64>,
+    pub total_net_output_bytes: Option<u64>,
+    pub used_memory: Option<u64>,
+    pub used_memory_human: Option<String>,
+    pub used_memory_peak: Option<u64>,
+    pub used_memory_peak_human: Option<String>,
+    pub used_memory_rss: Option<u64>,
+    pub mem_fragmentation_ratio: Option<f64>,
+    pub mem_allocator: Option<String>,
+    pub rdb_last_save_time: Option<u64>,
+    pub rdb_changes_since_last_save: Option<u64>,
+    pub aof_enabled: Option<u8>,
+    pub aof_rewrite_in_progress: Option<u8>,
+    pub keyspace: HashMap<String, u64>,
+    pub keys_total: u64,
+    pub expires_total: u64,
+}
+
 impl ConnectionPool {
     pub async fn scan_keys(&self, pattern: &str, count: usize) -> Result<Vec<String>> {
         let mut connection = self.connection.lock().await;
@@ -313,6 +346,36 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
+    
+    pub async fn get_server_info(&self) -> Result<ServerInfo> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            let info: String = redis::cmd("INFO")
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            
+            Ok(parse_server_info(&info))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+    
+    pub async fn get_raw_info(&self) -> Result<String> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            let info: String = redis::cmd("INFO")
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            
+            Ok(info)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
 }
 
 fn format_redis_value(value: &redis::Value) -> String {
@@ -341,4 +404,85 @@ fn format_redis_value(value: &redis::Value) -> String {
         redis::Value::Okay => "OK".to_string(),
         _ => format!("{:?}", value),
     }
+}
+
+fn parse_server_info(info: &str) -> ServerInfo {
+    let mut server_info = ServerInfo::default();
+    
+    for line in info.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        
+        if let Some((key, value)) = line.split_once(':') {
+            let key = key.trim();
+            let value = value.trim();
+            
+            match key {
+                "redis_version" => server_info.redis_version = Some(value.to_string()),
+                "redis_mode" => server_info.redis_mode = Some(value.to_string()),
+                "os" => server_info.os = Some(value.to_string()),
+                "arch_bits" => server_info.arch_bits = Some(value.to_string()),
+                "process_id" => server_info.process_id = value.parse().ok(),
+                "tcp_port" => server_info.tcp_port = value.parse().ok(),
+                "uptime_in_seconds" => {
+                    if let Some(secs) = value.parse::<u64>().ok() {
+                        server_info.uptime_in_seconds = Some(secs);
+                        server_info.uptime_in_days = Some(secs / 86400);
+                    }
+                }
+                "connected_clients" => server_info.connected_clients = value.parse().ok(),
+                "maxclients" => server_info.max_clients = value.parse().ok(),
+                "total_connections_received" => server_info.total_connections_received = value.parse().ok(),
+                "total_commands_processed" => server_info.total_commands_processed = value.parse().ok(),
+                "instantaneous_ops_per_sec" => server_info.instantaneous_ops_per_sec = value.parse().ok(),
+                "total_net_input_bytes" => server_info.total_net_input_bytes = value.parse().ok(),
+                "total_net_output_bytes" => server_info.total_net_output_bytes = value.parse().ok(),
+                "used_memory" => server_info.used_memory = value.parse().ok(),
+                "used_memory_human" => server_info.used_memory_human = Some(value.to_string()),
+                "used_memory_peak" => server_info.used_memory_peak = value.parse().ok(),
+                "used_memory_peak_human" => server_info.used_memory_peak_human = Some(value.to_string()),
+                "used_memory_rss" => server_info.used_memory_rss = value.parse().ok(),
+                "mem_fragmentation_ratio" => server_info.mem_fragmentation_ratio = value.parse().ok(),
+                "mem_allocator" => server_info.mem_allocator = Some(value.to_string()),
+                "rdb_last_save_time" => server_info.rdb_last_save_time = value.parse().ok(),
+                "rdb_changes_since_last_save" => server_info.rdb_changes_since_last_save = value.parse().ok(),
+                "aof_enabled" => server_info.aof_enabled = value.parse().ok(),
+                "aof_rewrite_in_progress" => server_info.aof_rewrite_in_progress = value.parse().ok(),
+                key if key.starts_with("db") => {
+                    if let Some(stats) = parse_db_stats(value) {
+                        server_info.keyspace.insert(key.to_string(), stats.keys);
+                        server_info.keys_total += stats.keys;
+                        server_info.expires_total += stats.expires;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    
+    server_info
+}
+
+struct DbStats {
+    keys: u64,
+    expires: u64,
+}
+
+fn parse_db_stats(value: &str) -> Option<DbStats> {
+    let mut keys = 0u64;
+    let mut expires = 0u64;
+    
+    for part in value.split(',') {
+        if let Some((k, v)) = part.split_once('=') {
+            match k.trim() {
+                "keys" => keys = v.parse().ok()?,
+                "expires" => expires = v.parse().ok()?,
+                _ => {}
+            }
+        }
+    }
+    
+    Some(DbStats { keys, expires })
 }
