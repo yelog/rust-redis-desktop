@@ -126,6 +126,18 @@ impl ConnectionPool {
         }
     }
     
+    pub async fn get_string_bytes(&self, key: &str) -> Result<Vec<u8>> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            conn.get(key)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+    
     pub async fn set_string_value(&self, key: &str, value: &str) -> Result<()> {
         let mut connection = self.connection.lock().await;
         
