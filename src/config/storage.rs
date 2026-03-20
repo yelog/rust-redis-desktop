@@ -10,6 +10,7 @@ struct ConfigFile {
     connections: Vec<ConnectionConfig>,
 }
 
+#[derive(Clone)]
 pub struct ConfigStorage {
     config_path: PathBuf,
 }

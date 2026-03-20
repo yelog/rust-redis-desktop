@@ -23,6 +23,24 @@ pub fn Sidebar(
             box_sizing: "border-box",
             overflow: "hidden",
 
+            div {
+                display: "flex",
+                justify_content: "space-between",
+                align_items: "center",
+                margin_bottom: "12px",
+
+                span {
+                    color: "#888",
+                    font_size: "12px",
+
+                    if connections.is_empty() {
+                        "No connections"
+                    } else {
+                        "{connections.len()} connection(s)"
+                    }
+                }
+            }
+
             button {
                 onclick: move |_| on_add_connection.call(()),
                 background: "#007acc",
