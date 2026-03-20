@@ -15,14 +15,29 @@ impl TreeBuilder {
     pub fn build(&self, keys: Vec<String>) -> Vec<TreeNode> {
         let mut root: HashMap<String, TreeNode> = HashMap::new();
 
-        for key in keys {
-            self.insert_key(&mut root, &key, &key);
+        for key in &keys {
+            self.insert_key(&mut root, key, key);
         }
 
         let mut result: Vec<TreeNode> = root.into_values().collect();
         self.sort_tree(&mut result);
+        self.calculate_total_keys(&mut result);
 
         result
+    }
+
+    fn calculate_total_keys(&self, nodes: &mut [TreeNode]) -> usize {
+        let mut total = 0;
+        for node in nodes.iter_mut() {
+            if node.is_leaf {
+                node.total_keys = 1;
+                total += 1;
+            } else {
+                node.total_keys = self.calculate_total_keys(&mut node.children);
+                total += node.total_keys;
+            }
+        }
+        total
     }
 
     fn insert_key(&self, nodes: &mut HashMap<String, TreeNode>, key: &str, full_path: &str) {
@@ -37,6 +52,7 @@ impl TreeBuilder {
                     is_leaf: true,
                     children: Vec::new(),
                     key_info: None,
+                    total_keys: 0,
                 },
             );
         } else {
@@ -49,6 +65,7 @@ impl TreeBuilder {
                 is_leaf: false,
                 children: Vec::new(),
                 key_info: None,
+                total_keys: 0,
             });
 
             let mut children_map: HashMap<String, TreeNode> = node

@@ -55,4 +55,5 @@ pub struct TreeNode {
     pub is_leaf: bool,
     pub children: Vec<TreeNode>,
     pub key_info: Option<KeyInfo>,
+    pub total_keys: usize,
 }

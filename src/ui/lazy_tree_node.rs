@@ -92,12 +92,12 @@ pub fn LazyTreeNode(
                     "{node.name}"
                 }
 
-                if !node.is_leaf && has_children {
+                if !node.is_leaf && node.total_keys > 0 {
                     span {
                         color: "#666",
                         font_size: "11px",
 
-                        "({node.children.len()})"
+                        "({node.total_keys})"
                     }
                 }
             }
