@@ -72,6 +72,7 @@ pub fn KeyBrowser(
             border_right: "1px solid #3c3c3c",
             display: "flex",
             flex_direction: "column",
+            box_sizing: "border-box",
             
             div {
                 padding: "8px",

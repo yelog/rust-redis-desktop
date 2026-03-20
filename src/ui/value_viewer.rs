@@ -7,7 +7,7 @@ use std::collections::HashMap;
 #[component]
 pub fn ValueViewer(
     connection_pool: ConnectionPool,
-    selected_key: String,
+    selected_key: Signal<String>,
     on_refresh: EventHandler<()>,
 ) -> Element {
     let mut key_info = use_signal(|| None::<KeyInfo>);
@@ -16,14 +16,13 @@ pub fn ValueViewer(
     let mut loading = use_signal(|| false);
     let mut saving = use_signal(|| false);
     
-    // Clone for use in closures
     let pool = connection_pool.clone();
-    let key = selected_key.clone();
     let pool_for_edit = connection_pool.clone();
-    let key_for_edit = selected_key.clone();
     
     // Load data when key changes
     use_effect(move || {
+        let key = selected_key.read().clone();
+        
         if key.is_empty() {
             key_info.set(None);
             string_value.set(String::new());
@@ -32,7 +31,6 @@ pub fn ValueViewer(
         }
         
         let pool = pool.clone();
-        let key = key.clone();
         
         spawn(async move {
             loading.set(true);
@@ -76,11 +74,14 @@ pub fn ValueViewer(
         });
     });
     
+    let key_for_edit = selected_key;
+    
     // Prepare data for render
     let info = key_info();
     let is_loading = loading();
     let str_val = string_value();
     let hash_val = hash_value();
+    let display_key = selected_key.read().clone();
     
     rsx! {
         div {
@@ -116,7 +117,7 @@ if let Some(ref info) = info {
                                 font_size: "14px",
                                 font_weight: "bold",
                                 
-                                "{selected_key}"
+                                "{display_key}"
                             }
                         }
                         
@@ -160,7 +161,7 @@ if let Some(ref info) = info {
                         
                         "Loading..."
                     }
-                } else if selected_key.is_empty() {
+                } else if display_key.is_empty() {
                     div {
                         color: "#888",
                         text_align: "center",
@@ -179,10 +180,10 @@ if let Some(ref info) = info {
                                     multiline: true,
                                     on_change: {
                                         let pool = pool_for_edit.clone();
-                                        let key = key_for_edit.clone();
+                                        let key_sig = key_for_edit.clone();
                                         move |new_val: String| {
                                             let pool = pool.clone();
-                                            let key = key.clone();
+                                            let key = key_sig.read().clone();
                                             let val = new_val.clone();
                                             spawn(async move {
                                                 saving.set(true);

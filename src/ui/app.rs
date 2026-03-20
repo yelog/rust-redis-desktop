@@ -156,7 +156,7 @@ pub fn App() -> Element {
                                                 if !selected_key.read().is_empty() {
                                                     ValueViewer {
                                                         connection_pool: pool,
-                                                        selected_key: selected_key(),
+                                                        selected_key: selected_key,
                                                         on_refresh: move |_| {
                                                             refresh_trigger.set(refresh_trigger() + 1);
                                                         },
