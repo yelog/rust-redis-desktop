@@ -50,6 +50,12 @@ pub fn LazyTreeNode(
         }
     };
 
+    let display_name = if node.name.is_empty() {
+        "[空]"
+    } else {
+        &node.name
+    };
+
     rsx! {
         div {
             key: "{node.full_path}",
@@ -109,13 +115,13 @@ pub fn LazyTreeNode(
                 }
 
                 span {
-                    color: if is_selected { "white" } else { "#cccccc" },
+                    color: if is_selected { "white" } else if node.name.is_empty() { "#f59e0b" } else { "#cccccc" },
                     font_size: "13px",
                     overflow: "hidden",
                     text_overflow: "ellipsis",
                     white_space: "nowrap",
 
-                    "{node.name}"
+                    "{display_name}"
                 }
 
                 if !node.is_leaf && node.total_keys > 0 {
