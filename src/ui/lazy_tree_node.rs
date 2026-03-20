@@ -35,8 +35,8 @@ pub fn LazyTreeNode(
     on_expand: EventHandler<String>,
     context_menu: Signal<Option<ContextMenuState>>,
 ) -> Element {
-    let is_expanded = tree_state.read().expanded_nodes.contains(&node.full_path);
-    let is_selected = selected_key == node.full_path;
+    let is_expanded = tree_state.read().expanded_nodes.contains(&node.node_id);
+    let is_selected = node.is_leaf && selected_key == node.path;
     let has_children = !node.children.is_empty();
     let indent = depth * 16;
 
@@ -58,7 +58,7 @@ pub fn LazyTreeNode(
 
     rsx! {
         div {
-            key: "{node.full_path}",
+            key: "{node.node_id}",
 
             div {
                 padding: "6px 8px",
@@ -70,18 +70,19 @@ pub fn LazyTreeNode(
                 cursor: "pointer",
 
                 onclick: {
-                    let full_path = node.full_path.clone();
+                    let node_id = node.node_id.clone();
+                    let path = node.path.clone();
                     move |_| {
                         if !node.is_leaf {
-                            on_expand.call(full_path.clone());
+                            on_expand.call(node_id.clone());
                         } else {
-                            on_select.call(full_path.clone());
+                            on_select.call(path.clone());
                         }
                     }
                 },
 
                 oncontextmenu: {
-                    let full_path = node.full_path.clone();
+                    let path = node.path.clone();
                     let is_leaf = node.is_leaf;
                     move |e| {
                         e.prevent_default();
@@ -91,7 +92,7 @@ pub fn LazyTreeNode(
                         context_menu.set(Some(ContextMenuState {
                             x: client_x,
                             y: client_y,
-                            node_path: full_path.clone(),
+                            node_path: path.clone(),
                             is_leaf,
                         }));
                     }
@@ -137,7 +138,7 @@ pub fn LazyTreeNode(
             if is_expanded && has_children {
                 for child in node.children.iter() {
                     LazyTreeNode {
-                        key: "{child.full_path}",
+                        key: "{child.node_id}",
                         node: child.clone(),
                         depth: depth + 1,
                         selected_key: selected_key.clone(),

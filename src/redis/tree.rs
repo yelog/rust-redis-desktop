@@ -40,6 +40,14 @@ impl TreeBuilder {
         total
     }
 
+    fn folder_node_id(path: &str) -> String {
+        format!("folder:{path}")
+    }
+
+    fn leaf_node_id(path: &str) -> String {
+        format!("leaf:{path}")
+    }
+
     fn insert_key(
         &self,
         nodes: &mut HashMap<String, TreeNode>,
@@ -50,11 +58,14 @@ impl TreeBuilder {
         let parts: Vec<&str> = key.splitn(2, &self.delimiter).collect();
 
         if parts.len() == 1 {
+            let path = full_path.to_string();
+            let node_id = Self::leaf_node_id(&path);
             nodes.insert(
-                key.to_string(),
+                node_id.clone(),
                 TreeNode {
                     name: key.to_string(),
-                    full_path: full_path.to_string(),
+                    node_id,
+                    path,
                     is_leaf: true,
                     children: Vec::new(),
                     key_info: None,
@@ -64,11 +75,13 @@ impl TreeBuilder {
         } else {
             let node_name = parts[0].to_string();
             let remaining = parts[1];
-            let node_full_path = format!("{}{}{}", parent_path, parts[0], self.delimiter);
+            let node_path = format!("{}{}{}", parent_path, parts[0], self.delimiter);
+            let node_id = Self::folder_node_id(&node_path);
 
-            let node = nodes.entry(node_name.clone()).or_insert_with(|| TreeNode {
+            let node = nodes.entry(node_id.clone()).or_insert_with(|| TreeNode {
                 name: node_name,
-                full_path: node_full_path.clone(),
+                node_id: node_id.clone(),
+                path: node_path.clone(),
                 is_leaf: false,
                 children: Vec::new(),
                 key_info: None,
@@ -78,15 +91,18 @@ impl TreeBuilder {
             let mut children_map: HashMap<String, TreeNode> = node
                 .children
                 .drain(..)
-                .map(|c| (c.name.clone(), c))
+                .map(|c| (c.node_id.clone(), c))
                 .collect();
 
             if remaining.is_empty() {
+                let path = full_path.to_string();
+                let node_id = Self::leaf_node_id(&path);
                 children_map.insert(
-                    "[空]".to_string(),
+                    node_id.clone(),
                     TreeNode {
                         name: "[空]".to_string(),
-                        full_path: full_path.to_string(),
+                        node_id,
+                        path,
                         is_leaf: true,
                         children: Vec::new(),
                         key_info: None,
@@ -94,7 +110,7 @@ impl TreeBuilder {
                     },
                 );
             } else {
-                self.insert_key(&mut children_map, &node_full_path, remaining, full_path);
+                self.insert_key(&mut children_map, &node_path, remaining, full_path);
             }
 
             node.children = children_map.into_values().collect();
@@ -114,5 +130,39 @@ impl TreeBuilder {
 impl Default for TreeBuilder {
     fn default() -> Self {
         Self::new(":")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TreeBuilder;
+
+    #[test]
+    fn trailing_delimiter_key_creates_distinct_folder_and_empty_leaf_nodes() {
+        let tree = TreeBuilder::new(":").build(vec!["cache:sys_file:".to_string()]);
+
+        assert_eq!(tree.len(), 1);
+
+        let cache = &tree[0];
+        assert_eq!(cache.name, "cache");
+        assert_eq!(cache.node_id, "folder:cache:");
+        assert_eq!(cache.path, "cache:");
+        assert_eq!(cache.children.len(), 1);
+
+        let sys_file = &cache.children[0];
+        assert_eq!(sys_file.name, "sys_file");
+        assert_eq!(sys_file.node_id, "folder:cache:sys_file:");
+        assert_eq!(sys_file.path, "cache:sys_file:");
+        assert!(!sys_file.is_leaf);
+        assert_eq!(sys_file.children.len(), 1);
+
+        let empty_leaf = &sys_file.children[0];
+        assert_eq!(empty_leaf.name, "[空]");
+        assert_eq!(empty_leaf.node_id, "leaf:cache:sys_file:");
+        assert_eq!(empty_leaf.path, "cache:sys_file:");
+        assert!(empty_leaf.is_leaf);
+
+        assert_ne!(sys_file.node_id, empty_leaf.node_id);
+        assert_eq!(sys_file.path, empty_leaf.path);
     }
 }

@@ -1,13 +1,13 @@
-use arboard::Clipboard;
-use dioxus::prelude::*;
 use crate::connection::ConnectionPool;
 use crate::redis::{TreeBuilder, TreeNode};
-use crate::ui::lazy_tree_node::{LazyTreeNode, TreeState, ContextMenuState};
+use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
-use crate::ui::add_key_dialog::AddKeyDialog;
-use uuid::Uuid;
+use crate::ui::lazy_tree_node::{ContextMenuState, LazyTreeNode, TreeState};
+use arboard::Clipboard;
+use dioxus::prelude::*;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 #[component]
 pub fn KeyBrowser(
@@ -276,7 +276,7 @@ pub fn KeyBrowser(
                 } else {
                     for node in tree_nodes.read().iter() {
                         LazyTreeNode {
-                            key: "{node.full_path}",
+                            key: "{node.node_id}",
                             node: node.clone(),
                             depth: 0,
                             selected_key: selected_key(),

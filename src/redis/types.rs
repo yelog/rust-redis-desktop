@@ -51,7 +51,8 @@ pub struct KeyInfo {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TreeNode {
     pub name: String,
-    pub full_path: String,
+    pub node_id: String,
+    pub path: String,
     pub is_leaf: bool,
     pub children: Vec<TreeNode>,
     pub key_info: Option<KeyInfo>,

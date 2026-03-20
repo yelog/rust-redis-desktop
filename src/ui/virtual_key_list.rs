@@ -33,12 +33,12 @@ pub fn VirtualKeyList(
                 for (idx, node) in nodes.iter().enumerate().skip(start_index).take(end_index - start_index) {
                     {
                         let top = idx as i32 * item_height;
-                        let is_selected = selected_key == node.full_path;
+                        let is_selected = node.is_leaf && selected_key == node.path;
                         let icon = if node.is_leaf { "📄" } else { "📁" };
 
                         rsx! {
                             div {
-                                key: "{node.full_path}",
+                                key: "{node.node_id}",
                                 position: "absolute",
                                 top: "{top}px",
                                 left: "0",
@@ -53,9 +53,9 @@ pub fn VirtualKeyList(
                                 overflow: "hidden",
 
                                 onclick: {
-                                    let full_path = node.full_path.clone();
+                                    let path = node.path.clone();
                                     move |_| {
-                                        on_select.call(full_path.clone());
+                                        on_select.call(path.clone());
                                     }
                                 },
 

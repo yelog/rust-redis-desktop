@@ -9,7 +9,7 @@ pub fn KeyItem(
     on_select: EventHandler<String>,
     on_toggle: EventHandler<String>,
 ) -> Element {
-    let is_selected = selected_key == node.full_path;
+    let is_selected = node.is_leaf && selected_key == node.path;
     let has_children = !node.children.is_empty();
     let mut is_expanded = use_signal(|| false);
 
@@ -34,7 +34,7 @@ pub fn KeyItem(
 
     rsx! {
         div {
-            key: "{node.full_path}",
+            key: "{node.node_id}",
 
             div {
                 padding: "6px 8px",
@@ -47,10 +47,10 @@ pub fn KeyItem(
                 onmouseenter: |_| {},
                 onclick: move |_| {
                     if node.is_leaf {
-                        on_select.call(node.full_path.clone());
+                        on_select.call(node.path.clone());
                     } else {
                         is_expanded.toggle();
-                        on_toggle.call(node.full_path.clone());
+                        on_toggle.call(node.node_id.clone());
                     }
                 },
 
@@ -80,7 +80,7 @@ pub fn KeyItem(
             if is_expanded() && has_children {
                 for child in node.children.iter() {
                     KeyItem {
-                        key: "{child.full_path}",
+                        key: "{child.node_id}",
                         node: child.clone(),
                         depth: depth + 1,
                         selected_key: selected_key.clone(),
