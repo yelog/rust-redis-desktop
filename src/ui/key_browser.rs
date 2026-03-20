@@ -1,3 +1,4 @@
+use arboard::Clipboard;
 use dioxus::prelude::*;
 use crate::connection::ConnectionPool;
 use crate::redis::{TreeBuilder, TreeNode};
@@ -190,6 +191,21 @@ pub fn KeyBrowser(
                 x: menu_state.x,
                 y: menu_state.y,
                 on_close: move |_| context_menu.set(None),
+
+                ContextMenuItem {
+                    icon: Some("📋".to_string()),
+                    label: "复制Key".to_string(),
+                    danger: false,
+                    onclick: {
+                        let menu_state = menu_state.clone();
+                        move |_| {
+                            if let Ok(mut clipboard) = Clipboard::new() {
+                                let _ = clipboard.set_text(menu_state.node_path.clone());
+                            }
+                            context_menu.set(None);
+                        }
+                    },
+                }
 
                 ContextMenuItem {
                     icon: Some("🗑️".to_string()),
