@@ -28,7 +28,6 @@ pub fn KeyBrowser(
         let mut loading = loading.clone();
         let mut tree_nodes = tree_nodes.clone();
         let mut keys_count = keys_count.clone();
-        let mut tree_state = tree_state.clone();
         move || {
             let pool = pool.clone();
             let pattern = if search_pattern.read().is_empty() {
@@ -48,8 +47,6 @@ pub fn KeyBrowser(
                         let builder = TreeBuilder::new(":");
                         let tree = builder.build(keys);
                         tree_nodes.set(tree);
-
-                        tree_state.set(TreeState::default());
                     }
                     Err(e) => {
                         tracing::error!("Failed to load keys: {}", e);
