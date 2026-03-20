@@ -36,6 +36,10 @@ pub fn App() -> Element {
         }
     });
 
+    use_effect(|| {
+        let _ = document::eval("document.body.style.margin = '0'; document.body.style.padding = '0'; document.documentElement.style.margin = '0'; document.documentElement.style.padding = '0';");
+    });
+
     rsx! {
                         div {
                             display: "flex",
@@ -111,12 +115,15 @@ pub fn App() -> Element {
 
                                     div {
                                         flex: "1",
+                                        min_height: "0",
                                         display: "flex",
                                         flex_direction: "column",
+                                        overflow: "hidden",
 
                                         // Tab bar
                                         div {
                                             display: "flex",
+                                            flex_shrink: "0",
                                             border_bottom: "1px solid #3c3c3c",
                                             background: "#252526",
 
