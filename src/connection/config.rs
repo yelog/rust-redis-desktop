@@ -1,6 +1,72 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ConnectionMode {
+    Direct,
+    Cluster,
+    Sentinel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SSHConfig {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: Option<String>,
+    pub private_key_path: Option<String>,
+    pub passphrase: Option<String>,
+}
+
+impl Default for SSHConfig {
+    fn default() -> Self {
+        Self {
+            host: "127.0.0.1".to_string(),
+            port: 22,
+            username: "root".to_string(),
+            password: None,
+            private_key_path: None,
+            passphrase: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SSLConfig {
+    pub enabled: bool,
+    pub ca_cert_path: Option<String>,
+    pub cert_path: Option<String>,
+    pub key_path: Option<String>,
+}
+
+impl Default for SSLConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            ca_cert_path: None,
+            cert_path: None,
+            key_path: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SentinelConfig {
+    pub master_name: String,
+    pub nodes: Vec<String>,
+    pub password: Option<String>,
+}
+
+impl Default for SentinelConfig {
+    fn default() -> Self {
+        Self {
+            master_name: "mymaster".to_string(),
+            nodes: vec!["127.0.0.1:26379".to_string()],
+            password: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {
     pub id: Uuid,
@@ -11,7 +77,10 @@ pub struct ConnectionConfig {
     pub username: Option<String>,
     pub db: u8,
     pub connection_timeout: u64,
-    pub use_ssl: bool,
+    pub mode: ConnectionMode,
+    pub ssh: Option<SSHConfig>,
+    pub ssl: SSLConfig,
+    pub sentinel: Option<SentinelConfig>,
 }
 
 impl Default for ConnectionConfig {
@@ -25,7 +94,10 @@ impl Default for ConnectionConfig {
             username: None,
             db: 0,
             connection_timeout: 5000,
-            use_ssl: false,
+            mode: ConnectionMode::Direct,
+            ssh: None,
+            ssl: SSLConfig::default(),
+            sentinel: None,
         }
     }
 }
@@ -56,5 +128,26 @@ impl ConnectionConfig {
             port,
             ..Default::default()
         }
+    }
+
+    pub fn with_ssh(mut self, ssh: SSHConfig) -> Self {
+        self.ssh = Some(ssh);
+        self
+    }
+
+    pub fn with_ssl(mut self, ssl: SSLConfig) -> Self {
+        self.ssl = ssl;
+        self
+    }
+
+    pub fn with_cluster_mode(mut self) -> Self {
+        self.mode = ConnectionMode::Cluster;
+        self
+    }
+
+    pub fn with_sentinel(mut self, sentinel: SentinelConfig) -> Self {
+        self.mode = ConnectionMode::Sentinel;
+        self.sentinel = Some(sentinel);
+        self
     }
 }
