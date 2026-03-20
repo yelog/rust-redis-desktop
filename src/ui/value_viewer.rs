@@ -162,10 +162,10 @@ pub fn ValueViewer(
     selected_key: Signal<String>,
     on_refresh: EventHandler<()>,
 ) -> Element {
-    let mut key_info = use_signal(|| None::<KeyInfo>);
+    let key_info = use_signal(|| None::<KeyInfo>);
     let mut string_value = use_signal(String::new);
-    let mut hash_value = use_signal(HashMap::new);
-    let mut loading = use_signal(|| false);
+    let hash_value = use_signal(HashMap::new);
+    let loading = use_signal(|| false);
     let mut saving = use_signal(|| false);
     let mut is_binary = use_signal(|| false);
     let mut binary_format = use_signal(BinaryFormat::default);

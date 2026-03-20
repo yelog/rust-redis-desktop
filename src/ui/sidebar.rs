@@ -1,4 +1,3 @@
-use crate::connection::{ConnectionConfig, ConnectionManager};
 use dioxus::prelude::*;
 use uuid::Uuid;
 
@@ -10,7 +9,9 @@ pub fn Sidebar(
     on_edit_connection: EventHandler<Uuid>,
     on_delete_connection: EventHandler<Uuid>,
 ) -> Element {
-    let mut hover_id = use_signal(|| None::<Uuid>);
+    let mut context_menu = use_signal(|| None::<(Uuid, (i32, i32))>);
+    let mut hover_edit = use_signal(|| false);
+    let mut hover_delete = use_signal(|| false);
 
     rsx! {
         div {
@@ -68,67 +69,97 @@ pub fn Sidebar(
                         color: "white",
                         position: "relative",
 
-                        onmouseenter: {
+                        oncontextmenu: {
                             let id = id;
-                            move |_| hover_id.set(Some(id))
+                            move |evt: Event<MouseData>| {
+                                evt.prevent_default();
+                                let coords = evt.data().client_coordinates();
+                                context_menu.set(Some((id, (coords.x as i32, coords.y as i32))));
+                            }
                         },
-                        onmouseleave: move |_| hover_id.set(None),
 
                         div {
                             onclick: {
                                 let id = id;
-                                move |_| on_select_connection.call(id)
+                                move |_| {
+                                    context_menu.set(None);
+                                    on_select_connection.call(id)
+                                }
                             },
                             cursor: "pointer",
 
                             "{name}"
                         }
-
-                        if hover_id() == Some(id) {
-                            div {
-                                display: "flex",
-                                gap: "4px",
-                                margin_top: "8px",
-
-                                button {
-                                    flex: "1",
-                                    padding: "4px 8px",
-                                    background: "#3182ce",
-                                    color: "white",
-                                    border: "none",
-                                    border_radius: "3px",
-                                    cursor: "pointer",
-                                    font_size: "12px",
-
-                                    onclick: {
-                                        let id = id;
-                                        move |_| on_edit_connection.call(id)
-                                    },
-
-                                    "✏️ Edit"
-                                }
-
-                                button {
-                                    flex: "1",
-                                    padding: "4px 8px",
-                                    background: "#c53030",
-                                    color: "white",
-                                    border: "none",
-                                    border_radius: "3px",
-                                    cursor: "pointer",
-                                    font_size: "12px",
-
-                                    onclick: {
-                                        let id = id;
-                                        move |_| on_delete_connection.call(id)
-                                    },
-
-                                    "🗑️ Delete"
-                                }
-                            }
-                        }
                     }
                 }
+            }
+        }
+
+        if let Some((menu_id, (x, y))) = context_menu() {
+            div {
+                position: "fixed",
+                left: "{x}px",
+                top: "{y}px",
+                background: "#2d2d2d",
+                border: "1px solid #3c3c3c",
+                border_radius: "4px",
+                box_shadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
+                z_index: "1000",
+                min_width: "120px",
+                padding: "4px 0",
+
+                div {
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    color: "white",
+                    font_size: "13px",
+                    background: if hover_edit() { "#3182ce" } else { "transparent" },
+
+                    onmouseenter: move |_| hover_edit.set(true),
+                    onmouseleave: move |_| hover_edit.set(false),
+
+                    onclick: {
+                        let menu_id = menu_id;
+                        move |_| {
+                            context_menu.set(None);
+                            on_edit_connection.call(menu_id);
+                        }
+                    },
+
+                    "✏️ Edit"
+                }
+
+                div {
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    color: "white",
+                    font_size: "13px",
+                    background: if hover_delete() { "#c53030" } else { "transparent" },
+
+                    onmouseenter: move |_| hover_delete.set(true),
+                    onmouseleave: move |_| hover_delete.set(false),
+
+                    onclick: {
+                        let menu_id = menu_id;
+                        move |_| {
+                            context_menu.set(None);
+                            on_delete_connection.call(menu_id);
+                        }
+                    },
+
+                    "🗑️ Delete"
+                }
+            }
+
+            div {
+                position: "fixed",
+                top: "0",
+                left: "0",
+                right: "0",
+                bottom: "0",
+                z_index: "999",
+
+                onclick: move |_| context_menu.set(None),
             }
         }
     }
