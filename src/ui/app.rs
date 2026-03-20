@@ -34,6 +34,7 @@ pub fn App() -> Element {
                 on_add_connection: move |_| show_form.set(true),
                 on_select_connection: move |id: Uuid| {
                     selected_connection.set(Some(id));
+                    selected_key.set(String::new());
 
                     spawn(async move {
                         if !connection_pools.read().contains_key(&id) {
@@ -56,10 +57,16 @@ pub fn App() -> Element {
                         },
                     }
 
-                    if !selected_key().is_empty() {
+                    if !selected_key.read().is_empty() {
                         ValueViewer {
                             connection_pool: pool,
                             selected_key: selected_key(),
+                            on_key_deleted: move |_| {
+                                selected_key.set(String::new());
+                            },
+                            on_key_renamed: move |new_key| {
+                                selected_key.set(new_key);
+                            },
                         }
                     } else {
                         div {

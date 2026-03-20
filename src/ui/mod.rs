@@ -4,6 +4,9 @@ mod connection_form;
 mod key_browser;
 mod key_item;
 mod value_viewer;
+mod string_editor;
+mod ttl_editor;
+mod key_actions;
 
 pub use app::*;
 pub use sidebar::*;
@@ -11,4 +14,7 @@ pub use connection_form::*;
 pub use key_browser::*;
 pub use key_item::*;
 pub use value_viewer::*;
+pub use string_editor::*;
+pub use ttl_editor::*;
+pub use key_actions::*;
 pub use sidebar::*;

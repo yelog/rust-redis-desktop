@@ -166,16 +166,70 @@ impl ConnectionPool {
         }
     }
     
-    pub async fn get_db_size(&self) -> Result<u64> {
+    pub async fn set_ttl(&self, key: &str, ttl: i64) -> Result<bool> {
         let mut connection = self.connection.lock().await;
         
         if let Some(ref mut conn) = *connection {
-            let result: u64 = redis::cmd("DBSIZE")
-                .query_async(conn)
+            let result: i32 = conn
+                .expire(key, ttl)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             
-            Ok(result)
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+    
+    pub async fn remove_ttl(&self, key: &str) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            let result: i32 = conn
+                .persist(key)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+    
+    pub async fn rename_key(&self, old_key: &str, new_key: &str) -> Result<()> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            conn.rename(old_key, new_key)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+    
+    pub async fn hash_set_field(&self, key: &str, field: &str, value: &str) -> Result<()> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            conn.hset(key, field, value)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+    
+    pub async fn hash_delete_field(&self, key: &str, field: &str) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            let deleted: i32 = conn
+                .hdel(key, field)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            
+            Ok(deleted > 0)
         } else {
             Err(ConnectionError::Closed)
         }
