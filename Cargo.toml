@@ -32,3 +32,7 @@ dirs = "6"
 
 [dev-dependencies]
 tokio-test = "0.4"
+
+[[example]]
+name = "test_config"
+path = "examples/test_config.rs"
