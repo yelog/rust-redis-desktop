@@ -8,10 +8,14 @@ pub fn Sidebar(
     on_select_connection: EventHandler<Uuid>,
     on_edit_connection: EventHandler<Uuid>,
     on_delete_connection: EventHandler<Uuid>,
+    on_reconnect_connection: EventHandler<Uuid>,
+    on_close_connection: EventHandler<Uuid>,
 ) -> Element {
     let mut context_menu = use_signal(|| None::<(Uuid, (i32, i32))>);
     let mut hover_edit = use_signal(|| false);
     let mut hover_delete = use_signal(|| false);
+    let mut hover_reconnect = use_signal(|| false);
+    let mut hover_close = use_signal(|| false);
 
     rsx! {
         div {
@@ -86,6 +90,13 @@ pub fn Sidebar(
                                     on_select_connection.call(id)
                                 }
                             },
+                            ondoubleclick: {
+                                let id = id;
+                                move |_| {
+                                    context_menu.set(None);
+                                    on_reconnect_connection.call(id)
+                                }
+                            },
                             cursor: "pointer",
 
                             "{name}"
@@ -107,6 +118,54 @@ pub fn Sidebar(
                 z_index: "1000",
                 min_width: "120px",
                 padding: "4px 0",
+
+                div {
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    color: "white",
+                    font_size: "13px",
+                    background: if hover_reconnect() { "#2d7d46" } else { "transparent" },
+
+                    onmouseenter: move |_| hover_reconnect.set(true),
+                    onmouseleave: move |_| hover_reconnect.set(false),
+
+                    onclick: {
+                        let menu_id = menu_id;
+                        move |_| {
+                            context_menu.set(None);
+                            on_reconnect_connection.call(menu_id);
+                        }
+                    },
+
+                    "🔄 Reconnect"
+                }
+
+                div {
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    color: "white",
+                    font_size: "13px",
+                    background: if hover_close() { "#d97706" } else { "transparent" },
+
+                    onmouseenter: move |_| hover_close.set(true),
+                    onmouseleave: move |_| hover_close.set(false),
+
+                    onclick: {
+                        let menu_id = menu_id;
+                        move |_| {
+                            context_menu.set(None);
+                            on_close_connection.call(menu_id);
+                        }
+                    },
+
+                    "✖️ Close"
+                }
+
+                div {
+                    height: "1px",
+                    background: "#3c3c3c",
+                    margin: "4px 0",
+                }
 
                 div {
                     padding: "8px 12px",

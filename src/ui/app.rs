@@ -2,6 +2,7 @@ use crate::config::ConfigStorage;
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool};
 use crate::ui::{ConnectionForm, KeyBrowser, ServerInfoPanel, Sidebar, Terminal, ValueViewer};
 use dioxus::prelude::*;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -27,6 +28,8 @@ pub fn App() -> Element {
     let mut connection_pools = use_signal(std::collections::HashMap::<Uuid, ConnectionPool>::new);
     let mut refresh_trigger = use_signal(|| 0u32);
     let mut current_tab = use_signal(|| Tab::Data);
+    let mut reconnecting_ids = use_signal(HashSet::<Uuid>::new);
+    let mut connection_versions = use_signal(std::collections::HashMap::<Uuid, u32>::new);
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -77,6 +80,43 @@ pub fn App() -> Element {
                         }
                     });
                 },
+                on_reconnect_connection: move |id: Uuid| {
+                    spawn(async move {
+                        reconnecting_ids.write().insert(id);
+
+                        if let Some(storage) = config_storage.read().as_ref() {
+                            if let Ok(saved) = storage.load_connections() {
+                                if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                    match ConnectionPool::new(config.clone()).await {
+                                        Ok(pool) => {
+                                            connection_pools.write().insert(id, pool);
+                                            let _ = connection_manager.read().add_connection(config).await;
+
+                                            let version = connection_versions.read().get(&id).copied().unwrap_or(0);
+                                            connection_versions.write().insert(id, version + 1);
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to reconnect: {}", e);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        reconnecting_ids.write().remove(&id);
+                    });
+                },
+                on_close_connection: move |id: Uuid| {
+                    spawn(async move {
+                        connection_pools.write().remove(&id);
+                        connection_manager.read().remove_connection(id).await;
+
+                        if selected_connection() == Some(id) {
+                            selected_connection.set(None);
+                            selected_key.set(String::new());
+                        }
+                    });
+                },
                 on_edit_connection: move |id: Uuid| {
                     // Load connection config
                     if let Some(storage) = config_storage.read().as_ref() {
@@ -116,10 +156,43 @@ pub fn App() -> Element {
             }
 
             if let Some(conn_id) = selected_connection() {
-                if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
+                if reconnecting_ids.read().contains(&conn_id) {
+                    div {
+                        flex: "1",
+                        display: "flex",
+                        flex_direction: "column",
+                        align_items: "center",
+                        justify_content: "center",
+                        gap: "16px",
+
+                        style { {r#"
+                            @keyframes spin {
+                                from { transform: rotate(0deg); }
+                                to { transform: rotate(360deg); }
+                            }
+                        "#} }
+
+                        div {
+                            width: "40px",
+                            height: "40px",
+                            border: "3px solid #4ec9b0",
+                            border_top_color: "transparent",
+                            border_radius: "50%",
+                            animation: "spin 0.8s linear infinite",
+                        }
+
+                        div {
+                            color: "#888",
+                            font_size: "14px",
+
+                            "Reconnecting..."
+                        }
+                    }
+                } else if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
                     KeyBrowser {
                         connection_id: conn_id,
                         connection_pool: pool.clone(),
+                        connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
                         selected_key: selected_key,
                         on_key_select: move |key: String| {
                             selected_key.set(key);

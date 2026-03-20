@@ -13,6 +13,7 @@ use uuid::Uuid;
 pub fn KeyBrowser(
     connection_id: Uuid,
     connection_pool: ConnectionPool,
+    connection_version: u32,
     selected_key: Signal<String>,
     on_key_select: EventHandler<String>,
 ) -> Element {
@@ -117,13 +118,14 @@ pub fn KeyBrowser(
         }
     };
 
-    use_effect({
-        let load_keys = load_keys.clone();
-        move || {
-            let _ = refresh_trigger();
-            load_keys();
-        }
-    });
+use_effect({
+    let load_keys = load_keys.clone();
+    move || {
+        let _ = refresh_trigger();
+        let _ = connection_version;
+        load_keys();
+    }
+});
 
     rsx! {
         div {
