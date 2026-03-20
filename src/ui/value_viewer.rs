@@ -1,19 +1,25 @@
 use dioxus::prelude::*;
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
+use crate::ui::editable_field::EditableField;
+use std::collections::HashMap;
 
 #[component]
 pub fn ValueViewer(
     connection_pool: ConnectionPool,
     selected_key: String,
+    on_refresh: EventHandler<()>,
 ) -> Element {
     let mut key_info = use_signal(|| None::<KeyInfo>);
-    let mut value = use_signal(|| String::new());
+    let mut string_value = use_signal(|| String::new());
+    let mut hash_value = use_signal(|| HashMap::new());
     let mut loading = use_signal(|| false);
+    let mut saving = use_signal(|| false);
     
     let key = selected_key.clone();
     let pool = connection_pool.clone();
     
+    // Load data
     use_effect(move || {
         if key.is_empty() {
             return;
@@ -29,40 +35,18 @@ pub fn ValueViewer(
                 Ok(info) => {
                     key_info.set(Some(info.clone()));
                     
-                    let val = match info.key_type {
-                        KeyType::String => pool.get_string_value(&key).await.ok(),
-                        KeyType::List => {
-                            match pool.get_list_range(&key, 0, 100).await {
-                                Ok(items) => Some(format!("{:#?}", items)),
-                                Err(_) => None,
-                            }
-                        }
-                        KeyType::Set => {
-                            match pool.get_set_members(&key).await {
-                                Ok(members) => Some(format!("{:#?}", members)),
-                                Err(_) => None,
+                    match info.key_type {
+                        KeyType::String => {
+                            if let Ok(val) = pool.get_string_value(&key).await {
+                                string_value.set(val);
                             }
                         }
                         KeyType::Hash => {
-                            match pool.get_hash_all(&key).await {
-                                Ok(fields) => {
-                                    let json = serde_json::to_string_pretty(&fields).unwrap_or_default();
-                                    Some(json)
-                                }
-                                Err(_) => None,
+                            if let Ok(fields) = pool.get_hash_all(&key).await {
+                                hash_value.set(fields);
                             }
                         }
-                        KeyType::ZSet => {
-                            match pool.get_zset_range(&key, 0, 100).await {
-                                Ok(members) => Some(format!("{:#?}", members)),
-                                Err(_) => None,
-                            }
-                        }
-                        _ => None,
-                    };
-                    
-                    if let Some(v) = val {
-                        value.set(v);
+                        _ => {}
                     }
                 }
                 Err(e) => {
@@ -82,6 +66,7 @@ pub fn ValueViewer(
             display: "flex",
             flex_direction: "column",
             
+            // Header
             div {
                 padding: "12px 16px",
                 border_bottom: "1px solid #3c3c3c",
@@ -137,9 +122,10 @@ pub fn ValueViewer(
                 }
             }
             
+            // Content
             div {
                 flex: "1",
-                overflow: "auto",
+                overflow_y: "auto",
                 padding: "16px",
                 
                 if loading() {
@@ -158,24 +144,144 @@ pub fn ValueViewer(
                         
                         "No key selected"
                     }
-                } else if value().is_empty() {
+                } else if let Some(info) = key_info() {
+                    match info.key_type {
+                        KeyType::String => {
+                            rsx! {
+                                EditableField {
+                                    label: "Value".to_string(),
+                                    value: string_value(),
+                                    on_change: {
+                                        let pool = connection_pool.clone();
+                                        let key = selected_key.clone();
+                                        move |new_val: String| {
+                                            let pool = pool.clone();
+                                            let key = key.clone();
+                                            let val = new_val.clone();
+                                            spawn(async move {
+                                                saving.set(true);
+                                                if pool.set_string_value(&key, &val).await.is_ok() {
+                                                    string_value.set(val);
+                                                    on_refresh.call(());
+                                                }
+                                                saving.set(false);
+                                            });
+                                        }
+                                    },
+                                    editable: true,
+                                    multiline: true,
+                                }
+                            }
+                        }
+                        KeyType::Hash => {
+                            rsx! {
+                                div {
+                                    color: "#888",
+                                    margin_bottom: "12px",
+                                    font_size: "14px",
+                                    
+                                    "Hash Fields:"
+                                }
+                                
+                                for (field, value) in hash_value.read().iter() {
+                                    div {
+                                        key: "{field}",
+                                        margin_bottom: "8px",
+                                        padding: "8px",
+                                        background: "#2d2d2d",
+                                        border_radius: "4px",
+                                        
+                                        div {
+                                            color: "#4ec9b0",
+                                            font_size: "12px",
+                                            margin_bottom: "4px",
+                                            
+                                            "{field}"
+                                        }
+                                        
+                                        div {
+                                            color: "white",
+                                            
+                                            "{value}"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        KeyType::List => {
+                            rsx! {
+                                div {
+                                    color: "#888",
+                                    margin_bottom: "12px",
+                                    font_size: "14px",
+                                    
+                                    "List Items:"
+                                }
+                                
+                                div {
+                                    color: "white",
+                                    font_family: "Consolas, monospace",
+                                    font_size: "13px",
+                                    
+                                    "Load with LRANGE command"
+                                }
+                            }
+                        }
+                        KeyType::Set => {
+                            rsx! {
+                                div {
+                                    color: "#888",
+                                    margin_bottom: "12px",
+                                    font_size: "14px",
+                                    
+                                    "Set Members:"
+                                }
+                                
+                                div {
+                                    color: "white",
+                                    font_family: "Consolas, monospace",
+                                    font_size: "13px",
+                                    
+                                    "Load with SMEMBERS command"
+                                }
+                            }
+                        }
+                        KeyType::ZSet => {
+                            rsx! {
+                                div {
+                                    color: "#888",
+                                    margin_bottom: "12px",
+                                    font_size: "14px",
+                                    
+                                    "Sorted Set Members:"
+                                }
+                                
+                                div {
+                                    color: "white",
+                                    font_family: "Consolas, monospace",
+                                    font_size: "13px",
+                                    
+                                    "Load with ZRANGE command"
+                                }
+                            }
+                        }
+                        _ => {
+                            rsx! {
+                                div {
+                                    color: "#888",
+                                    
+                                    "Unsupported type"
+                                }
+                            }
+                        }
+                    }
+                } else {
                     div {
                         color: "#888",
                         text_align: "center",
                         padding: "20px",
                         
-                        "No value"
-                    }
-                } else {
-                    pre {
-                        color: "#d4d4d4",
-                        font_family: "Consolas, 'Courier New', monospace",
-                        font_size: "13px",
-                        line_height: "1.6",
-                        white_space: "pre_wrap",
-                        word_wrap: "break_word",
-                        
-                        "{value}"
+                        "No data"
                     }
                 }
             }

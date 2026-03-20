@@ -13,6 +13,7 @@ pub fn App() -> Element {
     let config_storage = use_signal(|| ConfigStorage::new().ok());
     let mut selected_key = use_signal(String::new);
     let mut connection_pools = use_signal(std::collections::HashMap::<Uuid, ConnectionPool>::new);
+    let mut refresh_trigger = use_signal(|| 0u32);
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -61,6 +62,9 @@ pub fn App() -> Element {
                         ValueViewer {
                             connection_pool: pool,
                             selected_key: selected_key(),
+                            on_refresh: move |_| {
+                                refresh_trigger.set(refresh_trigger() + 1);
+                            },
                         }
                     } else {
                         div {
