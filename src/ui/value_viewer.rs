@@ -1,6 +1,7 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
 use crate::ui::editable_field::EditableField;
+use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use arboard::Clipboard;
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -439,6 +440,8 @@ pub fn ValueViewer(
                 } else if let Some(info) = info {
                     match info.key_type {
                         KeyType::String => {
+                            let is_json = !is_binary() && is_json_content(&str_val);
+                            
                             rsx! {
                                 div {
                                     if is_binary() {
@@ -452,7 +455,7 @@ pub fn ValueViewer(
                                                 color: "#f59e0b",
                                                 font_size: "12px",
 
-                                                "⚠️ 二进制数据 (Java序列化或其他)"
+                                                "二进制数据 (Java序列化或其他)"
                                             }
 
                                             button {
@@ -483,28 +486,52 @@ pub fn ValueViewer(
                                         }
                                     }
 
-                                    EditableField {
-                                        label: "Value".to_string(),
-                                        value: str_val.clone(),
-                                        editable: !is_binary(),
-                                        multiline: true,
-                                        on_change: {
-                                            let pool = pool_for_edit.clone();
-                                            let key_sig = key_for_edit.clone();
-                                            move |new_val: String| {
-                                                let pool = pool.clone();
-                                                let key = key_sig.read().clone();
-                                                let val = new_val.clone();
-                                                spawn(async move {
-                                                    saving.set(true);
-                                                    if pool.set_string_value(&key, &val).await.is_ok() {
-                                                        string_value.set(val);
-                                                        on_refresh.call(());
-                                                    }
-                                                    saving.set(false);
-                                                });
-                                            }
-                                        },
+                                    if is_json {
+                                        JsonViewer {
+                                            value: str_val.clone(),
+                                            editable: true,
+                                            on_change: {
+                                                let pool = pool_for_edit.clone();
+                                                let key_sig = key_for_edit.clone();
+                                                move |new_val: String| {
+                                                    let pool = pool.clone();
+                                                    let key = key_sig.read().clone();
+                                                    let val = new_val.clone();
+                                                    spawn(async move {
+                                                        saving.set(true);
+                                                        if pool.set_string_value(&key, &val).await.is_ok() {
+                                                            string_value.set(val);
+                                                            on_refresh.call(());
+                                                        }
+                                                        saving.set(false);
+                                                    });
+                                                }
+                                            },
+                                        }
+                                    } else {
+                                        EditableField {
+                                            label: "Value".to_string(),
+                                            value: str_val.clone(),
+                                            editable: !is_binary(),
+                                            multiline: true,
+                                            on_change: {
+                                                let pool = pool_for_edit.clone();
+                                                let key_sig = key_for_edit.clone();
+                                                move |new_val: String| {
+                                                    let pool = pool.clone();
+                                                    let key = key_sig.read().clone();
+                                                    let val = new_val.clone();
+                                                    spawn(async move {
+                                                        saving.set(true);
+                                                        if pool.set_string_value(&key, &val).await.is_ok() {
+                                                            string_value.set(val);
+                                                            on_refresh.call(());
+                                                        }
+                                                        saving.set(false);
+                                                    });
+                                                }
+                                            },
+                                        }
                                     }
                                 }
                             }

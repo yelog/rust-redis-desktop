@@ -8,6 +8,9 @@ mod virtual_key_list;
 mod editable_field;
 mod terminal;
 mod lazy_tree_node;
+mod context_menu;
+mod delete_confirm_dialog;
+mod json_viewer;
 
 pub use app::*;
 pub use sidebar::*;
@@ -19,4 +22,6 @@ pub use virtual_key_list::*;
 pub use editable_field::*;
 pub use terminal::*;
 pub use lazy_tree_node::*;
-pub use sidebar::*;
+pub use context_menu::*;
+pub use delete_confirm_dialog::*;
+pub use json_viewer::*;
