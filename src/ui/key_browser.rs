@@ -7,6 +7,7 @@ use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::add_key_dialog::AddKeyDialog;
 use uuid::Uuid;
+use std::collections::HashMap;
 
 #[component]
 pub fn KeyBrowser(
@@ -25,13 +26,42 @@ pub fn KeyBrowser(
     let mut refresh_trigger = use_signal(|| 0u32);
     let mut show_add_key_dialog = use_signal(|| false);
     let mut current_db = use_signal(|| 0u8);
+    let db_keys_count = use_signal(HashMap::<u8, u64>::new);
+
+    let load_keyspace = {
+        let pool = connection_pool.clone();
+        let db_keys_count = db_keys_count.clone();
+        move || {
+            let pool = pool.clone();
+            let mut db_keys_count = db_keys_count.clone();
+            spawn(async move {
+                match pool.get_server_info().await {
+                    Ok(info) => {
+                        let mut map = HashMap::new();
+                        for (db, keys) in info.keyspace {
+                            if let Some(db_num) = db.strip_prefix("db") {
+                                if let Ok(num) = db_num.parse::<u8>() {
+                                    map.insert(num, keys);
+                                }
+                            }
+                        }
+                        db_keys_count.set(map);
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to load keyspace: {}", e);
+                    }
+                }
+            });
+        }
+    };
 
     let load_keys = {
         let pool = connection_pool.clone();
         let search_pattern = search_pattern.clone();
-        let mut loading = loading.clone();
-        let mut tree_nodes = tree_nodes.clone();
-        let mut keys_count = keys_count.clone();
+        let loading = loading.clone();
+        let tree_nodes = tree_nodes.clone();
+        let keys_count = keys_count.clone();
+        let load_keyspace = load_keyspace.clone();
         move || {
             let pool = pool.clone();
             let pattern = if search_pattern.read().is_empty() {
@@ -39,6 +69,10 @@ pub fn KeyBrowser(
             } else {
                 format!("*{}*", search_pattern.read())
             };
+            let mut loading = loading.clone();
+            let mut tree_nodes = tree_nodes.clone();
+            let mut keys_count = keys_count.clone();
+            let load_keyspace = load_keyspace.clone();
 
             spawn(async move {
                 loading.set(true);
@@ -58,6 +92,7 @@ pub fn KeyBrowser(
                 }
 
                 loading.set(false);
+                load_keyspace();
             });
         }
     };
@@ -121,12 +156,22 @@ pub fn KeyBrowser(
                         }
                     },
 
-                    for i in 0..16 {
-                        option {
-                            value: "db{i}",
-                            selected: current_db() == i,
+                    for i in 0..16u8 {
+                        {
+                            let keys = db_keys_count.read().get(&i).copied().unwrap_or(0);
+                            let label = if keys > 0 {
+                                format!("DB {} ({})", i, keys)
+                            } else {
+                                format!("DB {}", i)
+                            };
+                            rsx! {
+                                option {
+                                    value: "db{i}",
+                                    selected: current_db() == i,
 
-                            "DB {i}"
+                                    "{label}"
+                                }
+                            }
                         }
                     }
                 }
