@@ -15,7 +15,7 @@ pub fn Sidebar(
     rsx! {
         div {
             width: "250px",
-            height: "100vh",
+            height: "100%",
             background: "#1e1e1e",
             padding: "16px",
             display: "flex",

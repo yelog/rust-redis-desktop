@@ -16,12 +16,18 @@ pub fn ValueViewer(
     let mut loading = use_signal(|| false);
     let mut saving = use_signal(|| false);
     
-    let key = selected_key.clone();
+    // Clone for use in closures
     let pool = connection_pool.clone();
+    let key = selected_key.clone();
+    let pool_for_edit = connection_pool.clone();
+    let key_for_edit = selected_key.clone();
     
-    // Load data
+    // Load data when key changes
     use_effect(move || {
         if key.is_empty() {
+            key_info.set(None);
+            string_value.set(String::new());
+            hash_value.set(HashMap::new());
             return;
         }
         
@@ -30,23 +36,35 @@ pub fn ValueViewer(
         
         spawn(async move {
             loading.set(true);
+            tracing::info!("Loading key: {}", key);
             
             match pool.get_key_info(&key).await {
                 Ok(info) => {
+                    tracing::info!("Key info loaded: {:?}", info.key_type);
                     key_info.set(Some(info.clone()));
                     
                     match info.key_type {
                         KeyType::String => {
-                            if let Ok(val) = pool.get_string_value(&key).await {
-                                string_value.set(val);
+                            match pool.get_string_value(&key).await {
+                                Ok(val) => {
+                                    tracing::info!("String value loaded: {} bytes", val.len());
+                                    string_value.set(val);
+                                }
+                                Err(e) => tracing::error!("Failed to load string: {}", e),
                             }
                         }
                         KeyType::Hash => {
-                            if let Ok(fields) = pool.get_hash_all(&key).await {
-                                hash_value.set(fields);
+                            match pool.get_hash_all(&key).await {
+                                Ok(fields) => {
+                                    tracing::info!("Hash loaded: {} fields", fields.len());
+                                    hash_value.set(fields);
+                                }
+                                Err(e) => tracing::error!("Failed to load hash: {}", e),
                             }
                         }
-                        _ => {}
+                        _ => {
+                            tracing::info!("Type: {:?}", info.key_type);
+                        }
                     }
                 }
                 Err(e) => {
@@ -57,6 +75,12 @@ pub fn ValueViewer(
             loading.set(false);
         });
     });
+    
+    // Prepare data for render
+    let info = key_info();
+    let is_loading = loading();
+    let str_val = string_value();
+    let hash_val = hash_value();
     
     rsx! {
         div {
@@ -72,7 +96,7 @@ pub fn ValueViewer(
                 border_bottom: "1px solid #3c3c3c",
                 background: "#252526",
                 
-                if let Some(info) = key_info() {
+if let Some(ref info) = info {
                     div {
                         display: "flex",
                         justify_content: "space_between",
@@ -128,7 +152,7 @@ pub fn ValueViewer(
                 overflow_y: "auto",
                 padding: "16px",
                 
-                if loading() {
+                if is_loading {
                     div {
                         color: "#888",
                         text_align: "center",
@@ -144,16 +168,18 @@ pub fn ValueViewer(
                         
                         "No key selected"
                     }
-                } else if let Some(info) = key_info() {
+                } else if let Some(info) = info {
                     match info.key_type {
                         KeyType::String => {
                             rsx! {
                                 EditableField {
                                     label: "Value".to_string(),
-                                    value: string_value(),
+                                    value: str_val.clone(),
+                                    editable: true,
+                                    multiline: true,
                                     on_change: {
-                                        let pool = connection_pool.clone();
-                                        let key = selected_key.clone();
+                                        let pool = pool_for_edit.clone();
+                                        let key = key_for_edit.clone();
                                         move |new_val: String| {
                                             let pool = pool.clone();
                                             let key = key.clone();
@@ -168,8 +194,6 @@ pub fn ValueViewer(
                                             });
                                         }
                                     },
-                                    editable: true,
-                                    multiline: true,
                                 }
                             }
                         }
@@ -180,10 +204,10 @@ pub fn ValueViewer(
                                     margin_bottom: "12px",
                                     font_size: "14px",
                                     
-                                    "Hash Fields:"
+                                    "Hash Fields ({hash_val.len()}):"
                                 }
                                 
-                                for (field, value) in hash_value.read().iter() {
+                                for (field, value) in hash_val.iter() {
                                     div {
                                         key: "{field}",
                                         margin_bottom: "8px",
@@ -215,15 +239,7 @@ pub fn ValueViewer(
                                     margin_bottom: "12px",
                                     font_size: "14px",
                                     
-                                    "List Items:"
-                                }
-                                
-                                div {
-                                    color: "white",
-                                    font_family: "Consolas, monospace",
-                                    font_size: "13px",
-                                    
-                                    "Load with LRANGE command"
+                                    "List Items (use CLI to view)"
                                 }
                             }
                         }
@@ -234,15 +250,7 @@ pub fn ValueViewer(
                                     margin_bottom: "12px",
                                     font_size: "14px",
                                     
-                                    "Set Members:"
-                                }
-                                
-                                div {
-                                    color: "white",
-                                    font_family: "Consolas, monospace",
-                                    font_size: "13px",
-                                    
-                                    "Load with SMEMBERS command"
+                                    "Set Members (use CLI to view)"
                                 }
                             }
                         }
@@ -253,15 +261,7 @@ pub fn ValueViewer(
                                     margin_bottom: "12px",
                                     font_size: "14px",
                                     
-                                    "Sorted Set Members:"
-                                }
-                                
-                                div {
-                                    color: "white",
-                                    font_family: "Consolas, monospace",
-                                    font_size: "13px",
-                                    
-                                    "Load with ZRANGE command"
+                                    "Sorted Set Members (use CLI to view)"
                                 }
                             }
                         }
