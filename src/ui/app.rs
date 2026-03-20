@@ -56,9 +56,23 @@ pub fn App() -> Element {
                                     selected_key.set(String::new());
 
                                     spawn(async move {
-                                        if !connection_pools.read().contains_key(&id) {
-                                            if let Some(pool) = connection_manager.read().get_connection(id).await {
-                                                connection_pools.write().insert(id, pool);
+                                        if connection_pools.read().contains_key(&id) {
+                                            return;
+                                        }
+
+                                        if let Some(pool) = connection_manager.read().get_connection(id).await {
+                                            connection_pools.write().insert(id, pool);
+                                            return;
+                                        }
+
+                                        if let Some(storage) = config_storage.read().as_ref() {
+                                            if let Ok(saved) = storage.load_connections() {
+                                                if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                                    if let Ok(pool) = ConnectionPool::new(config.clone()).await {
+                                                        let _ = connection_manager.read().add_connection(config).await;
+                                                        connection_pools.write().insert(id, pool);
+                                                    }
+                                                }
                                             }
                                         }
                                     });
