@@ -10,10 +10,16 @@ pub enum Tab {
     Terminal,
 }
 
+#[derive(Clone, PartialEq)]
+pub enum FormMode {
+    New,
+    Edit(ConnectionConfig),
+}
+
 #[component]
 pub fn App() -> Element {
     let mut connections = use_signal(Vec::new);
-    let mut show_form = use_signal(|| false);
+    let mut form_mode = use_signal(|| None::<FormMode>);
     let mut selected_connection = use_signal(|| None::<Uuid>);
     let connection_manager = use_signal(ConnectionManager::new);
     let config_storage = use_signal(|| ConfigStorage::new().ok());
@@ -39,7 +45,7 @@ pub fn App() -> Element {
 
             Sidebar {
                 connections: connections(),
-                on_add_connection: move |_| show_form.set(true),
+                on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
                 on_select_connection: move |id: Uuid| {
                     selected_connection.set(Some(id));
                     selected_key.set(String::new());
@@ -49,6 +55,42 @@ pub fn App() -> Element {
                             if let Some(pool) = connection_manager.read().get_connection(id).await {
                                 connection_pools.write().insert(id, pool);
                             }
+                        }
+                    });
+                },
+                on_edit_connection: move |id: Uuid| {
+                    // Load connection config
+                    if let Some(storage) = config_storage.read().as_ref() {
+                        if let Ok(saved) = storage.load_connections() {
+                            if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                form_mode.set(Some(FormMode::Edit(config)));
+                            }
+                        }
+                    }
+                },
+                on_delete_connection: move |id: Uuid| {
+                    // Delete connection
+                    spawn(async move {
+                        // Remove from storage
+                        if let Some(storage) = config_storage.read().as_ref() {
+                            let _ = storage.delete_connection(id);
+                        }
+
+                        // Remove from memory
+                        connection_pools.write().remove(&id);
+                        connection_manager.read().remove_connection(id).await;
+
+                        // Reload connections list
+                        if let Some(storage) = config_storage.read().as_ref() {
+                            if let Ok(saved) = storage.load_connections() {
+                                connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
+                            }
+                        }
+
+                        // Clear selection if deleted
+                        if selected_connection() == Some(id) {
+                            selected_connection.set(None);
+                            selected_key.set(String::new());
                         }
                     });
                 },
@@ -148,7 +190,7 @@ pub fn App() -> Element {
                         "Loading connection..."
                     }
                 }
-            } else if show_form() {
+            } else if let Some(mode) = form_mode() {
                 div {
                     flex: "1",
                     display: "flex",
@@ -156,23 +198,34 @@ pub fn App() -> Element {
                     justify_content: "center",
 
                     ConnectionForm {
+                        editing_config: match mode {
+                            FormMode::Edit(config) => Some(config),
+                            FormMode::New => None,
+                        },
                         on_save: move |config: ConnectionConfig| {
                             let id = config.id;
                             let name = config.name.clone();
 
                             spawn(async move {
+                                // Save to manager
                                 connection_manager.read().add_connection(config.clone()).await.ok();
 
+                                // Save to storage
                                 if let Some(storage) = config_storage.read().as_ref() {
                                     storage.save_connection(config).ok();
                                 }
 
-                                connections.write().push((id, name));
+                                // Reload connections list
+                                if let Some(storage) = config_storage.read().as_ref() {
+                                    if let Ok(saved) = storage.load_connections() {
+                                        connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
+                                    }
+                                }
                             });
 
-                            show_form.set(false);
+                            form_mode.set(None);
                         },
-                        on_cancel: move |_| show_form.set(false),
+                        on_cancel: move |_| form_mode.set(None),
                     }
                 }
             } else {

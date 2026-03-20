@@ -3,18 +3,55 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn ConnectionForm(
+    editing_config: Option<ConnectionConfig>,
     on_save: EventHandler<ConnectionConfig>,
     on_cancel: EventHandler<()>,
 ) -> Element {
-    let mut name = use_signal(|| String::new());
-    let mut host = use_signal(|| "127.0.0.1".to_string());
-    let mut port = use_signal(|| 6379u16);
-    let mut password = use_signal(|| String::new());
-    let mut username = use_signal(|| String::new());
-    let mut db = use_signal(|| 0u8);
-    let mut mode = use_signal(|| ConnectionMode::Direct);
-    let mut enable_ssh = use_signal(|| false);
-    let mut ssh_host = use_signal(|| String::new());
+    let mut name = use_signal(|| {
+        editing_config
+            .as_ref()
+            .map(|c| c.name.clone())
+            .unwrap_or_default()
+    });
+    let mut host = use_signal(|| {
+        editing_config
+            .as_ref()
+            .map(|c| c.host.clone())
+            .unwrap_or("127.0.0.1".to_string())
+    });
+    let mut port = use_signal(|| editing_config.as_ref().map(|c| c.port).unwrap_or(6379));
+    let mut password = use_signal(|| {
+        editing_config
+            .as_ref()
+            .and_then(|c| c.password.clone())
+            .unwrap_or_default()
+    });
+    let mut username = use_signal(|| {
+        editing_config
+            .as_ref()
+            .and_then(|c| c.username.clone())
+            .unwrap_or_default()
+    });
+    let mut db = use_signal(|| editing_config.as_ref().map(|c| c.db).unwrap_or(0));
+    let mut mode = use_signal(|| {
+        editing_config
+            .as_ref()
+            .map(|c| c.mode.clone())
+            .unwrap_or(ConnectionMode::Direct)
+    });
+    let mut enable_ssh = use_signal(|| {
+        editing_config
+            .as_ref()
+            .map(|c| c.ssh.is_some())
+            .unwrap_or(false)
+    });
+
+    let is_editing = editing_config.is_some();
+    let title = if is_editing {
+        "Edit Connection"
+    } else {
+        "New Connection"
+    };
 
     rsx! {
         div {
@@ -27,7 +64,7 @@ pub fn ConnectionForm(
                 color: "white",
                 margin_bottom: "20px",
 
-                "New Connection"
+                "{title}"
             }
 
             // Name
@@ -240,24 +277,23 @@ pub fn ConnectionForm(
                     border_radius: "4px",
                     cursor: "pointer",
                     onclick: move |_| {
-                        let mut config = ConnectionConfig::new(name(), host(), port());
+                        let id = editing_config.as_ref().map(|c| c.id).unwrap_or_else(|| uuid::Uuid::new_v4());
 
+                        let mut config = ConnectionConfig::new(name(), host(), port());
+                        config.id = id;
                         config.username = if username.read().is_empty() { None } else { Some(username()) };
                         config.password = if password.read().is_empty() { None } else { Some(password()) };
                         config.db = db();
                         config.mode = mode();
 
-                        if enable_ssh() && !ssh_host.read().is_empty() {
-                            config.ssh = Some(SSHConfig {
-                                host: ssh_host(),
-                                ..Default::default()
-                            });
+                        if enable_ssh() {
+                            config.ssh = Some(SSHConfig::default());
                         }
 
                         on_save.call(config);
                     },
 
-                    "💾 Save"
+                    if is_editing { "💾 Update" } else { "💾 Save" }
                 }
 
                 button {

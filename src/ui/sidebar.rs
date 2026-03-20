@@ -7,7 +7,11 @@ pub fn Sidebar(
     connections: Vec<(Uuid, String)>,
     on_add_connection: EventHandler<()>,
     on_select_connection: EventHandler<Uuid>,
+    on_edit_connection: EventHandler<Uuid>,
+    on_delete_connection: EventHandler<Uuid>,
 ) -> Element {
+    let mut hover_id = use_signal(|| None::<Uuid>);
+
     rsx! {
         div {
             width: "250px",
@@ -37,15 +41,72 @@ pub fn Sidebar(
                 for (id, name) in connections {
                     div {
                         key: "{id}",
-                        onclick: move |_| on_select_connection.call(id),
                         padding: "10px",
                         margin_bottom: "4px",
                         background: "#2d2d2d",
                         border_radius: "4px",
-                        cursor: "pointer",
                         color: "white",
+                        position: "relative",
 
-                        "{name}"
+                        onmouseenter: {
+                            let id = id;
+                            move |_| hover_id.set(Some(id))
+                        },
+                        onmouseleave: move |_| hover_id.set(None),
+
+                        div {
+                            onclick: {
+                                let id = id;
+                                move |_| on_select_connection.call(id)
+                            },
+                            cursor: "pointer",
+
+                            "{name}"
+                        }
+
+                        if hover_id() == Some(id) {
+                            div {
+                                display: "flex",
+                                gap: "4px",
+                                margin_top: "8px",
+
+                                button {
+                                    flex: "1",
+                                    padding: "4px 8px",
+                                    background: "#3182ce",
+                                    color: "white",
+                                    border: "none",
+                                    border_radius: "3px",
+                                    cursor: "pointer",
+                                    font_size: "12px",
+
+                                    onclick: {
+                                        let id = id;
+                                        move |_| on_edit_connection.call(id)
+                                    },
+
+                                    "✏️ Edit"
+                                }
+
+                                button {
+                                    flex: "1",
+                                    padding: "4px 8px",
+                                    background: "#c53030",
+                                    color: "white",
+                                    border: "none",
+                                    border_radius: "3px",
+                                    cursor: "pointer",
+                                    font_size: "12px",
+
+                                    onclick: {
+                                        let id = id;
+                                        move |_| on_delete_connection.call(id)
+                                    },
+
+                                    "🗑️ Delete"
+                                }
+                            }
+                        }
                     }
                 }
             }
