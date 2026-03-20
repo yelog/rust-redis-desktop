@@ -17,6 +17,14 @@ impl Default for TreeState {
     }
 }
 
+#[derive(Clone, PartialEq)]
+pub struct ContextMenuState {
+    pub x: i32,
+    pub y: i32,
+    pub node_path: String,
+    pub is_leaf: bool,
+}
+
 #[component]
 pub fn LazyTreeNode(
     node: TreeNode,
@@ -25,6 +33,7 @@ pub fn LazyTreeNode(
     tree_state: Signal<TreeState>,
     on_select: EventHandler<String>,
     on_expand: EventHandler<String>,
+    context_menu: Signal<Option<ContextMenuState>>,
 ) -> Element {
     let is_expanded = tree_state.read().expanded_nodes.contains(&node.full_path);
     let is_selected = selected_key == node.full_path;
@@ -62,6 +71,23 @@ pub fn LazyTreeNode(
                         } else {
                             on_select.call(full_path.clone());
                         }
+                    }
+                },
+
+                oncontextmenu: {
+                    let full_path = node.full_path.clone();
+                    let is_leaf = node.is_leaf;
+                    move |e| {
+                        e.prevent_default();
+                        let data = e.data();
+                        let client_x = data.client_coordinates().x as i32;
+                        let client_y = data.client_coordinates().y as i32;
+                        context_menu.set(Some(ContextMenuState {
+                            x: client_x,
+                            y: client_y,
+                            node_path: full_path.clone(),
+                            is_leaf,
+                        }));
                     }
                 },
 
@@ -112,6 +138,7 @@ pub fn LazyTreeNode(
                         tree_state: tree_state,
                         on_select: on_select.clone(),
                         on_expand: on_expand.clone(),
+                        context_menu: context_menu,
                     }
                 }
             }

@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 use crate::connection::ConnectionPool;
 use crate::redis::{TreeBuilder, TreeNode};
-use crate::ui::lazy_tree_node::{LazyTreeNode, TreeState};
+use crate::ui::lazy_tree_node::{LazyTreeNode, TreeState, ContextMenuState};
+use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
+use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use uuid::Uuid;
-use std::collections::HashSet;
 
 #[component]
 pub fn KeyBrowser(
@@ -12,14 +13,22 @@ pub fn KeyBrowser(
     selected_key: Signal<String>,
     on_key_select: EventHandler<String>,
 ) -> Element {
-    let mut tree_nodes = use_signal(Vec::<TreeNode>::new);
+    let tree_nodes = use_signal(Vec::<TreeNode>::new);
     let mut search_pattern = use_signal(String::new);
-    let mut loading = use_signal(|| false);
-    let mut keys_count = use_signal(|| 0usize);
+    let loading = use_signal(|| false);
+    let keys_count = use_signal(|| 0usize);
     let mut tree_state = use_signal(TreeState::default);
-    
+    let mut context_menu = use_signal(|| None::<ContextMenuState>);
+    let mut show_delete_dialog = use_signal(|| None::<Vec<DeleteTarget>>);
+    let mut refresh_trigger = use_signal(|| 0u32);
+
     let load_keys = {
         let pool = connection_pool.clone();
+        let search_pattern = search_pattern.clone();
+        let mut loading = loading.clone();
+        let mut tree_nodes = tree_nodes.clone();
+        let mut keys_count = keys_count.clone();
+        let mut tree_state = tree_state.clone();
         move || {
             let pool = pool.clone();
             let pattern = if search_pattern.read().is_empty() {
@@ -27,43 +36,39 @@ pub fn KeyBrowser(
             } else {
                 format!("*{}*", search_pattern.read())
             };
-            
+
             spawn(async move {
                 loading.set(true);
                 tree_nodes.set(Vec::new());
-                
+
                 match pool.scan_keys(&pattern, 500).await {
                     Ok(keys) => {
                         keys_count.set(keys.len());
-                        
+
                         let builder = TreeBuilder::new(":");
                         let tree = builder.build(keys);
                         tree_nodes.set(tree);
-                        
-                        // Reset tree state
+
                         tree_state.set(TreeState::default());
                     }
                     Err(e) => {
                         tracing::error!("Failed to load keys: {}", e);
                     }
                 }
-                
+
                 loading.set(false);
             });
         }
     };
-    
-    use_effect(load_keys.clone());
-    
-    let toggle_expand = move |path: String| {
-        let mut state = tree_state.write();
-        if state.expanded_nodes.contains(&path) {
-            state.expanded_nodes.remove(&path);
-        } else {
-            state.expanded_nodes.insert(path);
+
+    use_effect({
+        let load_keys = load_keys.clone();
+        move || {
+            let _ = refresh_trigger();
+            load_keys();
         }
-    };
-    
+    });
+
     rsx! {
         div {
             width: "300px",
@@ -73,11 +78,11 @@ pub fn KeyBrowser(
             display: "flex",
             flex_direction: "column",
             box_sizing: "border-box",
-            
+
             div {
                 padding: "8px",
                 border_bottom: "1px solid #3c3c3c",
-                
+
                 input {
                     width: "100%",
                     padding: "6px 10px",
@@ -99,14 +104,14 @@ pub fn KeyBrowser(
                     },
                 }
             }
-            
+
             div {
                 padding: "8px",
                 border_bottom: "1px solid #3c3c3c",
                 display: "flex",
                 gap: "8px",
                 align_items: "center",
-                
+
                 button {
                     flex: "1",
                     padding: "6px",
@@ -120,32 +125,32 @@ pub fn KeyBrowser(
                         let load_keys = load_keys.clone();
                         move |_| load_keys()
                     },
-                    
+
                     if loading() { "Loading..." } else { "🔄 Refresh" }
                 }
-                
+
                 if keys_count() > 0 {
                     span {
                         color: "#888",
                         font_size: "11px",
-                        
+
                         "{keys_count} keys"
                     }
                 }
             }
-            
+
             div {
                 flex: "1",
                 overflow_y: "auto",
                 padding: "4px 0",
-                
+
                 if tree_nodes.read().is_empty() {
                     if loading() {
                         div {
                             padding: "20px",
                             text_align: "center",
                             color: "#888",
-                            
+
                             "Loading keys..."
                         }
                     } else {
@@ -153,7 +158,7 @@ pub fn KeyBrowser(
                             padding: "20px",
                             text_align: "center",
                             color: "#888",
-                            
+
                             "No keys found"
                         }
                     }
@@ -176,9 +181,47 @@ pub fn KeyBrowser(
                                     }
                                 }
                             },
+                            context_menu: context_menu,
                         }
                     }
                 }
+            }
+        }
+
+        if let Some(menu_state) = context_menu() {
+            ContextMenu {
+                x: menu_state.x,
+                y: menu_state.y,
+                on_close: move |_| context_menu.set(None),
+
+                ContextMenuItem {
+                    icon: Some("🗑️".to_string()),
+                    label: "删除".to_string(),
+                    danger: true,
+                    onclick: {
+                        let menu_state = menu_state.clone();
+                        move |_| {
+                            context_menu.set(None);
+                            show_delete_dialog.set(Some(vec![DeleteTarget {
+                                key: menu_state.node_path.clone(),
+                                is_folder: !menu_state.is_leaf,
+                            }]));
+                        }
+                    },
+                }
+            }
+        }
+
+        if let Some(targets) = show_delete_dialog() {
+            DeleteConfirmDialog {
+                connection_pool: connection_pool.clone(),
+                targets: targets.clone(),
+                on_confirm: move |_| {
+                    show_delete_dialog.set(None);
+                    selected_key.set(String::new());
+                    refresh_trigger.set(refresh_trigger() + 1);
+                },
+                on_cancel: move |_| show_delete_dialog.set(None),
             }
         }
     }
