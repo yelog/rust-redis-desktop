@@ -272,4 +272,61 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
+    
+    pub async fn execute_raw_command(&self, command: &str) -> Result<String> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            let parts: Vec<&str> = command.split_whitespace().collect();
+            if parts.is_empty() {
+                return Ok("Empty command".to_string());
+            }
+            
+            let cmd_name = parts[0].to_uppercase();
+            let args: Vec<&str> = parts[1..].to_vec();
+            
+            let mut redis_cmd = redis::cmd(&cmd_name);
+            for arg in args {
+                redis_cmd.arg(arg);
+            }
+            
+            let result: redis::Value = redis_cmd
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            
+            let formatted = format_redis_value(&result);
+            Ok(formatted)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+}
+
+fn format_redis_value(value: &redis::Value) -> String {
+    match value {
+        redis::Value::Nil => "(nil)".to_string(),
+        redis::Value::Int(i) => format!("(integer) {}", i),
+        redis::Value::BulkString(data) => {
+            match String::from_utf8(data.clone()) {
+                Ok(s) => format!("\"{}\"", s),
+                Err(_) => format!("{:?}", data),
+            }
+        }
+        redis::Value::Array(items) => {
+            if items.is_empty() {
+                "(empty list or set)".to_string()
+            } else {
+                items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, item)| format!("{}) {}", i + 1, format_redis_value(item)))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+        }
+        redis::Value::SimpleString(s) => s.clone(),
+        redis::Value::Okay => "OK".to_string(),
+        _ => format!("{:?}", value),
+    }
 }
