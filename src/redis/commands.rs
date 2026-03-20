@@ -1,5 +1,6 @@
 use super::{KeyInfo, KeyType};
 use crate::connection::{ConnectionError, ConnectionPool, Result};
+use crate::ui::add_key_dialog::{HashField, ListValue, SetValue, ZSetMember, StreamEntry};
 use redis::AsyncCommands;
 use std::collections::HashMap;
 
@@ -485,4 +486,118 @@ fn parse_db_stats(value: &str) -> Option<DbStats> {
     }
     
     Some(DbStats { keys, expires })
+}
+
+impl ConnectionPool {
+    pub async fn set_hash_values(&self, key: &str, fields: Vec<HashField>) -> Result<()> {
+        if fields.is_empty() {
+            return Err(ConnectionError::ConnectionFailed(
+                "Hash fields cannot be empty".to_string(),
+            ));
+        }
+
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            for field in fields {
+                conn.hset::<_, _, _, ()>(key, field.field.clone(), field.value.clone())
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            }
+            Ok(())
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_list_values(&self, key: &str, values: Vec<ListValue>) -> Result<()> {
+        if values.is_empty() {
+            return Err(ConnectionError::ConnectionFailed(
+                "List values cannot be empty".to_string(),
+            ));
+        }
+
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let items: Vec<String> = values.into_iter().map(|v| v.value).collect();
+            conn.rpush(key, items)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_set_values(&self, key: &str, values: Vec<SetValue>) -> Result<()> {
+        if values.is_empty() {
+            return Err(ConnectionError::ConnectionFailed(
+                "Set values cannot be empty".to_string(),
+            ));
+        }
+
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let items: Vec<String> = values.into_iter().map(|v| v.value).collect();
+            conn.sadd(key, items)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_zset_members(&self, key: &str, members: Vec<ZSetMember>) -> Result<()> {
+        if members.is_empty() {
+            return Err(ConnectionError::ConnectionFailed(
+                "ZSet members cannot be empty".to_string(),
+            ));
+        }
+
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            for member in members {
+                let score: f64 = member.score.parse().unwrap_or(0.0);
+                conn.zadd::<_, _, _, ()>(key, member.value.clone(), score)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            }
+            Ok(())
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn add_stream_entries(&self, key: &str, entries: Vec<StreamEntry>) -> Result<()> {
+        if entries.is_empty() {
+            return Err(ConnectionError::ConnectionFailed(
+                "Stream entries cannot be empty".to_string(),
+            ));
+        }
+
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            for entry in entries {
+                let id = if entry.id.is_empty() || entry.id == "*" {
+                    "*"
+                } else {
+                    &entry.id
+                };
+                redis::cmd("XADD")
+                    .arg(key)
+                    .arg(id)
+                    .arg(&entry.field)
+                    .arg(&entry.value)
+                    .query_async::<redis::Value>(conn)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            }
+            Ok(())
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
 }

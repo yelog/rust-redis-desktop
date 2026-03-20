@@ -5,6 +5,7 @@ use crate::redis::{TreeBuilder, TreeNode};
 use crate::ui::lazy_tree_node::{LazyTreeNode, TreeState, ContextMenuState};
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
+use crate::ui::add_key_dialog::AddKeyDialog;
 use uuid::Uuid;
 
 #[component]
@@ -22,6 +23,7 @@ pub fn KeyBrowser(
     let mut context_menu = use_signal(|| None::<ContextMenuState>);
     let mut show_delete_dialog = use_signal(|| None::<Vec<DeleteTarget>>);
     let mut refresh_trigger = use_signal(|| 0u32);
+    let mut show_add_key_dialog = use_signal(|| false);
 
     let load_keys = {
         let pool = connection_pool.clone();
@@ -111,9 +113,22 @@ pub fn KeyBrowser(
                 align_items: "center",
 
                 button {
+                    padding: "6px 12px",
+                    background: "#0e639c",
+                    color: "white",
+                    border: "none",
+                    border_radius: "4px",
+                    cursor: "pointer",
+                    font_size: "12px",
+                    onclick: move |_| show_add_key_dialog.set(true),
+
+                    "➕ 新增"
+                }
+
+                button {
                     flex: "1",
                     padding: "6px",
-                    background: "#0e639c",
+                    background: "#3c3c3c",
                     color: "white",
                     border: "none",
                     border_radius: "4px",
@@ -235,6 +250,22 @@ pub fn KeyBrowser(
                     refresh_trigger.set(refresh_trigger() + 1);
                 },
                 on_cancel: move |_| show_delete_dialog.set(None),
+            }
+        }
+
+        if show_add_key_dialog() {
+            AddKeyDialog {
+                connection_pool: connection_pool.clone(),
+                on_save: {
+                    let mut refresh_trigger = refresh_trigger.clone();
+                    let mut selected_key = selected_key.clone();
+                    move |key: String| {
+                        show_add_key_dialog.set(false);
+                        selected_key.set(key);
+                        refresh_trigger.set(refresh_trigger() + 1);
+                    }
+                },
+                on_cancel: move |_| show_add_key_dialog.set(false),
             }
         }
     }
