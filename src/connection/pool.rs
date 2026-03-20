@@ -76,4 +76,18 @@ impl ConnectionPool {
     pub fn config(&self) -> &ConnectionConfig {
         &self.config
     }
+
+    pub async fn select_database(&self, db: u8) -> Result<()> {
+        let mut connection = self.connection.lock().await;
+        
+        if let Some(ref mut conn) = *connection {
+            redis::cmd("SELECT")
+                .arg(db)
+                .query_async::<()>(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+        }
+        
+        Ok(())
+    }
 }

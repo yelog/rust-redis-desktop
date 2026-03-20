@@ -32,7 +32,6 @@ pub fn ConnectionForm(
             .and_then(|c| c.username.clone())
             .unwrap_or_default()
     });
-    let mut db = use_signal(|| editing_config.as_ref().map(|c| c.db).unwrap_or(0));
     let mut mode = use_signal(|| {
         editing_config
             .as_ref()
@@ -198,36 +197,6 @@ pub fn ConnectionForm(
                         color: "#888",
                         margin_bottom: "8px",
 
-                        "Database (0-15)"
-                    }
-
-                    input {
-                        width: "100%",
-                        padding: "8px",
-                        background: "#3c3c3c",
-                        border: "1px solid #555",
-                        border_radius: "4px",
-                        color: "white",
-                        r#type: "number",
-                        min: "0",
-                        max: "15",
-                        value: "{db}",
-                        oninput: move |e| {
-                            if let Ok(d) = e.value().parse::<u8>() {
-                                db.set(d.min(15));
-                            }
-                        },
-                    }
-                }
-
-                div {
-                    margin_bottom: "16px",
-
-                    label {
-                        display: "block",
-                        color: "#888",
-                        margin_bottom: "8px",
-
                         "Connection Mode"
                     }
 
@@ -295,7 +264,7 @@ pub fn ConnectionForm(
                             config.id = id;
                             config.username = if username.read().is_empty() { None } else { Some(username()) };
                             config.password = if password.read().is_empty() { None } else { Some(password()) };
-                            config.db = db();
+                            config.db = 0;
                             config.mode = mode();
 
                             if enable_ssh() {

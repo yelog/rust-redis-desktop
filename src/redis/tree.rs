@@ -75,20 +75,30 @@ impl TreeBuilder {
                 total_keys: 0,
             });
 
+            let mut children_map: HashMap<String, TreeNode> = node
+                .children
+                .drain(..)
+                .map(|c| (c.name.clone(), c))
+                .collect();
+
             if remaining.is_empty() {
-                node.is_leaf = true;
+                children_map.insert(
+                    "[空]".to_string(),
+                    TreeNode {
+                        name: "[空]".to_string(),
+                        full_path: full_path.to_string(),
+                        is_leaf: true,
+                        children: Vec::new(),
+                        key_info: None,
+                        total_keys: 0,
+                    },
+                );
             } else {
-                let mut children_map: HashMap<String, TreeNode> = node
-                    .children
-                    .drain(..)
-                    .map(|c| (c.name.clone(), c))
-                    .collect();
-
                 self.insert_key(&mut children_map, &node_full_path, remaining, full_path);
-
-                node.children = children_map.into_values().collect();
-                self.sort_tree(&mut node.children);
             }
+
+            node.children = children_map.into_values().collect();
+            self.sort_tree(&mut node.children);
         }
     }
 

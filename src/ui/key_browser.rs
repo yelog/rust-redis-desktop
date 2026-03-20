@@ -24,6 +24,7 @@ pub fn KeyBrowser(
     let mut show_delete_dialog = use_signal(|| None::<Vec<DeleteTarget>>);
     let mut refresh_trigger = use_signal(|| 0u32);
     let mut show_add_key_dialog = use_signal(|| false);
+    let mut current_db = use_signal(|| 0u8);
 
     let load_keys = {
         let pool = connection_pool.clone();
@@ -61,6 +62,26 @@ pub fn KeyBrowser(
         }
     };
 
+    let select_db = {
+        let pool = connection_pool.clone();
+        let load_keys = load_keys.clone();
+        move |db: u8| {
+            let pool = pool.clone();
+            let load_keys = load_keys.clone();
+            spawn(async move {
+                match pool.select_database(db).await {
+                    Ok(_) => {
+                        current_db.set(db);
+                        load_keys();
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to select database: {}", e);
+                    }
+                }
+            });
+        }
+    };
+
     use_effect({
         let load_keys = load_keys.clone();
         move || {
@@ -78,6 +99,38 @@ pub fn KeyBrowser(
             display: "flex",
             flex_direction: "column",
             box_sizing: "border-box",
+
+            div {
+                padding: "8px",
+                border_bottom: "1px solid #3c3c3c",
+
+                select {
+                    width: "100%",
+                    padding: "6px 10px",
+                    background: "#3c3c3c",
+                    border: "1px solid #555",
+                    border_radius: "4px",
+                    color: "white",
+                    font_size: "13px",
+                    value: "db{current_db}",
+                    onchange: move |e| {
+                        if let Some(db_str) = e.value().strip_prefix("db") {
+                            if let Ok(db) = db_str.parse::<u8>() {
+                                select_db(db);
+                            }
+                        }
+                    },
+
+                    for i in 0..16 {
+                        option {
+                            value: "db{i}",
+                            selected: current_db() == i,
+
+                            "DB {i}"
+                        }
+                    }
+                }
+            }
 
             div {
                 padding: "8px",
