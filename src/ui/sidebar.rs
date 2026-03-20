@@ -1,9 +1,12 @@
+use crate::connection::ConnectionState;
 use dioxus::prelude::*;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[component]
 pub fn Sidebar(
     connections: Vec<(Uuid, String)>,
+    connection_states: HashMap<Uuid, ConnectionState>,
     on_add_connection: EventHandler<()>,
     on_select_connection: EventHandler<Uuid>,
     on_edit_connection: EventHandler<Uuid>,
@@ -18,6 +21,12 @@ pub fn Sidebar(
     let mut hover_close = use_signal(|| false);
 
     rsx! {
+        style { {r#"
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.3); opacity: 0.7; }
+            }
+        "#} }
         div {
             width: "250px",
             height: "100%",
@@ -64,42 +73,66 @@ pub fn Sidebar(
                 overflow_y: "auto",
 
                 for (id, name) in connections {
-                    div {
-                        key: "{id}",
-                        padding: "10px",
-                        margin_bottom: "4px",
-                        background: "#2d2d2d",
-                        border_radius: "4px",
-                        color: "white",
-                        position: "relative",
+                    {
+                        let state = connection_states.get(&id).copied().unwrap_or(ConnectionState::Disconnected);
+                        let (dot_color, is_pulsing) = match state {
+                            ConnectionState::Connected => ("#4ec9b0", false),
+                            ConnectionState::Disconnected => ("#888888", false),
+                            ConnectionState::Connecting => ("#f59e0b", true),
+                            ConnectionState::Error => ("#ef4444", false),
+                        };
 
-                        oncontextmenu: {
-                            let id = id;
-                            move |evt: Event<MouseData>| {
-                                evt.prevent_default();
-                                let coords = evt.data().client_coordinates();
-                                context_menu.set(Some((id, (coords.x as i32, coords.y as i32))));
+                        rsx! {
+                            div {
+                                key: "{id}",
+                                padding: "10px",
+                                margin_bottom: "4px",
+                                background: "#2d2d2d",
+                                border_radius: "4px",
+                                color: "white",
+                                position: "relative",
+
+                                oncontextmenu: {
+                                    let id = id;
+                                    move |evt: Event<MouseData>| {
+                                        evt.prevent_default();
+                                        let coords = evt.data().client_coordinates();
+                                        context_menu.set(Some((id, (coords.x as i32, coords.y as i32))));
+                                    }
+                                },
+
+                                div {
+                                    onclick: {
+                                        let id = id;
+                                        move |_| {
+                                            context_menu.set(None);
+                                            on_select_connection.call(id)
+                                        }
+                                    },
+                                    ondoubleclick: {
+                                        let id = id;
+                                        move |_| {
+                                            context_menu.set(None);
+                                            on_reconnect_connection.call(id)
+                                        }
+                                    },
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    align_items: "center",
+                                    gap: "8px",
+
+                                    div {
+                                        width: "8px",
+                                        height: "8px",
+                                        border_radius: "50%",
+                                        background: "{dot_color}",
+                                        flex_shrink: "0",
+                                        animation: if is_pulsing { "pulse 1.2s ease-in-out infinite" } else { "none" },
+                                    }
+
+                                    "{name}"
+                                }
                             }
-                        },
-
-                        div {
-                            onclick: {
-                                let id = id;
-                                move |_| {
-                                    context_menu.set(None);
-                                    on_select_connection.call(id)
-                                }
-                            },
-                            ondoubleclick: {
-                                let id = id;
-                                move |_| {
-                                    context_menu.set(None);
-                                    on_reconnect_connection.call(id)
-                                }
-                            },
-                            cursor: "pointer",
-
-                            "{name}"
                         }
                     }
                 }

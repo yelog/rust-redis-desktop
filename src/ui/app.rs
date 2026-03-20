@@ -1,8 +1,8 @@
 use crate::config::ConfigStorage;
-use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool};
+use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::ui::{ConnectionForm, KeyBrowser, ServerInfoPanel, Sidebar, Terminal, ValueViewer};
 use dioxus::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -25,11 +25,12 @@ pub fn App() -> Element {
     let connection_manager = use_signal(ConnectionManager::new);
     let config_storage = use_signal(|| ConfigStorage::new().ok());
     let mut selected_key = use_signal(String::new);
-    let mut connection_pools = use_signal(std::collections::HashMap::<Uuid, ConnectionPool>::new);
+    let mut connection_pools = use_signal(HashMap::<Uuid, ConnectionPool>::new);
     let mut refresh_trigger = use_signal(|| 0u32);
     let mut current_tab = use_signal(|| Tab::Data);
     let mut reconnecting_ids = use_signal(HashSet::<Uuid>::new);
-    let mut connection_versions = use_signal(std::collections::HashMap::<Uuid, u32>::new);
+    let mut connection_versions = use_signal(HashMap::<Uuid, u32>::new);
+    let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -53,6 +54,7 @@ pub fn App() -> Element {
 
             Sidebar {
                 connections: connections(),
+                connection_states: connection_states(),
                 on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
                 on_select_connection: move |id: Uuid| {
                     selected_connection.set(Some(id));
@@ -63,17 +65,26 @@ pub fn App() -> Element {
                             return;
                         }
 
+                        connection_states.write().insert(id, ConnectionState::Connecting);
+
                         if let Some(pool) = connection_manager.read().get_connection(id).await {
                             connection_pools.write().insert(id, pool);
+                            connection_states.write().insert(id, ConnectionState::Connected);
                             return;
                         }
 
                         if let Some(storage) = config_storage.read().as_ref() {
                             if let Ok(saved) = storage.load_connections() {
                                 if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                    if let Ok(pool) = ConnectionPool::new(config.clone()).await {
-                                        let _ = connection_manager.read().add_connection(config).await;
-                                        connection_pools.write().insert(id, pool);
+                                    match ConnectionPool::new(config.clone()).await {
+                                        Ok(pool) => {
+                                            let _ = connection_manager.read().add_connection(config).await;
+                                            connection_pools.write().insert(id, pool);
+                                            connection_states.write().insert(id, ConnectionState::Connected);
+                                        }
+                                        Err(_) => {
+                                            connection_states.write().insert(id, ConnectionState::Error);
+                                        }
                                     }
                                 }
                             }
@@ -83,6 +94,7 @@ pub fn App() -> Element {
                 on_reconnect_connection: move |id: Uuid| {
                     spawn(async move {
                         reconnecting_ids.write().insert(id);
+                        connection_states.write().insert(id, ConnectionState::Connecting);
 
                         if let Some(storage) = config_storage.read().as_ref() {
                             if let Ok(saved) = storage.load_connections() {
@@ -94,9 +106,10 @@ pub fn App() -> Element {
 
                                             let version = connection_versions.read().get(&id).copied().unwrap_or(0);
                                             connection_versions.write().insert(id, version + 1);
+                                            connection_states.write().insert(id, ConnectionState::Connected);
                                         }
-                                        Err(e) => {
-                                            tracing::error!("Failed to reconnect: {}", e);
+                                        Err(_) => {
+                                            connection_states.write().insert(id, ConnectionState::Error);
                                         }
                                     }
                                 }
@@ -110,6 +123,7 @@ pub fn App() -> Element {
                     spawn(async move {
                         connection_pools.write().remove(&id);
                         connection_manager.read().remove_connection(id).await;
+                        connection_states.write().insert(id, ConnectionState::Disconnected);
 
                         if selected_connection() == Some(id) {
                             selected_connection.set(None);
@@ -128,25 +142,21 @@ pub fn App() -> Element {
                     }
                 },
                 on_delete_connection: move |id: Uuid| {
-                    // Delete connection
                     spawn(async move {
-                        // Remove from storage
                         if let Some(storage) = config_storage.read().as_ref() {
                             let _ = storage.delete_connection(id);
                         }
 
-                        // Remove from memory
                         connection_pools.write().remove(&id);
                         connection_manager.read().remove_connection(id).await;
+                        connection_states.write().remove(&id);
 
-                        // Reload connections list
                         if let Some(storage) = config_storage.read().as_ref() {
                             if let Ok(saved) = storage.load_connections() {
                                 connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
                             }
                         }
 
-                        // Clear selection if deleted
                         if selected_connection() == Some(id) {
                             selected_connection.set(None);
                             selected_key.set(String::new());
