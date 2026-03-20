@@ -2,7 +2,7 @@
 
 ## ✅ 已完成功能
 
-### Phase 1: 连接管理 (已完成)
+### Phase 1: 连接管理 (已完成 ✅)
 - [x] 项目结构搭建
   - 从 Floem 迁移到 Dioxus 0.7 + Freya 0.3
   - 模块化架构设计
@@ -24,23 +24,42 @@
   - ConnectionForm 组件（创建连接）
   - App 主组件
 
+### Phase 2: Key 浏览器 (已完成 ✅)
+- [x] Redis 操作模块
+  - SCAN 命令集成
+  - TYPE 命令
+  - GET/SET 命令
+  - Hash/List/Set/ZSet 操作
+- [x] 树形结构构建器
+  - 按分隔符解析
+  - 层级组织
+  - 文件夹排序
+- [x] Key 浏览器 UI
+  - 树形展示
+  - 搜索功能
+  - 刷新按钮
+  - Key 类型图标
+- [x] Value 查看器
+  - String 显示
+  - Hash JSON 格式化
+  - List/Set/ZSet 显示
+  - TTL 显示
+
 ## 🚧 进行中功能
 
-### Phase 1: 核心功能 (待完成)
-- [ ] Key 浏览器
-  - 树形结构展示
-  - 虚拟滚动（10万+ keys）
-  - 搜索功能
-- [ ] 数据类型编辑器
+### Phase 2: 核心功能 (待完成)
+- [ ] 数据编辑功能
   - String 编辑器
-  - Hash 编辑器
-  - List 编辑器
-  - Set 编辑器
-  - ZSet 编辑器
+  - Hash 字段编辑
+  - List 元素操作
 - [ ] CLI 终端
   - 命令执行
   - 历史记录
   - 自动补全
+- [ ] 高级功能
+  - Key 导入/导出
+  - 批量操作
+  - TTL 管理
 
 ## 📦 如何运行
 
