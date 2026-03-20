@@ -1,10 +1,34 @@
 [package]
 name = "rust-redis-desktop"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-floem = "0.2.0"
-syntect = "5.2.0"
-lazy_static = "1.4.0"
+# GUI
+dioxus = "0.7"
+freya = "0.3"
 
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Redis
+redis = { version = "1", features = ["tokio-comp", "cluster", "cluster-async", "connection-manager"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Error handling
+thiserror = "2"
+
+# Utils
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+dirs = "6"
+
+[dev-dependencies]
+tokio-test = "0.4"
