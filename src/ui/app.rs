@@ -1,4 +1,4 @@
-use crate::config::ConfigStorage;
+use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::ui::{ConnectionForm, KeyBrowser, ServerInfoPanel, Sidebar, Terminal, ValueViewer};
 use dioxus::prelude::*;
@@ -31,11 +31,15 @@ pub fn App() -> Element {
     let mut reconnecting_ids = use_signal(HashSet::<Uuid>::new);
     let mut connection_versions = use_signal(HashMap::<Uuid, u32>::new);
     let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
+    let mut app_settings = use_signal(AppSettings::default);
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
             if let Ok(saved) = storage.load_connections() {
                 connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
+            }
+            if let Ok(settings) = storage.load_settings() {
+                app_settings.set(settings);
             }
         }
     });
@@ -43,6 +47,19 @@ pub fn App() -> Element {
     use_effect(|| {
         let _ = document::eval("document.body.style.margin = '0'; document.body.style.padding = '0'; document.documentElement.style.margin = '0'; document.documentElement.style.padding = '0';");
     });
+
+    let on_settings_change = {
+        let config_storage = config_storage.clone();
+        move |interval: u32| {
+            let settings = AppSettings {
+                auto_refresh_interval: interval,
+            };
+            app_settings.set(settings.clone());
+            if let Some(storage) = config_storage.read().as_ref() {
+                let _ = storage.save_settings(&settings);
+            }
+        }
+    };
 
     rsx! {
         div {
@@ -268,6 +285,9 @@ pub fn App() -> Element {
                                 } else {
                                     ServerInfoPanel {
                                         connection_pool: pool,
+                                        connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
+                                        auto_refresh_interval: app_settings.read().auto_refresh_interval,
+                                        on_settings_change: on_settings_change,
                                     }
                                 }
                             } else {

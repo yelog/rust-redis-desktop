@@ -5,9 +5,25 @@ use std::io;
 use std::path::PathBuf;
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppSettings {
+    #[serde(default)]
+    pub auto_refresh_interval: u32,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            auto_refresh_interval: 0,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigFile {
     connections: Vec<ConnectionConfig>,
+    #[serde(default)]
+    settings: AppSettings,
 }
 
 #[derive(Clone)]
@@ -60,6 +76,17 @@ impl ConfigStorage {
         self.save_config_file(&file)
     }
 
+    pub fn load_settings(&self) -> io::Result<AppSettings> {
+        let file = self.load_or_create_config_file()?;
+        Ok(file.settings)
+    }
+
+    pub fn save_settings(&self, settings: &AppSettings) -> io::Result<()> {
+        let mut file = self.load_or_create_config_file()?;
+        file.settings = settings.clone();
+        self.save_config_file(&file)
+    }
+
     fn load_or_create_config_file(&self) -> io::Result<ConfigFile> {
         if self.config_path.exists() {
             let content = fs::read_to_string(&self.config_path)?;
@@ -68,6 +95,7 @@ impl ConfigStorage {
         } else {
             Ok(ConfigFile {
                 connections: Vec::new(),
+                settings: AppSettings::default(),
             })
         }
     }
