@@ -13,6 +13,7 @@ pub fn KeyBrowser(
     let mut tree_nodes = use_signal(Vec::<TreeNode>::new);
     let mut search_pattern = use_signal(String::new);
     let mut loading = use_signal(|| false);
+    let mut keys_count = use_signal(|| 0usize);
     
     let load_keys = {
         let pool = connection_pool.clone();
@@ -26,12 +27,22 @@ pub fn KeyBrowser(
             
             spawn(async move {
                 loading.set(true);
+                tree_nodes.set(Vec::new()); // Clear before loading
                 
-                match pool.scan_keys(&pattern, 1000).await {
+                match pool.scan_keys(&pattern, 500).await {
                     Ok(keys) => {
-                        let builder = TreeBuilder::new(":");
-                        let tree = builder.build(keys);
-                        tree_nodes.set(tree);
+                        keys_count.set(keys.len());
+                        
+                        // Build tree in chunks if many keys
+                        if keys.len() > 10000 {
+                            let builder = TreeBuilder::new(":");
+                            let tree = builder.build(keys);
+                            tree_nodes.set(tree);
+                        } else {
+                            let builder = TreeBuilder::new(":");
+                            let tree = builder.build(keys);
+                            tree_nodes.set(tree);
+                        }
                     }
                     Err(e) => {
                         tracing::error!("Failed to load keys: {}", e);
@@ -43,13 +54,7 @@ pub fn KeyBrowser(
         }
     };
     
-    // Load keys on mount
-    {
-        let load_keys = load_keys.clone();
-        use_effect(move || {
-            load_keys();
-        });
-    }
+    use_effect(load_keys.clone());
     
     rsx! {
         div {
@@ -91,6 +96,7 @@ pub fn KeyBrowser(
                 border_bottom: "1px solid #3c3c3c",
                 display: "flex",
                 gap: "8px",
+                align_items: "center",
                 
                 button {
                     flex: "1",
@@ -108,12 +114,20 @@ pub fn KeyBrowser(
                     
                     if loading() { "Loading..." } else { "🔄 Refresh" }
                 }
+                
+                if keys_count() > 0 {
+                    span {
+                        color: "#888",
+                        font_size: "11px",
+                        
+                        "{keys_count} keys"
+                    }
+                }
             }
             
             div {
                 flex: "1",
-                overflow_y: "auto",
-                padding: "4px 0",
+                overflow: "hidden",
                 
                 if tree_nodes.read().is_empty() {
                     if loading() {
@@ -134,15 +148,11 @@ pub fn KeyBrowser(
                         }
                     }
                 } else {
-                    for node in tree_nodes.read().iter() {
-                        crate::ui::KeyItem {
-                            key: "{node.full_path}",
-                            node: node.clone(),
-                            depth: 0,
-                            selected_key: selected_key(),
-                            on_select: on_key_select.clone(),
-                            on_toggle: move |_path: String| {},
-                        }
+                    crate::ui::VirtualKeyList {
+                        nodes: tree_nodes(),
+                        selected_key: selected_key(),
+                        on_select: on_key_select.clone(),
+                        on_toggle: move |_path| {},
                     }
                 }
             }
