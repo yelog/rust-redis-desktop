@@ -42,6 +42,7 @@ pub fn App() -> Element {
             height: "100vh",
             background: "#1e1e1e",
             color: "white",
+            overflow: "hidden",
 
             Sidebar {
                 connections: connections(),

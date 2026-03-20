@@ -20,6 +20,8 @@ pub fn Sidebar(
             padding: "16px",
             display: "flex",
             flex_direction: "column",
+            box_sizing: "border-box",
+            overflow: "hidden",
 
             button {
                 onclick: move |_| on_add_connection.call(()),
