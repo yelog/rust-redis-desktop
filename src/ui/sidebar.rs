@@ -27,6 +27,7 @@ pub fn Sidebar(
     let mut hover_reconnect = use_signal(|| false);
     let mut hover_close = use_signal(|| false);
     let mut hover_flush = use_signal(|| false);
+    let mut hover_connection = use_signal(|| None::<Uuid>);
 
     rsx! {
         style { {r#"
@@ -93,14 +94,30 @@ pub fn Sidebar(
                         rsx! {
                             div {
                                 key: "{id}",
-                                padding: "10px",
+                                padding: "10px 12px",
                                 margin_bottom: "4px",
-                                background: if selected_connection == Some(id) { colors.background_tertiary } else { colors.background_secondary },
-                                border_radius: "4px",
+                                background: if selected_connection == Some(id) {
+                                    colors.background_tertiary
+                                } else if hover_connection() == Some(id) {
+                                    colors.background_tertiary
+                                } else {
+                                    colors.background_secondary
+                                },
+                                border_radius: "6px",
                                 color: "{colors.text}",
                                 position: "relative",
-                                border_left: if selected_connection == Some(id) { "3px solid {colors.primary}" } else { "3px solid transparent" },
-                                padding_left: if selected_connection == Some(id) { "7px" } else { "10px" },
+                                border: if selected_connection == Some(id) {
+                                    "1px solid {colors.primary}"
+                                } else {
+                                    "1px solid {colors.border}"
+                                },
+                                transition: "background 0.15s, border-color 0.15s",
+
+                                onmouseenter: {
+                                    let id = id;
+                                    move |_| hover_connection.set(Some(id))
+                                },
+                                onmouseleave: move |_| hover_connection.set(None),
 
                                 oncontextmenu: {
                                     let id = id;
@@ -122,7 +139,7 @@ pub fn Sidebar(
                                     cursor: "pointer",
                                     display: "flex",
                                     align_items: "center",
-                                    gap: "8px",
+                                    gap: "10px",
 
                                     div {
                                         width: "8px",
@@ -130,10 +147,16 @@ pub fn Sidebar(
                                         border_radius: "50%",
                                         background: "{dot_color}",
                                         flex_shrink: "0",
+                                        box_shadow: "0 0 4px {dot_color}",
                                         animation: if is_pulsing { "pulse 1.2s ease-in-out infinite" } else { "none" },
                                     }
 
-                                    "{name}"
+                                    span {
+                                        font_size: "13px",
+                                        font_weight: if selected_connection == Some(id) { "500" } else { "400" },
+
+                                        "{name}"
+                                    }
                                 }
                             }
                         }
