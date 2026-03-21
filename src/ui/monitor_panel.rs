@@ -1,6 +1,8 @@
 use crate::connection::ConnectionPool;
 use crate::redis::ServerInfo;
 use dioxus::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 fn format_bytes(bytes: u64) -> String {
@@ -36,10 +38,10 @@ pub fn MonitorPanel(
     auto_refresh_interval: u32,
 ) -> Element {
     let mut monitor_data = use_signal(Vec::<MonitorData>::new);
-    let current_info = use_signal(|| None::<ServerInfo>);
+    let mut current_info = use_signal(|| None::<ServerInfo>);
     let loading = use_signal(|| false);
-    let mut refresh_trigger = use_signal(|| 0u32);
     let mut is_monitoring = use_signal(|| false);
+    let mut monitoring_handle: Signal<Option<Arc<AtomicBool>>> = use_signal(|| None);
 
     let load_data = {
         let pool = connection_pool.clone();
@@ -81,31 +83,77 @@ pub fn MonitorPanel(
         }
     };
 
-    use_effect({
+    let start_monitoring = {
+        let pool = connection_pool.clone();
         let load_data = load_data.clone();
-        move || {
-            let _ = refresh_trigger();
+        move |_| {
+            if is_monitoring() {
+                if let Some(handle) = monitoring_handle() {
+                    handle.store(false, Ordering::SeqCst);
+                }
+                is_monitoring.set(false);
+                monitoring_handle.set(None);
+            } else {
+                let running = Arc::new(AtomicBool::new(true));
+                monitoring_handle.set(Some(running.clone()));
+                is_monitoring.set(true);
+                
+                load_data();
+
+                let pool = pool.clone();
+                let mut monitor_data = monitor_data.clone();
+                let mut current_info = current_info.clone();
+                let running = running.clone();
+                let interval_secs = auto_refresh_interval.max(1) as u64;
+
+                spawn(async move {
+                    let mut timer = tokio::time::interval(Duration::from_secs(interval_secs));
+                    timer.tick().await;
+
+                    while running.load(Ordering::SeqCst) {
+                        timer.tick().await;
+                        if !running.load(Ordering::SeqCst) {
+                            break;
+                        }
+
+                        match pool.get_server_info().await {
+                            Ok(info) => {
+                                current_info.set(Some(info.clone()));
+                                let data = MonitorData {
+                                    timestamp: std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_secs(),
+                                    used_memory: info.used_memory.unwrap_or(0),
+                                    ops_per_sec: info.instantaneous_ops_per_sec.unwrap_or(0),
+                                    connected_clients: info.connected_clients.unwrap_or(0),
+                                    keys_total: info.keys_total,
+                                    hits: 0,
+                                    misses: 0,
+                                };
+                                let mut data_vec = monitor_data();
+                                data_vec.push(data);
+                                if data_vec.len() > 60 {
+                                    data_vec.remove(0);
+                                }
+                                monitor_data.set(data_vec);
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to load monitor data: {}", e);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    };
+
+    let refresh_data = {
+        let load_data = load_data.clone();
+        move |_| {
             load_data();
         }
-    });
-
-    use_effect(move || {
-        if !is_monitoring() || auto_refresh_interval == 0 {
-            return;
-        }
-
-        let mut refresh_trigger = refresh_trigger.clone();
-        spawn(async move {
-            let mut timer = tokio::time::interval(Duration::from_secs(auto_refresh_interval as u64));
-            loop {
-                timer.tick().await;
-                if !is_monitoring() {
-                    break;
-                }
-                refresh_trigger.set(refresh_trigger() + 1);
-            }
-        });
-    });
+    };
 
     let info = current_info();
     let data = monitor_data();
@@ -147,7 +195,7 @@ pub fn MonitorPanel(
                         border_radius: "4px",
                         cursor: "pointer",
                         font_size: "12px",
-                        onclick: move |_| is_monitoring.set(!is_monitoring()),
+                        onclick: start_monitoring,
 
                         if is_monitoring() { "⏹ 停止监控" } else { "▶ 开始监控" }
                     }
@@ -160,10 +208,7 @@ pub fn MonitorPanel(
                         border_radius: "4px",
                         cursor: "pointer",
                         font_size: "12px",
-                        onclick: move |_| {
-                            monitor_data.set(Vec::new());
-                            refresh_trigger.set(refresh_trigger() + 1);
-                        },
+                        onclick: refresh_data,
 
                         "🔄 刷新"
                     }
