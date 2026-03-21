@@ -1,7 +1,8 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::ui::{
-    ConnectionForm, KeyBrowser, ServerInfoPanel, SettingsDialog, Sidebar, Terminal, ValueViewer,
+    ConnectionForm, KeyBrowser, MonitorPanel, ServerInfoPanel, SettingsDialog, Sidebar, Terminal,
+    ValueViewer,
 };
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -11,6 +12,7 @@ use uuid::Uuid;
 pub enum Tab {
     Data,
     Terminal,
+    Monitor,
 }
 
 #[derive(Clone, PartialEq)]
@@ -274,6 +276,19 @@ pub fn App() -> Element {
 
                                 "💻 Terminal"
                             }
+
+                            button {
+                                padding: "10px 20px",
+                                background: if current_tab() == Tab::Monitor { "#1e1e1e" } else { "transparent" },
+                                color: if current_tab() == Tab::Monitor { "white" } else { "#888" },
+                                border: "none",
+                                border_bottom: if current_tab() == Tab::Monitor { "2px solid #4ec9b0" } else { "none" },
+                                cursor: "pointer",
+                                font_size: "13px",
+                                onclick: move |_| current_tab.set(Tab::Monitor),
+
+                                "📈 Monitor"
+                            }
                         }
 
                         // Tab content
@@ -297,9 +312,14 @@ pub fn App() -> Element {
                                         auto_refresh_interval: app_settings.read().auto_refresh_interval,
                                     }
                                 }
-                            } else {
+                            } else if current_tab() == Tab::Terminal {
                                 Terminal {
                                     connection_pool: pool,
+                                }
+                            } else {
+                                MonitorPanel {
+                                    connection_pool: pool,
+                                    auto_refresh_interval: app_settings.read().auto_refresh_interval,
                                 }
                             }
                         }
