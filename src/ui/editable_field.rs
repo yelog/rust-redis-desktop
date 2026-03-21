@@ -102,9 +102,10 @@ pub fn EditableField(
                         border_radius: "4px",
                         color: "white",
                         font_family: if multiline { "Consolas, monospace" } else { "inherit" },
-                        overflow: "hidden",
-                        text_overflow: "ellipsis",
+                        overflow: if multiline { "auto" } else { "hidden" },
+                        text_overflow: if multiline { "unset" } else { "ellipsis" },
                         white_space: if multiline { "pre-wrap" } else { "nowrap" },
+                        word_break: if multiline { "break-all" } else { "normal" },
 
                         "{value}"
                     }
