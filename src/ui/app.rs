@@ -1,8 +1,8 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::ui::{
-    ConnectionForm, KeyBrowser, MonitorPanel, ServerInfoPanel, SettingsDialog, Sidebar, Terminal,
-    ValueViewer,
+    ConnectionForm, KeyBrowser, MonitorPanel, ServerInfoPanel, SettingsDialog, Sidebar,
+    SlowLogPanel, Terminal, ValueViewer,
 };
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -13,6 +13,7 @@ pub enum Tab {
     Data,
     Terminal,
     Monitor,
+    SlowLog,
 }
 
 #[derive(Clone, PartialEq)]
@@ -289,6 +290,19 @@ pub fn App() -> Element {
 
                                 "📈 Monitor"
                             }
+
+                            button {
+                                padding: "10px 20px",
+                                background: if current_tab() == Tab::SlowLog { "#1e1e1e" } else { "transparent" },
+                                color: if current_tab() == Tab::SlowLog { "white" } else { "#888" },
+                                border: "none",
+                                border_bottom: if current_tab() == Tab::SlowLog { "2px solid #4ec9b0" } else { "none" },
+                                cursor: "pointer",
+                                font_size: "13px",
+                                onclick: move |_| current_tab.set(Tab::SlowLog),
+
+                                "🐌 SlowLog"
+                            }
                         }
 
                         // Tab content
@@ -316,10 +330,14 @@ pub fn App() -> Element {
                                 Terminal {
                                     connection_pool: pool,
                                 }
-                            } else {
+                            } else if current_tab() == Tab::Monitor {
                                 MonitorPanel {
                                     connection_pool: pool,
                                     auto_refresh_interval: app_settings.read().auto_refresh_interval,
+                                }
+                            } else {
+                                SlowLogPanel {
+                                    connection_pool: pool,
                                 }
                             }
                         }
