@@ -1,4 +1,5 @@
 use super::types::*;
+use std::char;
 use std::io::{Cursor, Read};
 
 const STREAM_MAGIC: u16 = 0xACED;
@@ -278,6 +279,7 @@ fn parse_class_desc(reader: &mut ByteReader) -> Result<JavaClassInfo, ParseError
             type_code: java_type_code,
             type_string: type_string,
             class_name,
+            value: JavaFieldValue::NotParsed,
         });
     }
 
@@ -383,21 +385,109 @@ fn parse_new_object(reader: &mut ByteReader) -> Result<JavaClassInfo, ParseError
 
     match token {
         TC_CLASSDESC => {
-            let class_info = parse_class_desc(reader)?;
-            let _ = skip_object_data(reader, &class_info);
+            let mut class_info = parse_class_desc(reader)?;
+            parse_object_data(reader, &mut class_info)?;
             Ok(class_info)
         }
         TC_REFERENCE => {
             let handle = reader.read_u32()? as usize;
-            let class_info = match reader.get_handle(handle) {
+            let mut class_info = match reader.get_handle(handle) {
                 Some(Handle::Class(class_info)) => class_info.clone(),
                 _ => return Err(ParseError::InvalidClassDescriptor),
             };
-            let _ = skip_object_data(reader, &class_info);
+            parse_object_data(reader, &mut class_info)?;
             Ok(class_info)
         }
         _ => Err(ParseError::InvalidToken(token)),
     }
+}
+
+fn parse_primitive_value(
+    reader: &mut ByteReader,
+    type_code: JavaTypeCode,
+) -> Result<JavaFieldValue, ParseError> {
+    match type_code {
+        JavaTypeCode::Byte => {
+            let v = reader.read_u8()? as i8;
+            Ok(JavaFieldValue::Byte(v))
+        }
+        JavaTypeCode::Char => {
+            let v = reader.read_u16()?;
+            Ok(JavaFieldValue::Char(
+                char::from_u32(v as u32).unwrap_or('\0'),
+            ))
+        }
+        JavaTypeCode::Double => {
+            let bytes = reader.read_u64()?;
+            Ok(JavaFieldValue::Double(f64::from_be_bytes(
+                bytes.to_be_bytes(),
+            )))
+        }
+        JavaTypeCode::Float => {
+            let bytes = reader.read_u32()?;
+            Ok(JavaFieldValue::Float(f32::from_be_bytes(
+                bytes.to_be_bytes(),
+            )))
+        }
+        JavaTypeCode::Integer => {
+            let v = reader.read_i32()?;
+            Ok(JavaFieldValue::Int(v))
+        }
+        JavaTypeCode::Long => {
+            let v = reader.read_u64()? as i64;
+            Ok(JavaFieldValue::Long(v))
+        }
+        JavaTypeCode::Short => {
+            let v = reader.read_u16()? as i16;
+            Ok(JavaFieldValue::Short(v))
+        }
+        JavaTypeCode::Boolean => {
+            let v = reader.read_u8()?;
+            Ok(JavaFieldValue::Boolean(v != 0))
+        }
+        JavaTypeCode::Array | JavaTypeCode::Object => Ok(JavaFieldValue::NotParsed),
+    }
+}
+
+fn parse_object_data(
+    reader: &mut ByteReader,
+    class_info: &mut JavaClassInfo,
+) -> Result<(), ParseError> {
+    if let Some(ref mut super_class) = class_info.super_class {
+        parse_object_data(reader, super_class)?;
+    }
+
+    for field in &mut class_info.fields {
+        let value = match field.type_code {
+            JavaTypeCode::Byte
+            | JavaTypeCode::Char
+            | JavaTypeCode::Double
+            | JavaTypeCode::Float
+            | JavaTypeCode::Integer
+            | JavaTypeCode::Long
+            | JavaTypeCode::Short
+            | JavaTypeCode::Boolean => parse_primitive_value(reader, field.type_code)?,
+            JavaTypeCode::Array | JavaTypeCode::Object => {
+                let token = reader.read_u8()?;
+                match token {
+                    TC_NULL => JavaFieldValue::Null,
+                    TC_STRING => {
+                        let s = reader.read_long_utf()?;
+                        reader.add_handle(Handle::String(s.clone()));
+                        JavaFieldValue::String(Some(s))
+                    }
+                    TC_REFERENCE => {
+                        let handle = reader.read_u32()?;
+                        JavaFieldValue::Reference(handle)
+                    }
+                    _ => JavaFieldValue::NotParsed,
+                }
+            }
+        };
+        field.value = value;
+    }
+
+    Ok(())
 }
 
 fn skip_object_data(reader: &mut ByteReader, class_info: &JavaClassInfo) -> Result<(), ParseError> {
@@ -598,9 +688,42 @@ mod tests {
             println!("Class: {}", info.root_class.class_name);
             println!("Fields: {}", info.root_class.fields.len());
             for f in &info.root_class.fields {
-                println!("  - {}: {}", f.name, f.display_type());
+                println!(
+                    "  - {}: {} = {}",
+                    f.name,
+                    f.display_type(),
+                    f.value.display_value()
+                );
             }
             assert!(info.root_class.class_name.contains("OAuth2Authorization"));
+        }
+    }
+
+    #[test]
+    fn test_parse_int_field() {
+        let hex_data = "aced00057372000454657374000000000000000102000149000576616c756578700000002a";
+
+        let binary_data: Vec<u8> = (0..hex_data.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex_data[i..i + 2], 16).unwrap())
+            .collect();
+
+        assert!(is_java_serialization(&binary_data));
+
+        let result = parse_java_serialization(&binary_data);
+        if let Err(ref e) = result {
+            println!("Parse error: {:?}", e);
+        }
+        assert!(result.is_ok());
+
+        let info = result.unwrap();
+        assert_eq!(info.root_class.class_name, "Test");
+        assert_eq!(info.root_class.fields.len(), 1);
+        assert_eq!(info.root_class.fields[0].name, "value");
+
+        match &info.root_class.fields[0].value {
+            JavaFieldValue::Int(v) => assert_eq!(*v, 42),
+            other => panic!("Expected Int value, got {:?}", other),
         }
     }
 }

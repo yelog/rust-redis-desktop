@@ -1,6 +1,6 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
-use crate::serialization::{is_java_serialization, parse_java_serialization, JavaClassInfo, JavaSerializationInfo};
+use crate::serialization::{is_java_serialization, parse_java_serialization, JavaClassInfo, JavaFieldValue, JavaSerializationInfo};
 use crate::ui::editable_field::EditableField;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::{LargeKeyWarning, PageInfo};
@@ -316,29 +316,80 @@ fn JavaClassView(class_info: JavaClassInfo, depth: usize) -> Element {
                         border_radius: "6px",
                         padding: "12px",
                         
-                        for field in class_info.fields.iter() {
+                        div {
+                            display: "flex",
+                            padding: "8px 0",
+                            border_bottom: "1px solid #444",
+                            color: "#666",
+                            font_size: "11px",
+                            font_weight: "600",
+                            
                             div {
-                                display: "flex",
-                                padding: "6px 0",
-                                border_bottom: "1px solid #333",
+                                width: "25%",
+                                padding_right: "12px",
+                                "字段名"
+                            }
+                            
+                            div {
+                                width: "25%",
+                                padding_right: "12px",
+                                "类型"
+                            }
+                            
+                            div {
+                                flex: "1",
+                                "值"
+                            }
+                        }
+                        
+                        for field in class_info.fields.iter() {
+                            {
+                                let value_display = field.value.display_value();
+                                let value_color = match &field.value {
+                                    JavaFieldValue::String(Some(_)) => "#ce9178",
+                                    JavaFieldValue::Int(_) | JavaFieldValue::Long(_) => "#b5cea8",
+                                    JavaFieldValue::Boolean(_) => "#569cd6",
+                                    JavaFieldValue::Null => "#808080",
+                                    JavaFieldValue::NotParsed => "#666666",
+                                    _ => "#dcdcaa",
+                                };
                                 
-                                div {
-                                    width: "40%",
-                                    color: "#9cdcfe",
-                                    font_size: "13px",
-                                    font_family: "Consolas, monospace",
-                                    padding_right: "12px",
-                                    
-                                    "{field.name}"
-                                }
-                                
-                                div {
-                                    flex: "1",
-                                    color: "#ce9178",
-                                    font_size: "13px",
-                                    font_family: "Consolas, monospace",
-                                    
-                                    "{field.display_type()}"
+                                rsx! {
+                                    div {
+                                        display: "flex",
+                                        padding: "6px 0",
+                                        border_bottom: "1px solid #333",
+                                        
+                                        div {
+                                            width: "25%",
+                                            color: "#9cdcfe",
+                                            font_size: "13px",
+                                            font_family: "Consolas, monospace",
+                                            padding_right: "12px",
+                                            
+                                            "{field.name}"
+                                        }
+                                        
+                                        div {
+                                            width: "25%",
+                                            color: "#4ec9b0",
+                                            font_size: "13px",
+                                            font_family: "Consolas, monospace",
+                                            padding_right: "12px",
+                                            
+                                            "{field.display_type()}"
+                                        }
+                                        
+                                        div {
+                                            flex: "1",
+                                            color: "{value_color}",
+                                            font_size: "13px",
+                                            font_family: "Consolas, monospace",
+                                            word_break: "break_all",
+                                            
+                                            "{value_display}"
+                                        }
+                                    }
                                 }
                             }
                         }

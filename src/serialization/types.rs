@@ -59,6 +59,7 @@ pub struct JavaFieldInfo {
     pub type_code: JavaTypeCode,
     pub type_string: String,
     pub class_name: Option<String>,
+    pub value: JavaFieldValue,
 }
 
 impl JavaFieldInfo {
@@ -77,6 +78,15 @@ impl JavaFieldInfo {
                 _ => self.type_code.type_name().to_string(),
             }
         }
+    }
+
+    pub fn display_with_value(&self) -> String {
+        format!(
+            "{}: {} = {}",
+            self.name,
+            self.display_type(),
+            self.value.display_value()
+        )
     }
 }
 
@@ -127,5 +137,59 @@ pub fn format_class_name_with_package(full_name: &str) -> String {
         simplified
     } else {
         format!("{} ({})", simplified, full_name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum JavaFieldValue {
+    Null,
+    Byte(i8),
+    Char(char),
+    Double(f64),
+    Float(f32),
+    Int(i32),
+    Long(i64),
+    Short(i16),
+    Boolean(bool),
+    String(Option<String>),
+    Object(String),
+    Array(String),
+    Reference(u32),
+    NotParsed,
+}
+
+impl JavaFieldValue {
+    pub fn display_value(&self) -> String {
+        match self {
+            JavaFieldValue::Null => "null".to_string(),
+            JavaFieldValue::Byte(v) => format!("{} (byte)", v),
+            JavaFieldValue::Char(v) => format!("'{}' (char)", v),
+            JavaFieldValue::Double(v) => format!("{} (double)", v),
+            JavaFieldValue::Float(v) => format!("{} (float)", v),
+            JavaFieldValue::Int(v) => format!("{} (int)", v),
+            JavaFieldValue::Long(v) => format!("{} (long)", v),
+            JavaFieldValue::Short(v) => format!("{} (short)", v),
+            JavaFieldValue::Boolean(v) => v.to_string(),
+            JavaFieldValue::String(Some(s)) => format!("\"{}\"", s),
+            JavaFieldValue::String(None) => "null".to_string(),
+            JavaFieldValue::Object(class) => format!("<Object: {}>", simplify_class_name(class)),
+            JavaFieldValue::Array(type_name) => format!("<Array: {}>", type_name),
+            JavaFieldValue::Reference(handle) => format!("<ref: 0x{:08X}>", handle),
+            JavaFieldValue::NotParsed => "<not parsed>".to_string(),
+        }
+    }
+
+    pub fn is_primitive(&self) -> bool {
+        matches!(
+            self,
+            JavaFieldValue::Byte(_)
+                | JavaFieldValue::Char(_)
+                | JavaFieldValue::Double(_)
+                | JavaFieldValue::Float(_)
+                | JavaFieldValue::Int(_)
+                | JavaFieldValue::Long(_)
+                | JavaFieldValue::Short(_)
+                | JavaFieldValue::Boolean(_)
+        )
     }
 }
