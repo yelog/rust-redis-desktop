@@ -2,6 +2,10 @@ use crate::serialization::java_converters::{
     get_collection_display_name, is_collection_type, is_map_type, is_set_type,
 };
 use crate::serialization::{simplify_class_name, Content, Parser};
+use crate::theme::{
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT,
+    COLOR_TEXT_SECONDARY,
+};
 use arboard::Clipboard;
 use dioxus::prelude::*;
 use serde_json::Value as JsonValue;
@@ -21,9 +25,11 @@ fn extract_inner_value(json: JsonValue) -> JsonValue {
             } else if let Some(inner) = obj.get("Enum") {
                 if let Some(arr) = inner.as_array() {
                     if arr.len() == 2 {
-                        JsonValue::String(format!("{}::{}", 
+                        JsonValue::String(format!(
+                            "{}::{}",
                             simplify_class_name(arr[0].as_str().unwrap_or("")),
-                            arr[1].as_str().unwrap_or("")))
+                            arr[1].as_str().unwrap_or("")
+                        ))
                     } else {
                         inner.clone()
                     }
@@ -40,17 +46,20 @@ fn extract_inner_value(json: JsonValue) -> JsonValue {
                 JsonValue::Null
             } else if obj.contains_key("class") {
                 let mut result = serde_json::Map::new();
-                result.insert("class".to_string(), obj.get("class").cloned().unwrap_or(JsonValue::Null));
-                
+                result.insert(
+                    "class".to_string(),
+                    obj.get("class").cloned().unwrap_or(JsonValue::Null),
+                );
+
                 if let Some(fields) = obj.get("fields") {
                     let extracted_fields = extract_fields(fields);
                     result.insert("fields".to_string(), JsonValue::Object(extracted_fields));
                 }
-                
+
                 if let Some(annotations) = obj.get("annotations") {
                     result.insert("annotations".to_string(), annotations.clone());
                 }
-                
+
                 JsonValue::Object(result)
             } else {
                 let extracted: serde_json::Map<String, JsonValue> = obj
@@ -69,11 +78,10 @@ fn extract_inner_value(json: JsonValue) -> JsonValue {
 
 fn extract_fields(fields: &JsonValue) -> serde_json::Map<String, JsonValue> {
     match fields {
-        JsonValue::Object(obj) => {
-            obj.iter()
-                .map(|(k, v)| (k.clone(), extract_inner_value(v.clone())))
-                .collect()
-        }
+        JsonValue::Object(obj) => obj
+            .iter()
+            .map(|(k, v)| (k.clone(), extract_inner_value(v.clone())))
+            .collect(),
         _ => serde_json::Map::new(),
     }
 }
@@ -101,8 +109,8 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
     rsx! {
         div {
             padding: "16px",
-            background: "#252526",
-            border: "1px solid #3c3c3c",
+            background: COLOR_BG_SECONDARY,
+            border: "1px solid {COLOR_BORDER}",
             border_radius: "8px",
 
             div {
@@ -111,7 +119,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                 justify_content: "space_between",
                 margin_bottom: "12px",
                 padding_bottom: "12px",
-                border_bottom: "1px solid #3c3c3c",
+                border_bottom: "1px solid {COLOR_BORDER}",
 
                 div {
                     display: "flex",
@@ -139,7 +147,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                     }
 
                     span {
-                        color: "#22c55e",
+                        color: COLOR_ACCENT,
                         font_size: "14px",
                         font_weight: "600",
 
@@ -161,10 +169,10 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                     oninput: move |e| search_query.set(e.value()),
                     font_size: "12px",
                     padding: "4px 8px",
-                    background: "#1e1e1e",
-                    border: "1px solid #3c3c3c",
+                    background: COLOR_BG,
+                    border: "1px solid {COLOR_BORDER}",
                     border_radius: "4px",
-                    color: "#ccc",
+                    color: COLOR_TEXT,
                     flex: "1",
                     min_width: "150px",
                 }
@@ -172,9 +180,9 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                 button {
                     font_size: "11px",
                     padding: "4px 8px",
-                    background: "#333",
-                    border: "1px solid #444",
-                    color: "#ccc",
+                    background: COLOR_BG_TERTIARY,
+                    border: "1px solid {COLOR_BORDER}",
+                    color: COLOR_TEXT,
                     border_radius: "4px",
                     cursor: "pointer",
 
@@ -186,9 +194,9 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                 button {
                     font_size: "11px",
                     padding: "4px 8px",
-                    background: "#333",
-                    border: "1px solid #444",
-                    color: "#ccc",
+                    background: COLOR_BG_TERTIARY,
+                    border: "1px solid {COLOR_BORDER}",
+                    color: COLOR_TEXT,
                     border_radius: "4px",
                     cursor: "pointer",
 
@@ -200,9 +208,9 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                 button {
                     font_size: "11px",
                     padding: "4px 8px",
-                    background: if *show_raw_json.read() { "#1e4620" } else { "#333" },
-                    border: "1px solid #444",
-                    color: if *show_raw_json.read() { "#22c55e" } else { "#ccc" },
+                    background: if *show_raw_json.read() { "rgba(16, 124, 16, 0.16)" } else { COLOR_BG_TERTIARY },
+                    border: "1px solid {COLOR_BORDER}",
+                    color: if *show_raw_json.read() { "var(--theme-success, #107c10)" } else { COLOR_TEXT },
                     border_radius: "4px",
                     cursor: "pointer",
 
@@ -225,14 +233,14 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                                             let json_str = serde_json::to_string_pretty(&json).unwrap_or_else(|_| "序列化失败".to_string());
                                             rsx! {
                                                 pre {
-                                                    color: "#ccc",
+                                                    color: COLOR_TEXT,
                                                     font_size: "11px",
                                                     font_family: "Consolas, monospace",
                                                     white_space: "pre_wrap",
                                                     word_break: "break_all",
                                                     margin: "0",
                                                     padding: "8px",
-                                                    background: "#1e1e1e",
+                                                    background: COLOR_BG,
                                                     border_radius: "4px",
                                                     max_height: "500px",
                                                     overflow_y: "auto",
@@ -253,7 +261,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                                     },
                                     Err(_) => rsx! {
                                         div {
-                                            color: "#888",
+                                            color: COLOR_TEXT_SECONDARY,
                                             "序列化失败"
                                         }
                                     },
@@ -261,7 +269,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                             },
                             Content::Block(bytes) => rsx! {
                                 div {
-                                    color: "#888",
+                                    color: COLOR_TEXT_SECONDARY,
                                     "原始数据块 ({bytes.len()} 字节)"
                                 }
                             },
@@ -269,9 +277,9 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                     },
                     Some(Err(e)) => rsx! {
                         div {
-                            color: "#f44336",
+                            color: "var(--theme-error, #d13438)",
                             padding: "12px",
-                            background: "#2d1f1f",
+                            background: "rgba(209, 52, 56, 0.12)",
                             border_radius: "4px",
 
                             "解析错误: {e}"
@@ -279,7 +287,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                     },
                     None => rsx! {
                         div {
-                            color: "#888",
+                            color: COLOR_TEXT_SECONDARY,
                             text_align: "center",
                             padding: "20px",
 
@@ -318,7 +326,7 @@ fn JsonTreeNode(
         },
         _ => rsx! {
             JsonPrimitiveNode { value: value.clone(), depth }
-        }
+        },
     }
 }
 
@@ -342,7 +350,10 @@ fn JsonObjectNode(
     let indent = depth * 16;
 
     let is_java_object = obj.contains_key("class") && obj.contains_key("fields");
-    let class_name = obj.get("class").and_then(|v| v.as_str()).unwrap_or("Object");
+    let class_name = obj
+        .get("class")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Object");
     let simple_name = simplify_class_name(class_name);
     let has_full_name = class_name != simple_name;
 
@@ -456,7 +467,7 @@ fn JsonObjectNode(
                             rsx! {
                                 div {
                                     margin_left: "18px",
-                                    border_left: "1px solid #3c3c3c",
+                                    border_left: "1px solid {COLOR_BORDER}",
                                     padding_left: "8px",
                                     margin_top: "2px",
 
@@ -587,7 +598,7 @@ fn JsonArrayNode(
             if *expanded.read() {
                 div {
                     margin_left: "18px",
-                    border_left: "1px solid #3c3c3c",
+                    border_left: "1px solid {COLOR_BORDER}",
                     padding_left: "8px",
 
                     for (i, item) in arr.iter().enumerate() {
@@ -674,7 +685,7 @@ fn CopyButton(text: String) -> Element {
             font_size: "9px",
             padding: "1px 4px",
             background: if *copied.read() { "#1e4620" } else { "transparent" },
-            border: "1px solid #3c3c3c",
+            border: "1px solid {COLOR_BORDER}",
             color: if *copied.read() { "#22c55e" } else { "#666" },
             border_radius: "2px",
             cursor: "pointer",

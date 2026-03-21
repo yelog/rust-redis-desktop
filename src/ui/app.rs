@@ -6,6 +6,7 @@ use crate::ui::{
     ServerInfoPanel, SettingsDialog, Sidebar, SlowLogPanel, Terminal, ValueViewer,
 };
 use dioxus::prelude::*;
+use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -22,6 +23,406 @@ pub enum Tab {
 pub enum FormMode {
     New,
     Edit(ConnectionConfig),
+}
+
+fn system_theme_is_dark() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("defaults")
+            .args(["read", "-g", "AppleInterfaceStyle"])
+            .output()
+            .map(|output| String::from_utf8_lossy(&output.stdout).contains("Dark"))
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
+fn resolve_theme_colors(mode: ThemeMode) -> ThemeColors {
+    match mode {
+        ThemeMode::Dark => ThemeColors::dark(),
+        ThemeMode::Light => ThemeColors::light(),
+        ThemeMode::System => {
+            if system_theme_is_dark() {
+                ThemeColors::dark()
+            } else {
+                ThemeColors::light()
+            }
+        }
+    }
+}
+
+fn build_theme_palette(colors: &ThemeColors, is_dark: bool) -> serde_json::Value {
+    json!({
+        "isDark": is_dark,
+        "surfaceBase": colors.background,
+        "surfaceSecondary": colors.background_secondary,
+        "surfaceTertiary": colors.background_tertiary,
+        "border": colors.border,
+        "controlBg": if is_dark { "#3c3c3c" } else { "#ffffff" },
+        "controlBorder": if is_dark { "#555555" } else { "#c7c7c7" },
+        "buttonSecondary": if is_dark { "#5a5a5a" } else { "#d9d9d9" },
+        "buttonSecondaryBorder": if is_dark { "#444444" } else { "#c7c7c7" },
+        "textPrimary": colors.text,
+        "textSecondary": colors.text_secondary,
+        "textSubtle": if is_dark { "#666666" } else { "#808080" },
+        "textSoft": if is_dark { "#d4d4d4" } else { "#444444" },
+        "textContrast": "#ffffff",
+        "primary": colors.primary,
+        "accent": colors.accent,
+        "success": colors.success,
+        "warning": colors.warning,
+        "error": colors.error,
+        "info": if is_dark { "#63b3ed" } else { "#0f6cbd" },
+        "purple": if is_dark { "#a78bfa" } else { "#6b46c1" },
+        "infoBg": if is_dark { "#1a1a2e" } else { "#eef4ff" },
+        "infoBgAlt": if is_dark { "#1f2937" } else { "#edf7ff" },
+        "successBg": if is_dark { "#1a3a1a" } else { "#edf9f0" },
+        "successBgAlt": if is_dark { "#1e4620" } else { "#e3f5e6" },
+        "errorBg": if is_dark { "#2d1f1f" } else { "#fff1f1" },
+        "selectionBg": if is_dark { "#094771" } else { "#dbeafe" },
+        "selectionBgAlt": if is_dark { "#1a4a1a" } else { "#e7f6ea" },
+        "syntaxKey": if is_dark { "#9cdcfe" } else { "#0451a5" },
+        "syntaxString": if is_dark { "#ce9178" } else { "#a31515" },
+        "syntaxNumber": if is_dark { "#b5cea8" } else { "#098658" },
+        "syntaxKeyword": if is_dark { "#569cd6" } else { "#0000ff" },
+        "syntaxType": if is_dark { "#dcdcaa" } else { "#795e26" },
+    })
+}
+
+fn build_theme_bridge_script(mode: ThemeMode) -> String {
+    let selected_mode = match mode {
+        ThemeMode::Dark => "dark",
+        ThemeMode::Light => "light",
+        ThemeMode::System => "system",
+    };
+    let dark_theme = build_theme_palette(&ThemeColors::dark(), true);
+    let light_theme = build_theme_palette(&ThemeColors::light(), false);
+
+    format!(
+        r##"
+(() => {{
+  const bridge = (window.__rrdThemeBridge = window.__rrdThemeBridge || {{}});
+  bridge.selectedMode = {selected_mode};
+  bridge.dark = {dark_theme};
+  bridge.light = {light_theme};
+
+  const normalize = (value) => (value || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+  const hexToRgb = (value) => {{
+    if (!value || !value.startsWith("#")) {{
+      return null;
+    }}
+
+    let hex = value.slice(1);
+    if (hex.length === 3) {{
+      hex = hex
+        .split("")
+        .map((part) => part + part)
+        .join("");
+    }}
+
+    if (hex.length !== 6) {{
+      return null;
+    }}
+
+    const num = Number.parseInt(hex, 16);
+    if (Number.isNaN(num)) {{
+      return null;
+    }}
+
+    const red = (num >> 16) & 255;
+    const green = (num >> 8) & 255;
+    const blue = num & 255;
+    return `rgb(${{red}},${{green}},${{blue}})`;
+  }};
+
+  const addAlias = (map, aliases, target) => {{
+    aliases.forEach((alias) => {{
+      if (!alias) {{
+        return;
+      }}
+
+      const normalized = normalize(alias);
+      if (!normalized) {{
+        return;
+      }}
+
+      map.set(normalized, target);
+
+      const rgb = hexToRgb(alias);
+      if (rgb) {{
+        map.set(normalize(rgb), target);
+      }}
+    }});
+  }};
+
+  const themedSurfaceAliases = [
+    [["#1e1e1e", "#ffffff"], "surfaceBase"],
+    [["#252526", "#f3f3f3"], "surfaceSecondary"],
+    [["#2d2d2d", "#e8e8e8"], "surfaceTertiary"],
+    [["#3c3c3c", "#d4d4d4"], "border"],
+    [["#555", "#555555", "#c7c7c7"], "controlBorder"],
+    [["#333", "#5a5a5a", "#d9d9d9"], "buttonSecondary"],
+    [["#444"], "buttonSecondaryBorder"],
+    [["#1a1a2e"], "infoBg"],
+    [["#1f2937", "#202a33"], "infoBgAlt"],
+    [["#1a3a1a"], "successBg"],
+    [["#1a4a1a", "#1e4620"], "successBgAlt"],
+    [["#2d1f1f"], "errorBg"],
+    [["#094771"], "selectionBg"],
+  ];
+
+  const themedAccentAliases = [
+    [["#0e639c", "#3182ce"], "primary"],
+    [["#007acc", "#4ec9b0"], "accent"],
+    [["#38a169", "#68d391", "#22c55e", "#4ade80"], "success"],
+    [["#f59e0b"], "warning"],
+    [["#c53030", "#f87171", "#ef4444", "#f44336"], "error"],
+    [["#63b3ed"], "info"],
+    [["#805ad5", "#a78bfa"], "purple"],
+    [["#9cdcfe"], "syntaxKey"],
+    [["#ce9178"], "syntaxString"],
+    [["#b5cea8"], "syntaxNumber"],
+    [["#569cd6"], "syntaxKeyword"],
+    [["#dcdcaa"], "syntaxType"],
+  ];
+
+  const legacyTextPrimary = new Set([
+    "white",
+    "#fff",
+    "#ffffff",
+    "black",
+    "#000",
+    "#000000",
+    "#1e1e1e",
+    "#d4d4d4",
+    "#ccc",
+    "#cccccc",
+    "#bbb",
+    "#333",
+  ].map(normalize));
+
+  const legacyTextSecondary = new Set(["#888", "#666", "#808080"].map(normalize));
+
+  const resolveTheme = () => {{
+    if (bridge.selectedMode === "system") {{
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? bridge.dark : bridge.light;
+    }}
+
+    return bridge.selectedMode === "dark" ? bridge.dark : bridge.light;
+  }};
+
+  const buildMaps = (theme) => {{
+    const exact = new Map();
+    themedSurfaceAliases.forEach(([aliases, key]) => addAlias(exact, aliases, theme[key]));
+    themedAccentAliases.forEach(([aliases, key]) => addAlias(exact, aliases, theme[key]));
+    addAlias(exact, [theme.surfaceBase, theme.surfaceSecondary, theme.surfaceTertiary], theme.surfaceBase);
+    addAlias(exact, [theme.controlBg], theme.controlBg);
+    addAlias(exact, [theme.controlBorder], theme.controlBorder);
+    addAlias(exact, [theme.textPrimary], theme.textPrimary);
+    addAlias(exact, [theme.textSecondary], theme.textSecondary);
+    addAlias(exact, [theme.textSubtle], theme.textSubtle);
+    addAlias(exact, [theme.textSoft], theme.textSoft);
+    return exact;
+  }};
+
+  const isContrastBackground = (value) => {{
+    const normalized = normalize(value);
+    return [
+      bridge.dark.primary,
+      bridge.light.primary,
+      bridge.dark.success,
+      bridge.light.success,
+      bridge.dark.error,
+      bridge.light.error,
+      bridge.dark.warning,
+      bridge.light.warning,
+      bridge.dark.buttonSecondary,
+      bridge.light.buttonSecondary,
+      bridge.dark.purple,
+      bridge.light.purple,
+    ]
+      .map(normalize)
+      .includes(normalized);
+  }};
+
+  const replaceFragments = (value, map) => {{
+    if (!value) {{
+      return value;
+    }}
+
+    let nextValue = value;
+    map.forEach((target, source) => {{
+      if (nextValue.toLowerCase().includes(source)) {{
+        nextValue = nextValue.replaceAll(source, target);
+      }}
+    }});
+    return nextValue;
+  }};
+
+  const updateInlineStyles = (element, theme, map) => {{
+    const style = element.style;
+    if (!style) {{
+      return;
+    }}
+
+    const backgroundValue = style.backgroundColor || style.background;
+    const normalizedBackground = normalize(backgroundValue);
+
+    if (backgroundValue) {{
+      const mappedBackground = map.get(normalizedBackground);
+      if (mappedBackground && backgroundValue !== mappedBackground) {{
+        style.background = mappedBackground;
+      }} else {{
+        const fragmentBackground = replaceFragments(backgroundValue, map);
+        if (fragmentBackground !== backgroundValue) {{
+          style.background = fragmentBackground;
+        }}
+      }}
+    }}
+
+    if (style.borderColor) {{
+      const mappedBorder = map.get(normalize(style.borderColor));
+      if (mappedBorder && mappedBorder !== style.borderColor) {{
+        style.borderColor = mappedBorder;
+      }}
+    }}
+
+    if (style.borderBottomColor) {{
+      const mappedBorderBottomColor = map.get(normalize(style.borderBottomColor));
+      if (mappedBorderBottomColor && mappedBorderBottomColor !== style.borderBottomColor) {{
+        style.borderBottomColor = mappedBorderBottomColor;
+      }}
+    }}
+
+    if (style.borderTopColor) {{
+      const mappedBorderTopColor = map.get(normalize(style.borderTopColor));
+      if (mappedBorderTopColor && mappedBorderTopColor !== style.borderTopColor) {{
+        style.borderTopColor = mappedBorderTopColor;
+      }}
+    }}
+
+    if (style.border) {{
+      const mappedBorder = replaceFragments(style.border, map);
+      if (mappedBorder !== style.border) {{
+        style.border = mappedBorder;
+      }}
+    }}
+
+    if (style.borderBottom) {{
+      const mappedBorderBottom = replaceFragments(style.borderBottom, map);
+      if (mappedBorderBottom !== style.borderBottom) {{
+        style.borderBottom = mappedBorderBottom;
+      }}
+    }}
+
+    if (style.borderTop) {{
+      const mappedBorderTop = replaceFragments(style.borderTop, map);
+      if (mappedBorderTop !== style.borderTop) {{
+        style.borderTop = mappedBorderTop;
+      }}
+    }}
+
+    if (style.color) {{
+      const normalizedColor = normalize(style.color);
+      let nextColor = map.get(normalizedColor) || null;
+
+      if (!nextColor && legacyTextPrimary.has(normalizedColor)) {{
+        nextColor = isContrastBackground(backgroundValue) ? theme.textContrast : theme.textPrimary;
+      }}
+
+      if (!nextColor && legacyTextSecondary.has(normalizedColor)) {{
+        nextColor = normalizedColor === normalize("#666") ? theme.textSubtle : theme.textSecondary;
+      }}
+
+      if (nextColor && nextColor !== style.color) {{
+        style.color = nextColor;
+      }}
+    }}
+  }};
+
+  bridge.apply = () => {{
+    const theme = resolveTheme();
+    const map = buildMaps(theme);
+    const root = document.documentElement;
+    const body = document.body;
+
+    if (bridge.observer) {{
+      bridge.observer.disconnect();
+    }}
+
+    root.dataset.themeMode = bridge.selectedMode;
+    root.dataset.themeResolved = theme.isDark ? "dark" : "light";
+    root.style.colorScheme = theme.isDark ? "dark" : "light";
+    root.style.setProperty("--theme-bg", theme.surfaceBase);
+    root.style.setProperty("--theme-bg-secondary", theme.surfaceSecondary);
+    root.style.setProperty("--theme-bg-tertiary", theme.surfaceTertiary);
+    root.style.setProperty("--theme-border", theme.border);
+    root.style.setProperty("--theme-text", theme.textPrimary);
+    root.style.setProperty("--theme-text-secondary", theme.textSecondary);
+    root.style.setProperty("--theme-text-subtle", theme.textSubtle);
+    root.style.setProperty("--theme-text-soft", theme.textSoft);
+    root.style.setProperty("--theme-primary", theme.primary);
+    root.style.setProperty("--theme-accent", theme.accent);
+    root.style.setProperty("--theme-success", theme.success);
+    root.style.setProperty("--theme-warning", theme.warning);
+    root.style.setProperty("--theme-error", theme.error);
+    root.style.setProperty("--theme-info", theme.info);
+    root.style.setProperty("--theme-purple", theme.purple);
+    body.style.margin = "0";
+    body.style.padding = "0";
+    body.style.backgroundColor = theme.surfaceBase;
+    body.style.color = theme.textPrimary;
+
+    [body, ...body.querySelectorAll("*")].forEach((element) => {{
+      if (!(element instanceof HTMLElement)) {{
+        return;
+      }}
+      updateInlineStyles(element, theme, map);
+    }});
+
+    if (bridge.observer) {{
+      bridge.observer.observe(document.body, bridge.observerConfig);
+    }}
+  }};
+
+  bridge.schedule = () => {{
+    if (bridge.raf) {{
+      cancelAnimationFrame(bridge.raf);
+    }}
+    bridge.raf = requestAnimationFrame(() => bridge.apply());
+  }};
+
+  if (!bridge.mediaQuery) {{
+    bridge.mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    bridge.mediaQuery.addEventListener("change", () => bridge.schedule());
+  }}
+
+  if (!bridge.observer) {{
+    bridge.observerConfig = {{
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style"],
+    }};
+    bridge.observer = new MutationObserver(() => bridge.schedule());
+    bridge.observer.observe(document.body, bridge.observerConfig);
+  }}
+
+  bridge.schedule();
+}})();
+"##,
+        selected_mode = serde_json::to_string(selected_mode).unwrap(),
+        dark_theme = dark_theme,
+        light_theme = light_theme,
+    )
 }
 
 #[component]
@@ -41,34 +442,12 @@ pub fn App() -> Element {
     let mut app_settings = use_signal(AppSettings::default);
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
-    let mut current_db = use_signal(|| 0u8);
+    let current_db = use_signal(|| 0u8);
     let sidebar_width = use_signal(|| 250.0);
     let key_browser_width = use_signal(|| 300.0);
     let mut theme_mode = use_signal(ThemeMode::default);
 
-    let colors = match theme_mode.read().clone() {
-        ThemeMode::Dark => ThemeColors::dark(),
-        ThemeMode::Light => ThemeColors::light(),
-        ThemeMode::System => {
-            #[cfg(target_os = "macos")]
-            {
-                let is_dark = std::process::Command::new("defaults")
-                    .args(["read", "-g", "AppleInterfaceStyle"])
-                    .output()
-                    .map(|o| String::from_utf8_lossy(&o.stdout).contains("Dark"))
-                    .unwrap_or(false);
-                if is_dark {
-                    ThemeColors::dark()
-                } else {
-                    ThemeColors::light()
-                }
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                ThemeColors::dark()
-            }
-        }
-    };
+    let colors = resolve_theme_colors(*theme_mode.read());
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -82,8 +461,10 @@ pub fn App() -> Element {
         }
     });
 
-    use_effect(|| {
-        let _ = document::eval("document.body.style.margin = '0'; document.body.style.padding = '0'; document.documentElement.style.margin = '0'; document.documentElement.style.padding = '0';");
+    use_effect(move || {
+        let active_theme_mode = theme_mode();
+        let script = build_theme_bridge_script(active_theme_mode);
+        let _ = document::eval(&script);
     });
 
     let save_settings = {

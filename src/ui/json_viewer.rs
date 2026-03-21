@@ -1,3 +1,6 @@
+use crate::theme::{
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT, COLOR_TEXT_CONTRAST,
+};
 use dioxus::prelude::*;
 use serde_json::Value;
 
@@ -140,12 +143,12 @@ pub struct HighlightSegment {
 
 fn token_color(token_type: TokenType) -> &'static str {
     match token_type {
-        TokenType::Key => "#9cdcfe",
-        TokenType::String => "#ce9178",
-        TokenType::Number => "#b5cea8",
-        TokenType::Boolean => "#569cd6",
-        TokenType::Null => "#569cd6",
-        TokenType::Bracket => "#d4d4d4",
+        TokenType::Key => "var(--theme-info, #0f6cbd)",
+        TokenType::String => "var(--theme-syntax-string, #a31515)",
+        TokenType::Number => "var(--theme-success, #107c10)",
+        TokenType::Boolean => "var(--theme-primary, #007acc)",
+        TokenType::Null => "var(--theme-primary, #007acc)",
+        TokenType::Bracket => "var(--theme-text, #1e1e1e)",
     }
 }
 
@@ -198,7 +201,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                 flex_wrap: "wrap",
 
                 span {
-                    color: "#4ec9b0",
+                    color: COLOR_ACCENT,
                     font_size: "12px",
 
                     "JSON"
@@ -206,8 +209,8 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
                 button {
                     padding: "4px 8px",
-                    background: if view_mode() == ViewMode::Pretty { "#0e639c" } else { "#3c3c3c" },
-                    color: "white",
+                    background: if view_mode() == ViewMode::Pretty { "var(--theme-primary)" } else { COLOR_BG_TERTIARY },
+                    color: if view_mode() == ViewMode::Pretty { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
                     border: "none",
                     border_radius: "4px",
                     cursor: "pointer",
@@ -219,8 +222,8 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
                 button {
                     padding: "4px 8px",
-                    background: if view_mode() == ViewMode::Raw { "#0e639c" } else { "#3c3c3c" },
-                    color: "white",
+                    background: if view_mode() == ViewMode::Raw { "var(--theme-primary)" } else { COLOR_BG_TERTIARY },
+                    color: if view_mode() == ViewMode::Raw { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
                     border: "none",
                     border_radius: "4px",
                     cursor: "pointer",
@@ -232,8 +235,8 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
                 button {
                     padding: "4px 8px",
-                    background: "#3c3c3c",
-                    color: "white",
+                    background: COLOR_BG_TERTIARY,
+                    color: COLOR_TEXT,
                     border: "none",
                     border_radius: "4px",
                     cursor: "pointer",
@@ -247,7 +250,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                     button {
                         padding: "4px 8px",
                         background: "#3182ce",
-                        color: "white",
+                        color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -269,7 +272,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                     font_size: "12px",
                     margin_bottom: "8px",
                     padding: "8px",
-                    background: "#2d1f1f",
+                    background: "rgba(209, 52, 56, 0.12)",
                     border_radius: "4px",
 
                     "{error}"
@@ -285,10 +288,10 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                     textarea {
                         flex: "1",
                         padding: "12px",
-                        background: "#1e1e1e",
-                        border: "1px solid #555",
+                        background: COLOR_BG,
+                        border: "1px solid {COLOR_BORDER}",
                         border_radius: "4px",
-                        color: "white",
+                        color: COLOR_TEXT,
                         font_family: "Consolas, 'Courier New', monospace",
                         font_size: "14px",
                         resize: "none",
@@ -304,7 +307,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                         button {
                             padding: "6px 12px",
                             background: "#38a169",
-                            color: "white",
+                            color: COLOR_TEXT_CONTRAST,
                             border: "none",
                             border_radius: "4px",
                             cursor: "pointer",
@@ -330,8 +333,8 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
                         button {
                             padding: "6px 12px",
-                            background: "#5a5a5a",
-                            color: "white",
+                            background: COLOR_BG_TERTIARY,
+                            color: COLOR_TEXT,
                             border: "none",
                             border_radius: "4px",
                             cursor: "pointer",
@@ -349,8 +352,8 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                     flex: "1",
                     overflow: "auto",
                     padding: "12px",
-                    background: "#1e1e1e",
-                    border: "1px solid #3c3c3c",
+                    background: COLOR_BG,
+                    border: "1px solid {COLOR_BORDER}",
                     border_radius: "4px",
 
                     pre {
@@ -371,7 +374,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                             }
                         } else {
                             span {
-                                color: "#d4d4d4",
+                                color: COLOR_TEXT,
 
                                 "{display_value}"
                             }

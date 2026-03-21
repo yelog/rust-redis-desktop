@@ -1,3 +1,7 @@
+use crate::theme::{
+    COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT, COLOR_TEXT_CONTRAST,
+    COLOR_TEXT_SECONDARY,
+};
 use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq)]
@@ -24,7 +28,7 @@ pub fn EditableField(
 
             label {
                 display: "block",
-                color: "#888",
+                color: COLOR_TEXT_SECONDARY,
                 font_size: "12px",
                 margin_bottom: "4px",
 
@@ -40,10 +44,10 @@ pub fn EditableField(
                         textarea {
                             flex: "1",
                             padding: "8px",
-                            background: "#3c3c3c",
-                            border: "1px solid #555",
+                            background: COLOR_BG_TERTIARY,
+                            border: "1px solid {COLOR_BORDER}",
                             border_radius: "4px",
-                            color: "white",
+                            color: COLOR_TEXT,
                             font_family: "Consolas, monospace",
                             rows: "5",
                             value: "{temp_value}",
@@ -53,10 +57,10 @@ pub fn EditableField(
                         input {
                             flex: "1",
                             padding: "8px",
-                            background: "#3c3c3c",
-                            border: "1px solid #555",
+                            background: COLOR_BG_TERTIARY,
+                            border: "1px solid {COLOR_BORDER}",
                             border_radius: "4px",
-                            color: "white",
+                            color: COLOR_TEXT,
                             value: "{temp_value}",
                             oninput: move |e| temp_value.set(e.value()),
                         }
@@ -65,7 +69,7 @@ pub fn EditableField(
                     button {
                         padding: "6px 12px",
                         background: "#38a169",
-                        color: "white",
+                        color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -79,8 +83,8 @@ pub fn EditableField(
 
                     button {
                         padding: "6px 12px",
-                        background: "#5a5a5a",
-                        color: "white",
+                        background: COLOR_BG_TERTIARY,
+                        color: COLOR_TEXT,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -98,9 +102,9 @@ pub fn EditableField(
                     div {
                         flex: "1",
                         padding: "8px",
-                        background: "#2d2d2d",
+                        background: COLOR_BG,
                         border_radius: "4px",
-                        color: "white",
+                        color: COLOR_TEXT,
                         font_family: if multiline { "Consolas, monospace" } else { "inherit" },
                         overflow: if multiline { "auto" } else { "hidden" },
                         text_overflow: if multiline { "unset" } else { "ellipsis" },
@@ -114,7 +118,7 @@ pub fn EditableField(
                         button {
                             padding: "6px 12px",
                             background: "#3182ce",
-                            color: "white",
+                            color: COLOR_TEXT_CONTRAST,
                             border: "none",
                             border_radius: "4px",
                             cursor: "pointer",

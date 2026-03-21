@@ -1,4 +1,8 @@
 use crate::connection::ConnectionPool;
+use crate::theme::{
+    COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT,
+    COLOR_TEXT_SECONDARY, COLOR_TEXT_SOFT, COLOR_TEXT_SUBTLE, COLOR_WARNING,
+};
 use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq)]
@@ -11,7 +15,7 @@ pub struct SlowLogEntry {
 
 async fn get_slowlog(pool: &ConnectionPool) -> Result<Vec<SlowLogEntry>, String> {
     let mut connection = pool.connection.lock().await;
-    
+
     if let Some(ref mut conn) = *connection {
         let result: Vec<(u64, u64, u64, Vec<String>)> = redis::cmd("SLOWLOG")
             .arg("GET")
@@ -51,9 +55,7 @@ fn format_timestamp(ts: u64) -> String {
 }
 
 #[component]
-pub fn SlowLogPanel(
-    connection_pool: ConnectionPool,
-) -> Element {
+pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
     let slowlog_entries = use_signal(Vec::<SlowLogEntry>::new);
     let loading = use_signal(|| false);
     let mut refresh_trigger = use_signal(|| 0u32);
@@ -87,18 +89,18 @@ pub fn SlowLogPanel(
             height: "100%",
             display: "flex",
             flex_direction: "column",
-            background: "#1e1e1e",
+            background: COLOR_BG,
             overflow_y: "auto",
 
             div {
                 padding: "16px",
-                border_bottom: "1px solid #3c3c3c",
+                border_bottom: "1px solid {COLOR_BORDER}",
                 display: "flex",
                 justify_content: "space_between",
                 align_items: "center",
 
                 h2 {
-                    color: "white",
+                    color: COLOR_TEXT,
                     font_size: "18px",
                     margin: "0",
 
@@ -107,8 +109,8 @@ pub fn SlowLogPanel(
 
                 button {
                     padding: "6px 12px",
-                    background: "#3c3c3c",
-                    color: "white",
+                    background: COLOR_BG_TERTIARY,
+                    color: COLOR_TEXT,
                     border: "none",
                     border_radius: "4px",
                     cursor: "pointer",
@@ -124,7 +126,7 @@ pub fn SlowLogPanel(
 
                 if loading() {
                     div {
-                        color: "#888",
+                        color: COLOR_TEXT_SECONDARY,
                         text_align: "center",
                         padding: "40px",
 
@@ -132,7 +134,7 @@ pub fn SlowLogPanel(
                     }
                 } else if entries.is_empty() {
                     div {
-                        color: "#888",
+                        color: COLOR_TEXT_SECONDARY,
                         text_align: "center",
                         padding: "40px",
 
@@ -141,9 +143,9 @@ pub fn SlowLogPanel(
                 } else {
                     div {
                         overflow_x: "auto",
-                        border: "1px solid #3c3c3c",
+                        border: "1px solid {COLOR_BORDER}",
                         border_radius: "8px",
-                        background: "#252526",
+                        background: COLOR_BG_SECONDARY,
 
                         table {
                             width: "100%",
@@ -151,13 +153,13 @@ pub fn SlowLogPanel(
 
                             thead {
                                 tr {
-                                    background: "#2d2d2d",
-                                    border_bottom: "1px solid #3c3c3c",
+                                    background: COLOR_BG_TERTIARY,
+                                    border_bottom: "1px solid {COLOR_BORDER}",
 
                                     th {
                                         width: "60px",
                                         padding: "12px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "12px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -168,7 +170,7 @@ pub fn SlowLogPanel(
                                     th {
                                         width: "150px",
                                         padding: "12px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "12px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -179,7 +181,7 @@ pub fn SlowLogPanel(
                                     th {
                                         width: "100px",
                                         padding: "12px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "12px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -189,7 +191,7 @@ pub fn SlowLogPanel(
 
                                     th {
                                         padding: "12px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "12px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -203,12 +205,12 @@ pub fn SlowLogPanel(
                                 for (idx, entry) in entries.iter().enumerate() {
                                     tr {
                                         key: "{entry.id}",
-                                        background: if idx % 2 == 0 { "#252526" } else { "#1e1e1e" },
-                                        border_bottom: "1px solid #3c3c3c",
+                                        background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
+                                        border_bottom: "1px solid {COLOR_BORDER}",
 
                                         td {
                                             padding: "10px 12px",
-                                            color: "#888",
+                                            color: COLOR_TEXT_SECONDARY,
                                             font_size: "12px",
 
                                             "{entry.id}"
@@ -216,7 +218,7 @@ pub fn SlowLogPanel(
 
                                         td {
                                             padding: "10px 12px",
-                                            color: "#ccc",
+                                            color: COLOR_TEXT_SOFT,
                                             font_size: "12px",
 
                                             "{format_timestamp(entry.timestamp)}"
@@ -224,7 +226,7 @@ pub fn SlowLogPanel(
 
                                         td {
                                             padding: "10px 12px",
-                                            color: if entry.duration > 10_000 { "#f87171" } else { "#f59e0b" },
+                                            color: if entry.duration > 10_000 { "var(--theme-error, #d13438)" } else { COLOR_WARNING },
                                             font_size: "12px",
                                             font_weight: "bold",
 
@@ -233,7 +235,7 @@ pub fn SlowLogPanel(
 
                                         td {
                                             padding: "10px 12px",
-                                            color: "white",
+                                            color: COLOR_TEXT,
                                             font_size: "12px",
                                             font_family: "Consolas, monospace",
 
@@ -247,7 +249,7 @@ pub fn SlowLogPanel(
 
                     div {
                         margin_top: "12px",
-                        color: "#666",
+                        color: COLOR_TEXT_SUBTLE,
                         font_size: "12px",
 
                         "共 {entries.len()} 条记录"

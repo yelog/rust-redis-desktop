@@ -1,0 +1,16 @@
+pub const COLOR_BG: &str = "var(--theme-bg)";
+pub const COLOR_BG_SECONDARY: &str = "var(--theme-bg-secondary)";
+pub const COLOR_BG_TERTIARY: &str = "var(--theme-bg-tertiary)";
+pub const COLOR_BORDER: &str = "var(--theme-border)";
+pub const COLOR_TEXT: &str = "var(--theme-text)";
+pub const COLOR_TEXT_SECONDARY: &str = "var(--theme-text-secondary)";
+pub const COLOR_TEXT_SUBTLE: &str = "var(--theme-text-subtle, #808080)";
+pub const COLOR_TEXT_SOFT: &str = "var(--theme-text-soft, #444444)";
+pub const COLOR_PRIMARY: &str = "var(--theme-primary)";
+pub const COLOR_ACCENT: &str = "var(--theme-accent)";
+pub const COLOR_SUCCESS: &str = "var(--theme-success, #107c10)";
+pub const COLOR_WARNING: &str = "var(--theme-warning, #ca5010)";
+pub const COLOR_ERROR: &str = "var(--theme-error, #d13438)";
+pub const COLOR_INFO: &str = "var(--theme-info, #0f6cbd)";
+pub const COLOR_PURPLE: &str = "var(--theme-purple, #6b46c1)";
+pub const COLOR_TEXT_CONTRAST: &str = "#ffffff";

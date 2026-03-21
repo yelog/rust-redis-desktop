@@ -1,4 +1,9 @@
 use crate::connection::ConnectionPool;
+use crate::theme::{
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PURPLE,
+    COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SOFT, COLOR_TEXT_SUBTLE,
+    COLOR_WARNING,
+};
 use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq)]
@@ -113,9 +118,7 @@ fn format_age(seconds: u64) -> String {
 }
 
 #[component]
-pub fn ClientsPanel(
-    connection_pool: ConnectionPool,
-) -> Element {
+pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
     let clients = use_signal(Vec::<ClientInfo>::new);
     let loading = use_signal(|| false);
     let mut refresh_trigger = use_signal(|| 0u32);
@@ -151,18 +154,18 @@ pub fn ClientsPanel(
             height: "100%",
             display: "flex",
             flex_direction: "column",
-            background: "#1e1e1e",
+            background: COLOR_BG,
             overflow_y: "auto",
 
             div {
                 padding: "16px",
-                border_bottom: "1px solid #3c3c3c",
+                border_bottom: "1px solid {COLOR_BORDER}",
                 display: "flex",
                 justify_content: "space_between",
                 align_items: "center",
 
                 h2 {
-                    color: "white",
+                    color: COLOR_TEXT,
                     font_size: "18px",
                     margin: "0",
 
@@ -171,8 +174,8 @@ pub fn ClientsPanel(
 
                 button {
                     padding: "6px 12px",
-                    background: "#3c3c3c",
-                    color: "white",
+                    background: COLOR_BG_TERTIARY,
+                    color: COLOR_TEXT,
                     border: "none",
                     border_radius: "4px",
                     cursor: "pointer",
@@ -186,8 +189,8 @@ pub fn ClientsPanel(
             if !status_message.read().is_empty() {
                 div {
                     padding: "8px 16px",
-                    background: "rgba(78, 201, 176, 0.1)",
-                    color: "#4ec9b0",
+                    background: "rgba(0, 122, 204, 0.12)",
+                    color: COLOR_ACCENT,
                     font_size: "13px",
 
                     "{status_message}"
@@ -201,7 +204,7 @@ pub fn ClientsPanel(
 
                 if loading() && client_list.is_empty() {
                     div {
-                        color: "#888",
+                        color: COLOR_TEXT_SECONDARY,
                         text_align: "center",
                         padding: "40px",
 
@@ -209,7 +212,7 @@ pub fn ClientsPanel(
                     }
                 } else if client_list.is_empty() {
                     div {
-                        color: "#888",
+                        color: COLOR_TEXT_SECONDARY,
                         text_align: "center",
                         padding: "40px",
 
@@ -218,9 +221,9 @@ pub fn ClientsPanel(
                 } else {
                     div {
                         overflow_x: "auto",
-                        border: "1px solid #3c3c3c",
+                        border: "1px solid {COLOR_BORDER}",
                         border_radius: "8px",
-                        background: "#252526",
+                        background: COLOR_BG_SECONDARY,
 
                         table {
                             width: "100%",
@@ -228,12 +231,12 @@ pub fn ClientsPanel(
 
                             thead {
                                 tr {
-                                    background: "#2d2d2d",
-                                    border_bottom: "1px solid #3c3c3c",
+                                    background: COLOR_BG_TERTIARY,
+                                    border_bottom: "1px solid {COLOR_BORDER}",
 
                                     th {
                                         padding: "10px 8px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "11px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -244,7 +247,7 @@ pub fn ClientsPanel(
 
                                     th {
                                         padding: "10px 8px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "11px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -254,7 +257,7 @@ pub fn ClientsPanel(
 
                                     th {
                                         padding: "10px 8px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "11px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -264,7 +267,7 @@ pub fn ClientsPanel(
 
                                     th {
                                         padding: "10px 8px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "11px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -274,7 +277,7 @@ pub fn ClientsPanel(
 
                                     th {
                                         padding: "10px 8px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "11px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -284,7 +287,7 @@ pub fn ClientsPanel(
 
                                     th {
                                         padding: "10px 8px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "11px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -294,7 +297,7 @@ pub fn ClientsPanel(
 
                                     th {
                                         padding: "10px 8px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "11px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -305,7 +308,7 @@ pub fn ClientsPanel(
                                     th {
                                         width: "80px",
                                         padding: "10px 8px",
-                                        color: "#888",
+                                        color: COLOR_TEXT_SECONDARY,
                                         font_size: "11px",
                                         font_weight: "600",
                                         text_align: "left",
@@ -319,12 +322,12 @@ pub fn ClientsPanel(
                                 for (idx, client) in client_list.iter().enumerate() {
                                     tr {
                                         key: "{client.id}",
-                                        background: if idx % 2 == 0 { "#252526" } else { "#1e1e1e" },
-                                        border_bottom: "1px solid #3c3c3c",
+                                        background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
+                                        border_bottom: "1px solid {COLOR_BORDER}",
 
                                         td {
                                             padding: "8px",
-                                            color: "#888",
+                                            color: COLOR_TEXT_SECONDARY,
                                             font_size: "11px",
 
                                             "{client.id}"
@@ -332,7 +335,7 @@ pub fn ClientsPanel(
 
                                         td {
                                             padding: "8px",
-                                            color: "#4ec9b0",
+                                            color: COLOR_ACCENT,
                                             font_size: "11px",
                                             font_family: "Consolas, monospace",
 
@@ -341,7 +344,7 @@ pub fn ClientsPanel(
 
                                         td {
                                             padding: "8px",
-                                            color: if client.name.is_empty() { "#666" } else { "#ccc" },
+                                            color: if client.name.is_empty() { COLOR_TEXT_SUBTLE } else { COLOR_TEXT_SOFT },
                                             font_size: "11px",
 
                                             if client.name.is_empty() { "-" } else { "{client.name}" }
@@ -349,7 +352,7 @@ pub fn ClientsPanel(
 
                                         td {
                                             padding: "8px",
-                                            color: "#f59e0b",
+                                            color: COLOR_WARNING,
                                             font_size: "11px",
 
                                             "{client.db}"
@@ -357,7 +360,7 @@ pub fn ClientsPanel(
 
                                         td {
                                             padding: "8px",
-                                            color: "#ccc",
+                                            color: COLOR_TEXT_SOFT,
                                             font_size: "11px",
 
                                             "{format_age(client.age)}"
@@ -365,7 +368,7 @@ pub fn ClientsPanel(
 
                                         td {
                                             padding: "8px",
-                                            color: if client.idle > 300 { "#f87171" } else { "#ccc" },
+                                            color: if client.idle > 300 { "var(--theme-error, #d13438)" } else { COLOR_TEXT_SOFT },
                                             font_size: "11px",
 
                                             "{format_age(client.idle)}"
@@ -373,7 +376,7 @@ pub fn ClientsPanel(
 
                                         td {
                                             padding: "8px",
-                                            color: "#a78bfa",
+                                            color: COLOR_PURPLE,
                                             font_size: "11px",
                                             font_family: "Consolas, monospace",
 
@@ -386,7 +389,7 @@ pub fn ClientsPanel(
                                             button {
                                                 padding: "4px 8px",
                                                 background: "#c53030",
-                                                color: "white",
+                                                color: COLOR_TEXT_CONTRAST,
                                                 border: "none",
                                                 border_radius: "4px",
                                                 cursor: "pointer",

@@ -1,5 +1,10 @@
 use crate::connection::ConnectionPool;
 use crate::redis::ServerInfo;
+use crate::theme::{
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_INFO,
+    COLOR_PURPLE, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    COLOR_WARNING,
+};
 use dioxus::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -34,7 +39,7 @@ fn format_memory_axis(max_value: u64) -> Vec<String> {
     if max_value == 0 {
         return vec!["0 B".to_string()];
     }
-    
+
     let mut ticks = Vec::new();
     let steps = 4;
     for i in 0..=steps {
@@ -48,7 +53,7 @@ fn format_ops_axis(max_value: u64) -> Vec<String> {
     if max_value == 0 {
         return vec!["0".to_string()];
     }
-    
+
     let mut ticks = Vec::new();
     let steps = 4;
     for i in 0..=steps {
@@ -74,10 +79,7 @@ pub struct MonitorData {
 }
 
 #[component]
-pub fn MonitorPanel(
-    connection_pool: ConnectionPool,
-    auto_refresh_interval: u32,
-) -> Element {
+pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32) -> Element {
     let mut monitor_data = use_signal(Vec::<MonitorData>::new);
     let mut current_info = use_signal(|| None::<ServerInfo>);
     let loading = use_signal(|| false);
@@ -138,7 +140,7 @@ pub fn MonitorPanel(
                 let running = Arc::new(AtomicBool::new(true));
                 monitoring_handle.set(Some(running.clone()));
                 is_monitoring.set(true);
-                
+
                 load_data();
 
                 let pool = pool.clone();
@@ -203,23 +205,23 @@ pub fn MonitorPanel(
 
     rsx! {
         style { {include_str!("monitor_panel.css")} }
-        
+
         div {
             height: "100%",
             display: "flex",
             flex_direction: "column",
-            background: "#1e1e1e",
+            background: COLOR_BG,
             overflow_y: "auto",
 
             div {
                 padding: "16px",
-                border_bottom: "1px solid #3c3c3c",
+                border_bottom: "1px solid {COLOR_BORDER}",
                 display: "flex",
                 justify_content: "space_between",
                 align_items: "center",
 
                 h2 {
-                    color: "white",
+                    color: COLOR_TEXT,
                     font_size: "18px",
                     margin: "0",
 
@@ -233,7 +235,7 @@ pub fn MonitorPanel(
                     button {
                         padding: "6px 12px",
                         background: if is_monitoring() { "#c53030" } else { "#38a169" },
-                        color: "white",
+                        color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -245,8 +247,8 @@ pub fn MonitorPanel(
 
                     button {
                         padding: "6px 12px",
-                        background: "#3c3c3c",
-                        color: "white",
+                        background: COLOR_BG_TERTIARY,
+                        color: COLOR_TEXT,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -263,7 +265,7 @@ pub fn MonitorPanel(
 
                 if loading() && data.is_empty() {
                     div {
-                        color: "#888",
+                        color: COLOR_TEXT_SECONDARY,
                         text_align: "center",
                         padding: "40px",
 
@@ -277,13 +279,13 @@ pub fn MonitorPanel(
                         margin_bottom: "24px",
 
                         div {
-                            background: "#252526",
-                            border: "1px solid #3c3c3c",
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
                             border_radius: "8px",
                             padding: "16px",
 
                             div {
-                                color: "#888",
+                                color: COLOR_TEXT_SECONDARY,
                                 font_size: "12px",
                                 margin_bottom: "4px",
 
@@ -291,7 +293,7 @@ pub fn MonitorPanel(
                             }
 
                             div {
-                                color: "#4ec9b0",
+                                color: COLOR_ACCENT,
                                 font_size: "24px",
                                 font_weight: "bold",
 
@@ -303,7 +305,7 @@ pub fn MonitorPanel(
                             }
 
                             div {
-                                color: "#666",
+                                color: COLOR_TEXT_SUBTLE,
                                 font_size: "11px",
                                 margin_top: "4px",
 
@@ -312,13 +314,13 @@ pub fn MonitorPanel(
                         }
 
                         div {
-                            background: "#252526",
-                            border: "1px solid #3c3c3c",
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
                             border_radius: "8px",
                             padding: "16px",
 
                             div {
-                                color: "#888",
+                                color: COLOR_TEXT_SECONDARY,
                                 font_size: "12px",
                                 margin_bottom: "4px",
 
@@ -326,7 +328,7 @@ pub fn MonitorPanel(
                             }
 
                             div {
-                                color: "#f59e0b",
+                                color: COLOR_WARNING,
                                 font_size: "24px",
                                 font_weight: "bold",
 
@@ -338,7 +340,7 @@ pub fn MonitorPanel(
                             }
 
                             div {
-                                color: "#666",
+                                color: COLOR_TEXT_SUBTLE,
                                 font_size: "11px",
                                 margin_top: "4px",
 
@@ -347,13 +349,13 @@ pub fn MonitorPanel(
                         }
 
                         div {
-                            background: "#252526",
-                            border: "1px solid #3c3c3c",
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
                             border_radius: "8px",
                             padding: "16px",
 
                             div {
-                                color: "#888",
+                                color: COLOR_TEXT_SECONDARY,
                                 font_size: "12px",
                                 margin_bottom: "4px",
 
@@ -361,7 +363,7 @@ pub fn MonitorPanel(
                             }
 
                             div {
-                                color: "#63b3ed",
+                                color: COLOR_INFO,
                                 font_size: "24px",
                                 font_weight: "bold",
 
@@ -373,7 +375,7 @@ pub fn MonitorPanel(
                             }
 
                             div {
-                                color: "#666",
+                                color: COLOR_TEXT_SUBTLE,
                                 font_size: "11px",
                                 margin_top: "4px",
 
@@ -382,13 +384,13 @@ pub fn MonitorPanel(
                         }
 
                         div {
-                            background: "#252526",
-                            border: "1px solid #3c3c3c",
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
                             border_radius: "8px",
                             padding: "16px",
 
                             div {
-                                color: "#888",
+                                color: COLOR_TEXT_SECONDARY,
                                 font_size: "12px",
                                 margin_bottom: "4px",
 
@@ -396,7 +398,7 @@ pub fn MonitorPanel(
                             }
 
                             div {
-                                color: "#a78bfa",
+                                color: COLOR_PURPLE,
                                 font_size: "24px",
                                 font_weight: "bold",
 
@@ -408,7 +410,7 @@ pub fn MonitorPanel(
                             }
 
                             div {
-                                color: "#666",
+                                color: COLOR_TEXT_SUBTLE,
                                 font_size: "11px",
                                 margin_top: "4px",
 
@@ -421,7 +423,7 @@ pub fn MonitorPanel(
                         margin_top: "24px",
 
                         h3 {
-                            color: "#888",
+                            color: COLOR_TEXT_SECONDARY,
                             font_size: "14px",
                             margin_bottom: "12px",
 
@@ -430,8 +432,8 @@ pub fn MonitorPanel(
 
                         div {
                             class: "chart-container",
-                            background: "#252526",
-                            border: "1px solid #3c3c3c",
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
                             border_radius: "8px",
                             padding: "16px",
 
@@ -509,7 +511,7 @@ pub fn MonitorPanel(
                         margin_top: "24px",
 
                         h3 {
-                            color: "#888",
+                            color: COLOR_TEXT_SECONDARY,
                             font_size: "14px",
                             margin_bottom: "12px",
 
@@ -518,8 +520,8 @@ pub fn MonitorPanel(
 
                         div {
                             class: "chart-container",
-                            background: "#252526",
-                            border: "1px solid #3c3c3c",
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
                             border_radius: "8px",
                             padding: "16px",
 
@@ -596,7 +598,7 @@ pub fn MonitorPanel(
                     if data.len() > 0 {
                         div {
                             margin_top: "16px",
-                            color: "#666",
+                            color: COLOR_TEXT_SUBTLE,
                             font_size: "11px",
 
                             "最近 {data.len()} 个数据点"
