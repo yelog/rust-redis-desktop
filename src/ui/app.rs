@@ -1,8 +1,8 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::ui::{
-    ClientsPanel, ConnectionForm, KeyBrowser, MonitorPanel, ResizableDivider, ServerInfoPanel,
-    SettingsDialog, Sidebar, SlowLogPanel, Terminal, ValueViewer,
+    ClientsPanel, ConnectionForm, FlushConfirmDialog, KeyBrowser, MonitorPanel, ResizableDivider,
+    ServerInfoPanel, SettingsDialog, Sidebar, SlowLogPanel, Terminal, ValueViewer,
 };
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -39,6 +39,7 @@ pub fn App() -> Element {
     let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
     let mut app_settings = use_signal(AppSettings::default);
     let mut show_settings = use_signal(|| false);
+    let mut show_flush_dialog = use_signal(|| None::<Uuid>);
     let mut sidebar_width = use_signal(|| 250.0);
     let mut key_browser_width = use_signal(|| 300.0);
 
@@ -192,6 +193,9 @@ pub fn App() -> Element {
                             selected_key.set(String::new());
                         }
                     });
+                },
+                on_flush_connection: move |id: Uuid| {
+                    show_flush_dialog.set(Some(id));
                 },
                 on_open_settings: move |_| show_settings.set(true),
             }
@@ -465,6 +469,19 @@ pub fn App() -> Element {
                     }
                 },
                 on_close: move |_| show_settings.set(false),
+            }
+        }
+
+        if let Some(flush_id) = show_flush_dialog() {
+            if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
+                FlushConfirmDialog {
+                    connection_pool: pool,
+                    on_confirm: move |_| {
+                        show_flush_dialog.set(None);
+                        refresh_trigger.set(refresh_trigger() + 1);
+                    },
+                    on_cancel: move |_| show_flush_dialog.set(None),
+                }
             }
         }
     }

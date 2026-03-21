@@ -1,5 +1,5 @@
 use crate::connection::ConnectionPool;
-use crate::redis::{TreeBuilder, TreeNode};
+use crate::redis::{KeyInfo, KeyType, TreeBuilder, TreeNode};
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
@@ -21,6 +21,19 @@ fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
         keys.extend(collect_all_keys(&node.children));
     }
     keys
+}
+
+fn update_node_key_info(nodes: &mut [TreeNode], key_path: &str, key_info: KeyInfo) -> bool {
+    for node in nodes.iter_mut() {
+        if node.is_leaf && node.path == key_path {
+            node.key_info = Some(key_info);
+            return true;
+        }
+        if update_node_key_info(&mut node.children, key_path, key_info.clone()) {
+            return true;
+        }
+    }
+    false
 }
 
 #[derive(Clone, Default)]
@@ -53,6 +66,7 @@ pub fn KeyBrowser(
     let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
     let mut scan_progress = use_signal(ScanProgress::default);
     let mut cancel_scan = use_signal(|| Arc::new(AtomicBool::new(false)));
+    let key_type_cache = use_signal(HashMap::<String, KeyType>::new);
 
     let selection_mode = tree_state.read().selection_mode;
     let selected_keys_count = tree_state.read().selected_keys.len();
@@ -552,7 +566,46 @@ use_effect({
                             depth: 0,
                             selected_key: selected_key(),
                             tree_state: tree_state,
-                            on_select: on_key_select.clone(),
+                            on_select: {
+                                let pool = connection_pool.clone();
+                                let key_type_cache = key_type_cache.clone();
+                                let tree_nodes = tree_nodes.clone();
+                                let on_key_select = on_key_select.clone();
+                                move |key: String| {
+                                    let key_clone = key.clone();
+                                    let needs_fetch = {
+                                        let cache = key_type_cache.read();
+                                        !cache.contains_key(&key_clone)
+                                    };
+                                    
+                                    if needs_fetch {
+                                        let pool = pool.clone();
+                                        let mut key_type_cache = key_type_cache.clone();
+                                        let mut tree_nodes = tree_nodes.clone();
+                                        let key = key.clone();
+                                        spawn(async move {
+                                            match pool.get_key_info(&key).await {
+                                                Ok(info) => {
+                                                    key_type_cache.write().insert(key.clone(), info.key_type.clone());
+                                                    let updated = {
+                                                        let mut nodes = tree_nodes.write();
+                                                        update_node_key_info(&mut nodes, &key, info)
+                                                    };
+                                                    if updated {
+                                                        let nodes_clone = tree_nodes.read().clone();
+                                                        tree_nodes.set(nodes_clone);
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!("Failed to get key type: {}", e);
+                                                }
+                                            }
+                                        });
+                                    }
+                                    
+                                    on_key_select.call(key_clone);
+                                }
+                            },
                             on_expand: {
                                 move |path: String| {
                                     let mut state = tree_state.write();

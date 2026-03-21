@@ -906,4 +906,18 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
+
+    pub async fn flush_db(&self) -> Result<()> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            redis::cmd("FLUSHDB")
+                .query_async::<()>(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(())
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
 }

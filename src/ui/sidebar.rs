@@ -14,6 +14,7 @@ pub fn Sidebar(
     on_delete_connection: EventHandler<Uuid>,
     on_reconnect_connection: EventHandler<Uuid>,
     on_close_connection: EventHandler<Uuid>,
+    on_flush_connection: EventHandler<Uuid>,
     on_open_settings: EventHandler<()>,
 ) -> Element {
     let mut context_menu = use_signal(|| None::<(Uuid, (i32, i32))>);
@@ -21,6 +22,7 @@ pub fn Sidebar(
     let mut hover_delete = use_signal(|| false);
     let mut hover_reconnect = use_signal(|| false);
     let mut hover_close = use_signal(|| false);
+    let mut hover_flush = use_signal(|| false);
 
     rsx! {
         style { {r#"
@@ -223,6 +225,27 @@ pub fn Sidebar(
                     },
 
                     "✖️ Close"
+                }
+
+                div {
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    color: "#f87171",
+                    font_size: "13px",
+                    background: if hover_flush() { "#c53030" } else { "transparent" },
+
+                    onmouseenter: move |_| hover_flush.set(true),
+                    onmouseleave: move |_| hover_flush.set(false),
+
+                    onclick: {
+                        let menu_id = menu_id;
+                        move |_| {
+                            context_menu.set(None);
+                            on_flush_connection.call(menu_id);
+                        }
+                    },
+
+                    "⚠️ Flush Data"
                 }
 
                 div {
