@@ -29,30 +29,30 @@ impl ThemeColors {
             background: "#1e1e1e",
             background_secondary: "#252526",
             background_tertiary: "#2d2d2d",
-            border: "#3c3c3c",
+            border: "#383838",
             text: "white",
             text_secondary: "#888888",
-            primary: "#007acc",
-            accent: "#4ec9b0",
-            success: "#4ec9b0",
-            warning: "#f59e0b",
-            error: "#ef4444",
+            primary: "#0a84ff",
+            accent: "#0a84ff",
+            success: "#30d158",
+            warning: "#ff9f0a",
+            error: "#ff453a",
         }
     }
 
     pub fn light() -> Self {
         Self {
             background: "#ffffff",
-            background_secondary: "#f3f3f3",
-            background_tertiary: "#e8e8e8",
-            border: "#d4d4d4",
+            background_secondary: "#f5f5f5",
+            background_tertiary: "#ebebeb",
+            border: "#e5e5e5",
             text: "#1e1e1e",
             text_secondary: "#666666",
-            primary: "#007acc",
-            accent: "#007acc",
-            success: "#107c10",
-            warning: "#ca5010",
-            error: "#d13438",
+            primary: "#007aff",
+            accent: "#007aff",
+            success: "#28a745",
+            warning: "#f59e0b",
+            error: "#dc3545",
         }
     }
 }

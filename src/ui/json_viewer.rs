@@ -1,5 +1,6 @@
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT, COLOR_TEXT_CONTRAST,
+    SYNTAX_BOOLEAN, SYNTAX_BRACKET, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING,
 };
 use dioxus::prelude::*;
 use serde_json::Value;
@@ -143,12 +144,12 @@ pub struct HighlightSegment {
 
 fn token_color(token_type: TokenType) -> &'static str {
     match token_type {
-        TokenType::Key => "var(--theme-info, #0f6cbd)",
-        TokenType::String => "var(--theme-syntax-string, #a31515)",
-        TokenType::Number => "var(--theme-success, #107c10)",
-        TokenType::Boolean => "var(--theme-primary, #007acc)",
-        TokenType::Null => "var(--theme-primary, #007acc)",
-        TokenType::Bracket => "var(--theme-text, #1e1e1e)",
+        TokenType::Key => SYNTAX_KEY,
+        TokenType::String => SYNTAX_STRING,
+        TokenType::Number => SYNTAX_NUMBER,
+        TokenType::Boolean => SYNTAX_BOOLEAN,
+        TokenType::Null => SYNTAX_NULL,
+        TokenType::Bracket => SYNTAX_BRACKET,
     }
 }
 

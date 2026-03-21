@@ -1,5 +1,6 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType, TreeBuilder, TreeNode};
+use crate::theme::{COLOR_ACCENT, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_CONTRAST};
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
@@ -236,23 +237,23 @@ pub fn KeyBrowser(
         div {
             width: "{width}px",
             height: "100%",
-            background: "#252526",
-            border_right: "1px solid #3c3c3c",
+            background: COLOR_BG_SECONDARY,
+            border_right: "1px solid {COLOR_BORDER}",
             display: "flex",
             flex_direction: "column",
             box_sizing: "border-box",
 
             div {
                 padding: "8px",
-                border_bottom: "1px solid #3c3c3c",
+                border_bottom: "1px solid {COLOR_BORDER}",
 
                 select {
                     width: "100%",
                     padding: "6px 10px",
-                    background: "#3c3c3c",
-                    border: "1px solid #555",
+                    background: COLOR_BG_TERTIARY,
+                    border: "1px solid {COLOR_BORDER}",
                     border_radius: "4px",
-                    color: "white",
+                    color: COLOR_TEXT,
                     font_size: "13px",
                     value: "db{current_db}",
                     onchange: move |e| {
@@ -286,15 +287,15 @@ pub fn KeyBrowser(
 
             div {
                 padding: "8px",
-                border_bottom: "1px solid #3c3c3c",
+                border_bottom: "1px solid {COLOR_BORDER}",
 
                 input {
                     width: "100%",
                     padding: "6px 10px",
-                    background: "#3c3c3c",
-                    border: "1px solid #555",
+                    background: COLOR_BG_TERTIARY,
+                    border: "1px solid {COLOR_BORDER}",
                     border_radius: "4px",
-                    color: "white",
+                    color: COLOR_TEXT,
                     font_size: "13px",
                     placeholder: "Search keys...",
                     value: "{search_pattern}",
@@ -309,7 +310,7 @@ pub fn KeyBrowser(
 
             div {
                 padding: "8px",
-                border_bottom: "1px solid #3c3c3c",
+                border_bottom: "1px solid {COLOR_BORDER}",
                 display: "flex",
                 gap: "8px",
                 align_items: "center",
@@ -317,8 +318,8 @@ pub fn KeyBrowser(
 
                 button {
                     padding: "6px 12px",
-                    background: "#0e639c",
-                    color: "white",
+                    background: COLOR_PRIMARY,
+                    color: COLOR_TEXT_CONTRAST,
                     border: "none",
                     border_radius: "4px",
                     cursor: "pointer",
@@ -333,7 +334,7 @@ pub fn KeyBrowser(
                         flex: "1",
                         padding: "6px",
                         background: "#c53030",
-                        color: "white",
+                        color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -358,8 +359,8 @@ pub fn KeyBrowser(
                     button {
                         flex: "1",
                         padding: "6px",
-                        background: "#3c3c3c",
-                        color: "white",
+                        background: COLOR_BG_TERTIARY,
+                        color: COLOR_TEXT,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -381,7 +382,7 @@ pub fn KeyBrowser(
 
                 if keys_count() > 0 {
                     span {
-                        color: "#888",
+                        color: COLOR_TEXT_SECONDARY,
                         font_size: "11px",
 
                         "{keys_count} keys"
@@ -392,8 +393,8 @@ pub fn KeyBrowser(
             if scan_progress.read().is_scanning {
                 div {
                     padding: "8px",
-                    border_bottom: "1px solid #3c3c3c",
-                    background: "#1a1a2e",
+                    border_bottom: "1px solid {COLOR_BORDER}",
+                    background: COLOR_BG_TERTIARY,
 
                     div {
                         display: "flex",
@@ -402,14 +403,14 @@ pub fn KeyBrowser(
                         margin_bottom: "4px",
 
                         span {
-                            color: "#888",
+                            color: COLOR_TEXT_SECONDARY,
                             font_size: "11px",
 
                             "正在扫描..."
                         }
 
                         span {
-                            color: "#4ec9b0",
+                            color: COLOR_ACCENT,
                             font_size: "11px",
 
                             "已找到 {scan_progress.read().scanned} 个 key"
@@ -419,14 +420,14 @@ pub fn KeyBrowser(
                     div {
                         width: "100%",
                         height: "4px",
-                        background: "#3c3c3c",
+                        background: COLOR_BORDER,
                         border_radius: "2px",
                         overflow: "hidden",
 
                         div {
                             width: "100%",
                             height: "100%",
-                            background: "linear-gradient(90deg, #4ec9b0, #0e639c)",
+                            background: "linear-gradient(90deg, {COLOR_ACCENT}, {COLOR_PRIMARY})",
                             animation: "pulse 1.5s ease-in-out infinite",
                         }
                     }
@@ -443,15 +444,15 @@ pub fn KeyBrowser(
             if selection_mode {
                 div {
                     padding: "8px",
-                    border_bottom: "1px solid #3c3c3c",
-                    background: "#1a3a1a",
+                    border_bottom: "1px solid {COLOR_BORDER}",
+                    background: "rgba(48, 209, 88, 0.15)",
                     display: "flex",
                     gap: "8px",
                     align_items: "center",
                     flex_wrap: "wrap",
 
                     span {
-                        color: "#68d391",
+                        color: COLOR_ACCENT,
                         font_size: "12px",
 
                         "已选 {selected_keys_count} 项"
@@ -460,7 +461,7 @@ pub fn KeyBrowser(
                     button {
                         padding: "4px 8px",
                         background: "#38a169",
-                        color: "white",
+                        color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -475,8 +476,8 @@ pub fn KeyBrowser(
 
                     button {
                         padding: "4px 8px",
-                        background: "#5a5a5a",
-                        color: "white",
+                        background: COLOR_BG_TERTIARY,
+                        color: COLOR_TEXT,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -491,7 +492,7 @@ pub fn KeyBrowser(
                     button {
                         padding: "4px 8px",
                         background: "#c53030",
-                        color: "white",
+                        color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -519,8 +520,8 @@ pub fn KeyBrowser(
 
                     button {
                         padding: "4px 8px",
-                        background: "#0e639c",
-                        color: "white",
+                        background: COLOR_PRIMARY,
+                        color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -545,8 +546,8 @@ pub fn KeyBrowser(
 
                     button {
                         padding: "4px 8px",
-                        background: "#5a5a5a",
-                        color: "white",
+                        background: COLOR_BG_TERTIARY,
+                        color: COLOR_TEXT,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -570,7 +571,7 @@ pub fn KeyBrowser(
 
             div {
                 padding: "4px 8px",
-                border_bottom: "1px solid #3c3c3c",
+                border_bottom: "1px solid {COLOR_BORDER}",
                 display: "flex",
                 justify_content: "flex_end",
 
@@ -578,7 +579,7 @@ pub fn KeyBrowser(
                     display: "flex",
                     align_items: "center",
                     gap: "6px",
-                    color: "#888",
+                    color: COLOR_TEXT_SECONDARY,
                     font_size: "11px",
                     cursor: "pointer",
 
@@ -607,7 +608,7 @@ pub fn KeyBrowser(
                         div {
                             padding: "20px",
                             text_align: "center",
-                            color: "#888",
+                            color: COLOR_TEXT_SECONDARY,
 
                             "Loading keys..."
                         }
@@ -615,7 +616,7 @@ pub fn KeyBrowser(
                         div {
                             padding: "20px",
                             text_align: "center",
-                            color: "#888",
+                            color: COLOR_TEXT_SECONDARY,
 
                             "No keys found"
                         }

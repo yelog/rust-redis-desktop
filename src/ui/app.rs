@@ -75,18 +75,21 @@ fn build_theme_palette(colors: &ThemeColors, is_dark: bool) -> serde_json::Value
         "success": colors.success,
         "warning": colors.warning,
         "error": colors.error,
-        "info": if is_dark { "#63b3ed" } else { "#0f6cbd" },
-        "purple": if is_dark { "#a78bfa" } else { "#6b46c1" },
+        "info": if is_dark { "#64b5f6" } else { "#007aff" },
+        "purple": if is_dark { "#bb86fc" } else { "#8b2fc9" },
         "infoBg": if is_dark { "#1a1a2e" } else { "#eef4ff" },
         "infoBgAlt": if is_dark { "#1f2937" } else { "#edf7ff" },
         "successBg": if is_dark { "#1a3a1a" } else { "#edf9f0" },
         "successBgAlt": if is_dark { "#1e4620" } else { "#e3f5e6" },
         "errorBg": if is_dark { "#2d1f1f" } else { "#fff1f1" },
-        "selectionBg": if is_dark { "#094771" } else { "#dbeafe" },
+        "selectionBg": if is_dark { "rgba(10, 132, 255, 0.25)" } else { "rgba(0, 122, 255, 0.12)" },
         "selectionBgAlt": if is_dark { "#1a4a1a" } else { "#e7f6ea" },
-        "syntaxKey": if is_dark { "#9cdcfe" } else { "#0451a5" },
-        "syntaxString": if is_dark { "#ce9178" } else { "#a31515" },
-        "syntaxNumber": if is_dark { "#b5cea8" } else { "#098658" },
+        "syntaxKey": if is_dark { "#9cdcfe" } else { "#8b2fc9" },
+        "syntaxString": if is_dark { "#6a9955" } else { "#0a8f3c" },
+        "syntaxNumber": if is_dark { "#b5cea8" } else { "#0969da" },
+        "syntaxBoolean": if is_dark { "#569cd6" } else { "#cf222e" },
+        "syntaxNull": if is_dark { "#808080" } else { "#6e7781" },
+        "syntaxBracket": if is_dark { "#d4d4d4" } else { "#1e1e1e" },
         "syntaxKeyword": if is_dark { "#569cd6" } else { "#0000ff" },
         "syntaxType": if is_dark { "#dcdcaa" } else { "#795e26" },
     })
@@ -376,6 +379,12 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
     root.style.setProperty("--theme-error", theme.error);
     root.style.setProperty("--theme-info", theme.info);
     root.style.setProperty("--theme-purple", theme.purple);
+    root.style.setProperty("--theme-syntax-key", theme.syntaxKey);
+    root.style.setProperty("--theme-syntax-string", theme.syntaxString);
+    root.style.setProperty("--theme-syntax-number", theme.syntaxNumber);
+    root.style.setProperty("--theme-syntax-boolean", theme.syntaxBoolean);
+    root.style.setProperty("--theme-syntax-null", theme.syntaxNull);
+    root.style.setProperty("--theme-syntax-bracket", theme.syntaxBracket);
     body.style.margin = "0";
     body.style.padding = "0";
     body.style.backgroundColor = theme.surfaceBase;
