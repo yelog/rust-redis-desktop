@@ -88,6 +88,7 @@ pub fn App() -> Element {
                 width: sidebar_width(),
                 connections: connections(),
                 connection_states: connection_states(),
+                selected_connection: selected_connection(),
                 on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
                 on_select_connection: move |id: Uuid| {
                     selected_connection.set(Some(id));

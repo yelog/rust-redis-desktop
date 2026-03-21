@@ -8,6 +8,7 @@ pub fn Sidebar(
     width: f64,
     connections: Vec<(Uuid, String)>,
     connection_states: HashMap<Uuid, ConnectionState>,
+    selected_connection: Option<Uuid>,
     on_add_connection: EventHandler<()>,
     on_select_connection: EventHandler<Uuid>,
     on_edit_connection: EventHandler<Uuid>,
@@ -91,10 +92,12 @@ pub fn Sidebar(
                                 key: "{id}",
                                 padding: "10px",
                                 margin_bottom: "4px",
-                                background: "#2d2d2d",
+                                background: if selected_connection == Some(id) { "#3d3d5c" } else { "#2d2d2d" },
                                 border_radius: "4px",
                                 color: "white",
                                 position: "relative",
+                                border_left: if selected_connection == Some(id) { "3px solid #007acc" } else { "3px solid transparent" },
+                                padding_left: if selected_connection == Some(id) { "7px" } else { "10px" },
 
                                 oncontextmenu: {
                                     let id = id;
