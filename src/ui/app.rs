@@ -40,12 +40,12 @@ fn system_theme_is_dark() -> bool {
     }
 }
 
-fn resolve_theme_colors(mode: ThemeMode) -> ThemeColors {
+fn resolve_theme_colors(mode: ThemeMode, system_is_dark: bool) -> ThemeColors {
     match mode {
         ThemeMode::Dark => ThemeColors::dark(),
         ThemeMode::Light => ThemeColors::light(),
         ThemeMode::System => {
-            if system_theme_is_dark() {
+            if system_is_dark {
                 ThemeColors::dark()
             } else {
                 ThemeColors::light()
@@ -446,8 +446,22 @@ pub fn App() -> Element {
     let sidebar_width = use_signal(|| 250.0);
     let key_browser_width = use_signal(|| 300.0);
     let mut theme_mode = use_signal(ThemeMode::default);
+    let mut system_theme_dark = use_signal(system_theme_is_dark);
 
-    let colors = resolve_theme_colors(*theme_mode.read());
+    let active_theme_mode = *theme_mode.read();
+    let active_system_theme_dark = system_theme_dark();
+    let colors = resolve_theme_colors(active_theme_mode, active_system_theme_dark);
+    let resolved_theme_key = match active_theme_mode {
+        ThemeMode::Dark => "dark",
+        ThemeMode::Light => "light",
+        ThemeMode::System => {
+            if active_system_theme_dark {
+                "dark"
+            } else {
+                "light"
+            }
+        }
+    };
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -462,9 +476,32 @@ pub fn App() -> Element {
     });
 
     use_effect(move || {
-        let active_theme_mode = theme_mode();
-        let script = build_theme_bridge_script(active_theme_mode);
+        let current_theme_mode = theme_mode();
+        let script = build_theme_bridge_script(current_theme_mode);
         let _ = document::eval(&script);
+    });
+
+    use_future(move || async move {
+        let mut eval = document::eval(
+            r#"
+const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+const notify = () => dioxus.send(mediaQuery.matches);
+
+notify();
+
+if (typeof mediaQuery.addEventListener === "function") {
+  mediaQuery.addEventListener("change", notify);
+} else if (typeof mediaQuery.addListener === "function") {
+  mediaQuery.addListener(notify);
+}
+
+await new Promise(() => {});
+"#,
+        );
+
+        while let Ok(is_dark) = eval.recv::<bool>().await {
+            system_theme_dark.set(is_dark);
+        }
     });
 
     let save_settings = {
@@ -656,7 +693,7 @@ pub fn App() -> Element {
                     }
                 } else if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
                     KeyBrowser {
-                        key: "{conn_id}-{connection_versions.read().get(&conn_id).copied().unwrap_or(0)}",
+                        key: "{conn_id}-{connection_versions.read().get(&conn_id).copied().unwrap_or(0)}-{resolved_theme_key}",
                         width: key_browser_width(),
                         connection_id: conn_id,
                         connection_pool: pool.clone(),
