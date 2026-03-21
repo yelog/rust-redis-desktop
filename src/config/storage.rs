@@ -1,4 +1,5 @@
 use crate::connection::ConnectionConfig;
+use crate::theme::ThemeMode;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
@@ -9,12 +10,15 @@ use uuid::Uuid;
 pub struct AppSettings {
     #[serde(default)]
     pub auto_refresh_interval: u32,
+    #[serde(default)]
+    pub theme_mode: ThemeMode,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             auto_refresh_interval: 0,
+            theme_mode: ThemeMode::default(),
         }
     }
 }

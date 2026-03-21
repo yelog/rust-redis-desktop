@@ -1,4 +1,5 @@
 use crate::connection::ConnectionState;
+use crate::theme::ThemeColors;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -9,6 +10,7 @@ pub fn Sidebar(
     connections: Vec<(Uuid, String)>,
     connection_states: HashMap<Uuid, ConnectionState>,
     selected_connection: Option<Uuid>,
+    colors: ThemeColors,
     on_add_connection: EventHandler<()>,
     on_select_connection: EventHandler<Uuid>,
     on_edit_connection: EventHandler<Uuid>,
@@ -35,7 +37,7 @@ pub fn Sidebar(
         div {
             width: "{width}px",
             height: "100%",
-            background: "#1e1e1e",
+            background: "{colors.background}",
             padding: "16px",
             display: "flex",
             flex_direction: "column",
@@ -44,12 +46,12 @@ pub fn Sidebar(
 
             div {
                 display: "flex",
-                justify_content: "space-between",
+                justify_content: "space_between",
                 align_items: "center",
                 margin_bottom: "12px",
 
                 span {
-                    color: "#888",
+                    color: "{colors.text_secondary}",
                     font_size: "12px",
 
                     if connections.is_empty() {
@@ -62,7 +64,7 @@ pub fn Sidebar(
 
             button {
                 onclick: move |_| on_add_connection.call(()),
-                background: "#007acc",
+                background: "{colors.primary}",
                 color: "white",
                 border: "none",
                 padding: "10px",
@@ -81,10 +83,10 @@ pub fn Sidebar(
                     {
                         let state = connection_states.get(&id).copied().unwrap_or(ConnectionState::Disconnected);
                         let (dot_color, is_pulsing) = match state {
-                            ConnectionState::Connected => ("#4ec9b0", false),
-                            ConnectionState::Disconnected => ("#888888", false),
-                            ConnectionState::Connecting => ("#f59e0b", true),
-                            ConnectionState::Error => ("#ef4444", false),
+                            ConnectionState::Connected => (colors.success, false),
+                            ConnectionState::Disconnected => (colors.text_secondary, false),
+                            ConnectionState::Connecting => (colors.warning, true),
+                            ConnectionState::Error => (colors.error, false),
                         };
 
                         rsx! {
@@ -92,11 +94,11 @@ pub fn Sidebar(
                                 key: "{id}",
                                 padding: "10px",
                                 margin_bottom: "4px",
-                                background: if selected_connection == Some(id) { "#3d3d5c" } else { "#2d2d2d" },
+                                background: if selected_connection == Some(id) { colors.background_tertiary } else { colors.background_secondary },
                                 border_radius: "4px",
-                                color: "white",
+                                color: "{colors.text}",
                                 position: "relative",
-                                border_left: if selected_connection == Some(id) { "3px solid #007acc" } else { "3px solid transparent" },
+                                border_left: if selected_connection == Some(id) { "3px solid {colors.primary}" } else { "3px solid transparent" },
                                 padding_left: if selected_connection == Some(id) { "7px" } else { "10px" },
 
                                 oncontextmenu: {
@@ -141,13 +143,13 @@ pub fn Sidebar(
             div {
                 margin_top: "12px",
                 padding_top: "12px",
-                border_top: "1px solid #3c3c3c",
+                border_top: "1px solid {colors.border}",
 
                 button {
                     width: "100%",
                     padding: "10px",
-                    background: "#2d2d2d",
-                    color: "#888",
+                    background: "{colors.background_secondary}",
+                    color: "{colors.text_secondary}",
                     border: "none",
                     border_radius: "4px",
                     cursor: "pointer",
@@ -173,8 +175,8 @@ pub fn Sidebar(
                 position: "fixed",
                 left: "{x}px",
                 top: "{y}px",
-                background: "#2d2d2d",
-                border: "1px solid #3c3c3c",
+                background: "{colors.background_secondary}",
+                border: "1px solid {colors.border}",
                 border_radius: "4px",
                 box_shadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
                 z_index: "1000",
@@ -184,9 +186,9 @@ pub fn Sidebar(
                 div {
                     padding: "8px 12px",
                     cursor: "pointer",
-                    color: "white",
+                    color: "{colors.text}",
                     font_size: "13px",
-                    background: if hover_reconnect() { "#2d7d46" } else { "transparent" },
+                    background: if hover_reconnect() { colors.success } else { "transparent" },
 
                     onmouseenter: move |_| hover_reconnect.set(true),
                     onmouseleave: move |_| hover_reconnect.set(false),
@@ -205,9 +207,9 @@ pub fn Sidebar(
                 div {
                     padding: "8px 12px",
                     cursor: "pointer",
-                    color: "white",
+                    color: "{colors.text}",
                     font_size: "13px",
-                    background: if hover_close() { "#d97706" } else { "transparent" },
+                    background: if hover_close() { colors.warning } else { "transparent" },
 
                     onmouseenter: move |_| hover_close.set(true),
                     onmouseleave: move |_| hover_close.set(false),
@@ -226,9 +228,9 @@ pub fn Sidebar(
                 div {
                     padding: "8px 12px",
                     cursor: "pointer",
-                    color: "#f87171",
+                    color: "{colors.error}",
                     font_size: "13px",
-                    background: if hover_flush() { "#c53030" } else { "transparent" },
+                    background: if hover_flush() { colors.error } else { "transparent" },
 
                     onmouseenter: move |_| hover_flush.set(true),
                     onmouseleave: move |_| hover_flush.set(false),
@@ -246,16 +248,16 @@ pub fn Sidebar(
 
                 div {
                     height: "1px",
-                    background: "#3c3c3c",
+                    background: "{colors.border}",
                     margin: "4px 0",
                 }
 
                 div {
                     padding: "8px 12px",
                     cursor: "pointer",
-                    color: "white",
+                    color: "{colors.text}",
                     font_size: "13px",
-                    background: if hover_edit() { "#3182ce" } else { "transparent" },
+                    background: if hover_edit() { colors.primary } else { "transparent" },
 
                     onmouseenter: move |_| hover_edit.set(true),
                     onmouseleave: move |_| hover_edit.set(false),
@@ -274,9 +276,9 @@ pub fn Sidebar(
                 div {
                     padding: "8px 12px",
                     cursor: "pointer",
-                    color: "white",
+                    color: "{colors.text}",
                     font_size: "13px",
-                    background: if hover_delete() { "#c53030" } else { "transparent" },
+                    background: if hover_delete() { colors.error } else { "transparent" },
 
                     onmouseenter: move |_| hover_delete.set(true),
                     onmouseleave: move |_| hover_delete.set(false),

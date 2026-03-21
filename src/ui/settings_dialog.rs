@@ -1,13 +1,16 @@
 use crate::config::AppSettings;
+use crate::theme::{ThemeColors, ThemeMode};
 use dioxus::prelude::*;
 
 #[component]
 pub fn SettingsDialog(
     settings: AppSettings,
+    colors: ThemeColors,
     on_save: EventHandler<AppSettings>,
     on_close: EventHandler<()>,
 ) -> Element {
     let mut auto_refresh_interval = use_signal(|| settings.auto_refresh_interval);
+    let mut theme_mode = use_signal(|| settings.theme_mode);
 
     rsx! {
         div {
@@ -26,7 +29,7 @@ pub fn SettingsDialog(
             div {
                 width: "400px",
                 padding: "24px",
-                background: "#1e1e1e",
+                background: "{colors.background}",
                 border_radius: "8px",
                 box_shadow: "0 4px 24px rgba(0, 0, 0, 0.5)",
 
@@ -35,7 +38,7 @@ pub fn SettingsDialog(
                 },
 
                 h2 {
-                    color: "white",
+                    color: "{colors.text}",
                     margin_bottom: "24px",
                     font_size: "20px",
 
@@ -46,7 +49,70 @@ pub fn SettingsDialog(
                     margin_bottom: "24px",
 
                     div {
-                        color: "#888",
+                        color: "{colors.text_secondary}",
+                        font_size: "13px",
+                        margin_bottom: "8px",
+
+                        "主题模式"
+                    }
+
+                    div {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "12px",
+
+                        select {
+                            flex: "1",
+                            padding: "8px 12px",
+                            background: "{colors.background_tertiary}",
+                            border: "1px solid {colors.border}",
+                            border_radius: "4px",
+                            color: "{colors.text}",
+                            font_size: "13px",
+                            onchange: move |e| {
+                                let mode = match e.value().as_str() {
+                                    "light" => ThemeMode::Light,
+                                    "dark" => ThemeMode::Dark,
+                                    _ => ThemeMode::System,
+                                };
+                                theme_mode.set(mode);
+                            },
+
+                            option {
+                                value: "system",
+                                selected: theme_mode() == ThemeMode::System,
+                                "跟随系统"
+                            }
+                            option {
+                                value: "light",
+                                selected: theme_mode() == ThemeMode::Light,
+                                "亮色"
+                            }
+                            option {
+                                value: "dark",
+                                selected: theme_mode() == ThemeMode::Dark,
+                                "暗色"
+                            }
+                        }
+
+                        span {
+                            color: "{colors.accent}",
+                            font_size: "12px",
+
+                            match theme_mode() {
+                                ThemeMode::Light => "🌞 亮色模式",
+                                ThemeMode::Dark => "🌙 暗色模式",
+                                ThemeMode::System => "💻 跟随系统",
+                            }
+                        }
+                    }
+                }
+
+                div {
+                    margin_bottom: "24px",
+
+                    div {
+                        color: "{colors.text_secondary}",
                         font_size: "13px",
                         margin_bottom: "8px",
 
@@ -61,28 +127,27 @@ pub fn SettingsDialog(
                         select {
                             flex: "1",
                             padding: "8px 12px",
-                            background: "#2d2d2d",
-                            border: "1px solid #3c3c3c",
+                            background: "{colors.background_tertiary}",
+                            border: "1px solid {colors.border}",
                             border_radius: "4px",
-                            color: "white",
+                            color: "{colors.text}",
                             font_size: "13px",
-                            value: "{auto_refresh_interval}",
                             onchange: move |e| {
                                 if let Ok(v) = e.value().parse() {
                                     auto_refresh_interval.set(v);
                                 }
                             },
 
-                            option { value: "0", "关闭" }
-                            option { value: "5", "5 秒" }
-                            option { value: "10", "10 秒" }
-                            option { value: "30", "30 秒" }
-                            option { value: "60", "60 秒" }
+                            option { value: "0", selected: auto_refresh_interval() == 0, "关闭" }
+                            option { value: "5", selected: auto_refresh_interval() == 5, "5 秒" }
+                            option { value: "10", selected: auto_refresh_interval() == 10, "10 秒" }
+                            option { value: "30", selected: auto_refresh_interval() == 30, "30 秒" }
+                            option { value: "60", selected: auto_refresh_interval() == 60, "60 秒" }
                         }
 
                         if auto_refresh_interval() > 0 {
                             span {
-                                color: "#4ec9b0",
+                                color: "{colors.accent}",
                                 font_size: "12px",
 
                                 "每 {auto_refresh_interval} 秒刷新"
@@ -98,8 +163,8 @@ pub fn SettingsDialog(
 
                     button {
                         padding: "8px 16px",
-                        background: "#3c3c3c",
-                        color: "white",
+                        background: "{colors.background_tertiary}",
+                        color: "{colors.text}",
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
@@ -111,7 +176,7 @@ pub fn SettingsDialog(
 
                     button {
                         padding: "8px 16px",
-                        background: "#007acc",
+                        background: "{colors.primary}",
                         color: "white",
                         border: "none",
                         border_radius: "4px",
@@ -120,6 +185,7 @@ pub fn SettingsDialog(
                         onclick: move |_| {
                             on_save.call(AppSettings {
                                 auto_refresh_interval: auto_refresh_interval(),
+                                theme_mode: theme_mode(),
                             });
                             on_close.call(());
                         },

@@ -1,5 +1,6 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
+use crate::theme::{ThemeColors, ThemeMode};
 use crate::ui::{
     ClientsPanel, ConnectionForm, FlushConfirmDialog, KeyBrowser, MonitorPanel, ResizableDivider,
     ServerInfoPanel, SettingsDialog, Sidebar, SlowLogPanel, Terminal, ValueViewer,
@@ -43,6 +44,31 @@ pub fn App() -> Element {
     let mut current_db = use_signal(|| 0u8);
     let sidebar_width = use_signal(|| 250.0);
     let key_browser_width = use_signal(|| 300.0);
+    let mut theme_mode = use_signal(ThemeMode::default);
+
+    let colors = match theme_mode.read().clone() {
+        ThemeMode::Dark => ThemeColors::dark(),
+        ThemeMode::Light => ThemeColors::light(),
+        ThemeMode::System => {
+            #[cfg(target_os = "macos")]
+            {
+                let is_dark = std::process::Command::new("defaults")
+                    .args(["read", "-g", "AppleInterfaceStyle"])
+                    .output()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).contains("Dark"))
+                    .unwrap_or(false);
+                if is_dark {
+                    ThemeColors::dark()
+                } else {
+                    ThemeColors::light()
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                ThemeColors::dark()
+            }
+        }
+    };
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -50,7 +76,8 @@ pub fn App() -> Element {
                 connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
             }
             if let Ok(settings) = storage.load_settings() {
-                app_settings.set(settings);
+                app_settings.set(settings.clone());
+                theme_mode.set(settings.theme_mode);
             }
         }
     });
@@ -61,8 +88,10 @@ pub fn App() -> Element {
 
     let save_settings = {
         let config_storage = config_storage.clone();
+        let mut theme_mode = theme_mode.clone();
         move |settings: AppSettings| {
             app_settings.set(settings.clone());
+            theme_mode.set(settings.theme_mode);
             if let Some(storage) = config_storage.read().as_ref() {
                 let _ = storage.save_settings(&settings);
             }
@@ -73,8 +102,8 @@ pub fn App() -> Element {
         div {
             display: "flex",
             height: "100vh",
-            background: "#1e1e1e",
-            color: "white",
+            background: "{colors.background}",
+            color: "{colors.text}",
             overflow: "hidden",
             onkeydown: move |e| {
                 let key = e.data().key();
@@ -89,6 +118,7 @@ pub fn App() -> Element {
                 connections: connections(),
                 connection_states: connection_states(),
                 selected_connection: selected_connection(),
+                colors: colors.clone(),
                 on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
                 on_select_connection: move |id: Uuid| {
                     selected_connection.set(Some(id));
@@ -230,14 +260,14 @@ pub fn App() -> Element {
                         div {
                             width: "40px",
                             height: "40px",
-                            border: "3px solid #4ec9b0",
+                            border: "3px solid {colors.accent}",
                             border_top_color: "transparent",
                             border_radius: "50%",
                             animation: "spin 0.8s linear infinite",
                         }
 
                         div {
-                            color: "#888",
+                            color: "{colors.text_secondary}",
                             font_size: "14px",
 
                             "Reconnecting..."
@@ -276,15 +306,15 @@ pub fn App() -> Element {
                         div {
                             display: "flex",
                             flex_shrink: "0",
-                            border_bottom: "1px solid #3c3c3c",
-                            background: "#252526",
+                            border_bottom: "1px solid {colors.border}",
+                            background: "{colors.background_secondary}",
 
                             button {
                                 padding: "10px 20px",
-                                background: if current_tab() == Tab::Data { "#1e1e1e" } else { "transparent" },
-                                color: if current_tab() == Tab::Data { "white" } else { "#888" },
+                                background: if current_tab() == Tab::Data { colors.background } else { "transparent" },
+                                color: if current_tab() == Tab::Data { colors.text } else { colors.text_secondary },
                                 border: "none",
-                                border_bottom: if current_tab() == Tab::Data { "2px solid #4ec9b0" } else { "none" },
+                                border_bottom: if current_tab() == Tab::Data { "2px solid {colors.accent}" } else { "none" },
                                 cursor: "pointer",
                                 font_size: "13px",
                                 onclick: move |_| current_tab.set(Tab::Data),
@@ -294,10 +324,10 @@ pub fn App() -> Element {
 
                             button {
                                 padding: "10px 20px",
-                                background: if current_tab() == Tab::Terminal { "#1e1e1e" } else { "transparent" },
-                                color: if current_tab() == Tab::Terminal { "white" } else { "#888" },
+                                background: if current_tab() == Tab::Terminal { colors.background } else { "transparent" },
+                                color: if current_tab() == Tab::Terminal { colors.text } else { colors.text_secondary },
                                 border: "none",
-                                border_bottom: if current_tab() == Tab::Terminal { "2px solid #4ec9b0" } else { "none" },
+                                border_bottom: if current_tab() == Tab::Terminal { "2px solid {colors.accent}" } else { "none" },
                                 cursor: "pointer",
                                 font_size: "13px",
                                 onclick: move |_| current_tab.set(Tab::Terminal),
@@ -307,10 +337,10 @@ pub fn App() -> Element {
 
                             button {
                                 padding: "10px 20px",
-                                background: if current_tab() == Tab::Monitor { "#1e1e1e" } else { "transparent" },
-                                color: if current_tab() == Tab::Monitor { "white" } else { "#888" },
+                                background: if current_tab() == Tab::Monitor { colors.background } else { "transparent" },
+                                color: if current_tab() == Tab::Monitor { colors.text } else { colors.text_secondary },
                                 border: "none",
-                                border_bottom: if current_tab() == Tab::Monitor { "2px solid #4ec9b0" } else { "none" },
+                                border_bottom: if current_tab() == Tab::Monitor { "2px solid {colors.accent}" } else { "none" },
                                 cursor: "pointer",
                                 font_size: "13px",
                                 onclick: move |_| current_tab.set(Tab::Monitor),
@@ -320,10 +350,10 @@ pub fn App() -> Element {
 
                             button {
                                 padding: "10px 20px",
-                                background: if current_tab() == Tab::SlowLog { "#1e1e1e" } else { "transparent" },
-                                color: if current_tab() == Tab::SlowLog { "white" } else { "#888" },
+                                background: if current_tab() == Tab::SlowLog { colors.background } else { "transparent" },
+                                color: if current_tab() == Tab::SlowLog { colors.text } else { colors.text_secondary },
                                 border: "none",
-                                border_bottom: if current_tab() == Tab::SlowLog { "2px solid #4ec9b0" } else { "none" },
+                                border_bottom: if current_tab() == Tab::SlowLog { "2px solid {colors.accent}" } else { "none" },
                                 cursor: "pointer",
                                 font_size: "13px",
                                 onclick: move |_| current_tab.set(Tab::SlowLog),
@@ -333,10 +363,10 @@ pub fn App() -> Element {
 
                             button {
                                 padding: "10px 20px",
-                                background: if current_tab() == Tab::Clients { "#1e1e1e" } else { "transparent" },
-                                color: if current_tab() == Tab::Clients { "white" } else { "#888" },
+                                background: if current_tab() == Tab::Clients { colors.background } else { "transparent" },
+                                color: if current_tab() == Tab::Clients { colors.text } else { colors.text_secondary },
                                 border: "none",
-                                border_bottom: if current_tab() == Tab::Clients { "2px solid #4ec9b0" } else { "none" },
+                                border_bottom: if current_tab() == Tab::Clients { "2px solid {colors.accent}" } else { "none" },
                                 cursor: "pointer",
                                 font_size: "13px",
                                 onclick: move |_| current_tab.set(Tab::Clients),
@@ -398,7 +428,7 @@ pub fn App() -> Element {
                         display: "flex",
                         align_items: "center",
                         justify_content: "center",
-                        color: "#888",
+                        color: "{colors.text_secondary}",
 
                         "Loading connection..."
                     }
@@ -409,7 +439,7 @@ pub fn App() -> Element {
                     display: "flex",
                     align_items: "center",
                     justify_content: "center",
-                    color: "#888",
+                    color: "{colors.text_secondary}",
                     font_size: "24px",
 
                     "Select a connection or create a new one"
@@ -475,6 +505,7 @@ pub fn App() -> Element {
         if show_settings() {
             SettingsDialog {
                 settings: app_settings.read().clone(),
+                colors: colors.clone(),
                 on_save: {
                     let mut save_settings = save_settings.clone();
                     move |settings: AppSettings| {
