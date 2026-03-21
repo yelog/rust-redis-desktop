@@ -146,13 +146,22 @@ pub fn LazyTreeNode(
                 },
 
                 if selection_mode {
-                    input {
-                        r#type: "checkbox",
-                        checked: is_checked,
-                        onclick: move |e| e.stop_propagation(),
-                        onchange: {
+                    div {
+                        width: "14px",
+                        height: "14px",
+                        border: "1px solid",
+                        border_color: if is_partial { "#f59e0b" } else if is_checked { "#68d391" } else { "#666" },
+                        border_radius: "3px",
+                        background: if is_partial { "rgba(245, 158, 11, 0.2)" } else if is_checked { "rgba(104, 211, 145, 0.2)" } else { "transparent" },
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        cursor: "pointer",
+                        flex_shrink: 0,
+                        onclick: {
                             let leaf_paths = leaf_paths.clone();
-                            move |_| {
+                            move |e| {
+                                e.stop_propagation();
                                 let mut state = tree_state.write();
                                 let all_selected = leaf_paths.iter().all(|p| state.selected_keys.contains(p));
                                 if all_selected {
@@ -166,6 +175,25 @@ pub fn LazyTreeNode(
                                 }
                             }
                         },
+
+                        if is_checked {
+                            span {
+                                color: "#68d391",
+                                font_size: "11px",
+                                font_weight: "bold",
+                                line_height: "1",
+
+                                "✓"
+                            }
+                        } else if is_partial {
+                            span {
+                                color: "#f59e0b",
+                                font_size: "10px",
+                                line_height: "1",
+
+                                "─"
+                            }
+                        }
                     }
                 }
 
