@@ -146,6 +146,9 @@ async fn load_key_data(
     mut key_info: Signal<Option<KeyInfo>>,
     mut string_value: Signal<String>,
     mut hash_value: Signal<HashMap<String, String>>,
+    mut list_value: Signal<Vec<String>>,
+    mut set_value: Signal<Vec<String>>,
+    mut zset_value: Signal<Vec<(String, f64)>>,
     mut is_binary: Signal<bool>,
     binary_format: Signal<BinaryFormat>,
     mut loading: Signal<bool>,
@@ -154,6 +157,9 @@ async fn load_key_data(
         key_info.set(None);
         string_value.set(String::new());
         hash_value.set(HashMap::new());
+        list_value.set(Vec::new());
+        set_value.set(Vec::new());
+        zset_value.set(Vec::new());
         is_binary.set(false);
         loading.set(false);
         return Ok(());
@@ -198,6 +204,9 @@ async fn load_key_data(
                     }
                 }
                 hash_value.set(HashMap::new());
+                list_value.set(Vec::new());
+                set_value.set(Vec::new());
+                zset_value.set(Vec::new());
             }
             KeyType::Hash => {
                 let fields = pool
@@ -207,12 +216,57 @@ async fn load_key_data(
                 tracing::info!("Hash loaded: {} fields", fields.len());
                 hash_value.set(fields);
                 string_value.set(String::new());
+                list_value.set(Vec::new());
+                set_value.set(Vec::new());
+                zset_value.set(Vec::new());
+                is_binary.set(false);
+            }
+            KeyType::List => {
+                let items = pool
+                    .get_list_range(&key, 0, -1)
+                    .await
+                    .map_err(|e| format!("读取 list 数据失败: {e}"))?;
+                tracing::info!("List loaded: {} items", items.len());
+                list_value.set(items);
+                string_value.set(String::new());
+                hash_value.set(HashMap::new());
+                set_value.set(Vec::new());
+                zset_value.set(Vec::new());
+                is_binary.set(false);
+            }
+            KeyType::Set => {
+                let members = pool
+                    .get_set_members(&key)
+                    .await
+                    .map_err(|e| format!("读取 set 数据失败: {e}"))?;
+                tracing::info!("Set loaded: {} members", members.len());
+                set_value.set(members);
+                string_value.set(String::new());
+                hash_value.set(HashMap::new());
+                list_value.set(Vec::new());
+                zset_value.set(Vec::new());
+                is_binary.set(false);
+            }
+            KeyType::ZSet => {
+                let members = pool
+                    .get_zset_range(&key, 0, -1)
+                    .await
+                    .map_err(|e| format!("读取 zset 数据失败: {e}"))?;
+                tracing::info!("ZSet loaded: {} members", members.len());
+                zset_value.set(members);
+                string_value.set(String::new());
+                hash_value.set(HashMap::new());
+                list_value.set(Vec::new());
+                set_value.set(Vec::new());
                 is_binary.set(false);
             }
             _ => {
                 tracing::info!("Type: {:?}", info.key_type);
                 string_value.set(String::new());
                 hash_value.set(HashMap::new());
+                list_value.set(Vec::new());
+                set_value.set(Vec::new());
+                zset_value.set(Vec::new());
                 is_binary.set(false);
             }
         }
@@ -225,6 +279,9 @@ async fn load_key_data(
         key_info.set(None);
         string_value.set(String::new());
         hash_value.set(HashMap::new());
+        list_value.set(Vec::new());
+        set_value.set(Vec::new());
+        zset_value.set(Vec::new());
         is_binary.set(false);
     }
 
@@ -241,6 +298,9 @@ pub fn ValueViewer(
     let key_info = use_signal(|| None::<KeyInfo>);
     let mut string_value = use_signal(String::new);
     let hash_value = use_signal(HashMap::new);
+    let list_value = use_signal(Vec::new);
+    let set_value = use_signal(Vec::new);
+    let zset_value = use_signal(Vec::new);
     let loading = use_signal(|| false);
     let mut saving = use_signal(|| false);
     let mut is_binary = use_signal(|| false);
@@ -257,6 +317,30 @@ pub fn ValueViewer(
     let mut new_hash_value = use_signal(String::new);
     let mut deleting_hash_field = use_signal(|| None::<HashDeleteTarget>);
     let mut hash_action = use_signal(|| None::<String>);
+
+    let mut list_status_message = use_signal(String::new);
+    let mut list_status_error = use_signal(|| false);
+    let mut new_list_value = use_signal(String::new);
+    let mut list_action = use_signal(|| None::<String>);
+    let mut editing_list_index = use_signal(|| None::<usize>);
+    let mut editing_list_value = use_signal(String::new);
+
+    let mut set_status_message = use_signal(String::new);
+    let mut set_status_error = use_signal(|| false);
+    let mut new_set_member = use_signal(String::new);
+    let mut set_action = use_signal(|| None::<String>);
+    let mut set_search = use_signal(String::new);
+    let mut deleting_set_member = use_signal(|| None::<String>);
+
+    let mut zset_status_message = use_signal(String::new);
+    let mut zset_status_error = use_signal(|| false);
+    let mut new_zset_member = use_signal(String::new);
+    let mut new_zset_score = use_signal(String::new);
+    let mut zset_action = use_signal(|| None::<String>);
+    let mut zset_search = use_signal(String::new);
+    let mut deleting_zset_member = use_signal(|| None::<String>);
+    let mut editing_zset_member = use_signal(|| None::<String>);
+    let mut editing_zset_score = use_signal(String::new);
 
     let pool = connection_pool.clone();
     let pool_for_edit = connection_pool.clone();
@@ -278,6 +362,30 @@ pub fn ValueViewer(
         hash_action.set(None);
         is_binary.set(false);
 
+        list_status_message.set(String::new());
+        list_status_error.set(false);
+        new_list_value.set(String::new());
+        list_action.set(None);
+        editing_list_index.set(None);
+        editing_list_value.set(String::new());
+
+        set_status_message.set(String::new());
+        set_status_error.set(false);
+        new_set_member.set(String::new());
+        set_action.set(None);
+        set_search.set(String::new());
+        deleting_set_member.set(None);
+
+        zset_status_message.set(String::new());
+        zset_status_error.set(false);
+        new_zset_member.set(String::new());
+        new_zset_score.set(String::new());
+        zset_action.set(None);
+        zset_search.set(String::new());
+        deleting_zset_member.set(None);
+        editing_zset_member.set(None);
+        editing_zset_score.set(String::new());
+
         let pool = pool.clone();
 
         spawn(async move {
@@ -289,6 +397,9 @@ pub fn ValueViewer(
                 key_info,
                 string_value,
                 hash_value,
+                list_value,
+                set_value,
+                zset_value,
                 is_binary,
                 binary_format,
                 loading,
@@ -326,6 +437,9 @@ pub fn ValueViewer(
     let is_loading = loading();
     let str_val = string_value();
     let hash_val = hash_value();
+    let list_val = list_value();
+    let set_val = set_value();
+    let zset_val = zset_value();
     let display_key = selected_key.read().clone();
 
     let status_message = hash_status_message();
@@ -351,6 +465,34 @@ pub fn ValueViewer(
                     || value.to_lowercase().contains(&normalized_search)
             }
         })
+        .collect();
+
+    let set_search_val = set_search();
+    let normalized_set_search = set_search_val.trim().to_lowercase();
+    let filtered_set_members: Vec<String> = set_val
+        .iter()
+        .filter(|member| {
+            if normalized_set_search.is_empty() {
+                true
+            } else {
+                member.to_lowercase().contains(&normalized_set_search)
+            }
+        })
+        .cloned()
+        .collect();
+
+    let zset_search_val = zset_search();
+    let normalized_zset_search = zset_search_val.trim().to_lowercase();
+    let filtered_zset_members: Vec<(String, f64)> = zset_val
+        .iter()
+        .filter(|(member, _)| {
+            if normalized_zset_search.is_empty() {
+                true
+            } else {
+                member.to_lowercase().contains(&normalized_zset_search)
+            }
+        })
+        .cloned()
         .collect();
 
     rsx! {
@@ -780,6 +922,9 @@ pub fn ValueViewer(
                                                                                         key_info,
                                                                                         string_value,
                                                                                         hash_value,
+                                                                                        list_value,
+                                                                                        set_value,
+                                                                                        zset_value,
                                                                                         is_binary,
                                                                                         binary_format,
                                                                                         loading,
@@ -948,6 +1093,9 @@ pub fn ValueViewer(
                                                                                             key_info,
                                                                                             string_value,
                                                                                             hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
                                                                                             is_binary,
                                                                                             binary_format,
                                                                                             loading,
@@ -1258,6 +1406,9 @@ pub fn ValueViewer(
                                                                             key_info,
                                                                             string_value,
                                                                             hash_value,
+                                                                            list_value,
+                                                                            set_value,
+                                                                            zset_value,
                                                                             is_binary,
                                                                             binary_format,
                                                                             loading,
@@ -1298,33 +1449,1220 @@ pub fn ValueViewer(
                         KeyType::List => {
                             rsx! {
                                 div {
-                                    color: "#888",
+                                    display: "flex",
+                                    justify_content: "space_between",
+                                    align_items: "center",
+                                    gap: "12px",
                                     margin_bottom: "12px",
-                                    font_size: "14px",
 
-                                    "List Items (use CLI to view)"
+                                    div {
+                                        display: "flex",
+                                        gap: "8px",
+                                        align_items: "center",
+
+                                        input {
+                                            width: "300px",
+                                            padding: "8px 10px",
+                                            background: "#2d2d2d",
+                                            border: "1px solid #3c3c3c",
+                                            border_radius: "6px",
+                                            color: "white",
+                                            value: "{new_list_value}",
+                                            placeholder: "输入新元素值",
+                                            oninput: move |event| new_list_value.set(event.value()),
+                                        }
+
+                                        button {
+                                            padding: "8px 12px",
+                                            background: "#38a169",
+                                            color: "white",
+                                            border: "none",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            disabled: list_action().is_some(),
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    let value = new_list_value();
+                                                    spawn(async move {
+                                                        if value.trim().is_empty() {
+                                                            list_status_message.set("值不能为空".to_string());
+                                                            list_status_error.set(true);
+                                                            return;
+                                                        }
+
+                                                        list_action.set(Some("push".to_string()));
+                                                        list_status_message.set(String::new());
+                                                        list_status_error.set(false);
+
+                                                        match pool.list_push(&key, &value, true).await {
+                                                            Ok(_) => {
+                                                                new_list_value.set(String::new());
+                                                                list_status_message.set("添加成功".to_string());
+                                                                list_status_error.set(false);
+                                                                if let Err(error) = load_key_data(
+                                                                    pool.clone(),
+                                                                    key.clone(),
+                                                                    key_info,
+                                                                    string_value,
+                                                                    hash_value,
+                                                                    list_value,
+                                                                    set_value,
+                                                                    zset_value,
+                                                                    is_binary,
+                                                                    binary_format,
+                                                                    loading,
+                                                                ).await {
+                                                                    tracing::error!("{error}");
+                                                                } else {
+                                                                    on_refresh.call(());
+                                                                }
+                                                            }
+                                                            Err(error) => {
+                                                                list_status_message.set(format!("添加失败：{error}"));
+                                                                list_status_error.set(true);
+                                                            }
+                                                        }
+                                                        list_action.set(None);
+                                                    });
+                                                }
+                                            },
+
+                                            if list_action().as_deref() == Some("push") { "添加中..." } else { "LPUSH" }
+                                        }
+
+                                        button {
+                                            padding: "8px 12px",
+                                            background: "#0e639c",
+                                            color: "white",
+                                            border: "none",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            disabled: list_action().is_some(),
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    let value = new_list_value();
+                                                    spawn(async move {
+                                                        if value.trim().is_empty() {
+                                                            list_status_message.set("值不能为空".to_string());
+                                                            list_status_error.set(true);
+                                                            return;
+                                                        }
+
+                                                        list_action.set(Some("rpush".to_string()));
+                                                        match pool.list_push(&key, &value, false).await {
+                                                            Ok(_) => {
+                                                                new_list_value.set(String::new());
+                                                                list_status_message.set("添加成功".to_string());
+                                                                list_status_error.set(false);
+                                                                if let Err(error) = load_key_data(
+                                                                    pool.clone(),
+                                                                    key.clone(),
+                                                                    key_info,
+                                                                    string_value,
+                                                                    hash_value,
+                                                                    list_value,
+                                                                    set_value,
+                                                                    zset_value,
+                                                                    is_binary,
+                                                                    binary_format,
+                                                                    loading,
+                                                                ).await {
+                                                                    tracing::error!("{error}");
+                                                                } else {
+                                                                    on_refresh.call(());
+                                                                }
+                                                            }
+                                                            Err(error) => {
+                                                                list_status_message.set(format!("添加失败：{error}"));
+                                                                list_status_error.set(true);
+                                                            }
+                                                        }
+                                                        list_action.set(None);
+                                                    });
+                                                }
+                                            },
+
+                                            "RPUSH"
+                                        }
+                                    }
+
+                                    div {
+                                        color: "#888",
+                                        font_size: "13px",
+
+                                        "List Items ({list_val.len()})"
+                                    }
+                                }
+
+                                if !list_status_message.read().is_empty() {
+                                    div {
+                                        margin_bottom: "12px",
+                                        padding: "8px 12px",
+                                        background: if list_status_error() { "rgba(248, 113, 113, 0.1)" } else { "rgba(78, 201, 176, 0.1)" },
+                                        border_radius: "6px",
+                                        color: if list_status_error() { "#f87171" } else { "#4ec9b0" },
+                                        font_size: "13px",
+
+                                        "{list_status_message}"
+                                    }
+                                }
+
+                                div {
+                                    overflow_x: "auto",
+                                    border: "1px solid #3c3c3c",
+                                    border_radius: "8px",
+                                    background: "#252526",
+
+                                    table {
+                                        width: "100%",
+                                        border_collapse: "collapse",
+
+                                        thead {
+                                            tr {
+                                                background: "#2d2d2d",
+                                                border_bottom: "1px solid #3c3c3c",
+
+                                                th {
+                                                    width: "72px",
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+
+                                                    "Index"
+                                                }
+
+                                                th {
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+
+                                                    "Value"
+                                                }
+
+                                                th {
+                                                    width: "156px",
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+
+                                                    "Action"
+                                                }
+                                            }
+                                        }
+
+                                        tbody {
+                                            for (idx, value) in list_val.iter().enumerate() {
+                                                if editing_list_index() == Some(idx) {
+                                                    tr {
+                                                        background: "#1f2937",
+                                                        border_bottom: "1px solid #3c3c3c",
+
+                                                        td {
+                                                            padding: "12px",
+                                                            color: "#4ec9b0",
+
+                                                            "{idx}"
+                                                        }
+
+                                                        td {
+                                                            padding: "12px",
+
+                                                            input {
+                                                                width: "100%",
+                                                                padding: "8px 10px",
+                                                                background: "#1e1e1e",
+                                                                border: "1px solid #555",
+                                                                border_radius: "6px",
+                                                                color: "white",
+                                                                value: "{editing_list_value}",
+                                                                oninput: move |event| editing_list_value.set(event.value()),
+                                                            }
+                                                        }
+
+                                                        td {
+                                                            padding: "12px",
+
+                                                            div {
+                                                                display: "flex",
+                                                                gap: "8px",
+
+                                                                button {
+                                                                    padding: "6px 10px",
+                                                                    background: "#38a169",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    disabled: list_action().is_some(),
+                                                                    onclick: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        let idx = idx as i64;
+                                                                        move |_| {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            let new_val = editing_list_value();
+                                                                            spawn(async move {
+                                                                                list_action.set(Some("set".to_string()));
+                                                                                match pool.list_set(&key, idx, &new_val).await {
+                                                                                    Ok(_) => {
+                                                                                        editing_list_index.set(None);
+                                                                                        list_status_message.set("修改成功".to_string());
+                                                                                        list_status_error.set(false);
+                                                                                        if let Err(error) = load_key_data(
+                                                                                            pool.clone(),
+                                                                                            key.clone(),
+                                                                                            key_info,
+                                                                                            string_value,
+                                                                                            hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
+                                                                                            is_binary,
+                                                                                            binary_format,
+                                                                                            loading,
+                                                                                        ).await {
+                                                                                            tracing::error!("{error}");
+                                                                                        } else {
+                                                                                            on_refresh.call(());
+                                                                                        }
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        list_status_message.set(format!("修改失败：{error}"));
+                                                                                        list_status_error.set(true);
+                                                                                    }
+                                                                                }
+                                                                                list_action.set(None);
+                                                                            });
+                                                                        }
+                                                                    },
+
+                                                                    "保存"
+                                                                }
+
+                                                                button {
+                                                                    padding: "6px 10px",
+                                                                    background: "#5a5a5a",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    onclick: move |_| {
+                                                                        editing_list_index.set(None);
+                                                                    },
+
+                                                                    "取消"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    tr {
+                                                        key: "{idx}",
+                                                        border_bottom: "1px solid #3c3c3c",
+                                                        background: if idx % 2 == 0 { "#252526" } else { "#1e1e1e" },
+
+                                                        td {
+                                                            padding: "12px",
+                                                            color: "#888",
+
+                                                            "{idx}"
+                                                        }
+
+                                                        td {
+                                                            padding: "12px",
+                                                            color: "white",
+                                                            font_family: "Consolas, monospace",
+                                                            font_size: "13px",
+                                                            word_break: "break-all",
+
+                                                            "{value}"
+                                                        }
+
+                                                        td {
+                                                            padding: "12px",
+
+                                                            div {
+                                                                display: "flex",
+                                                                gap: "6px",
+
+                                                                button {
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(49, 130, 206, 0.18)",
+                                                                    color: "#63b3ed",
+                                                                    border: "1px solid rgba(99, 179, 237, 0.30)",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    title: "编辑",
+                                                                    onclick: {
+                                                                        let value = value.clone();
+                                                                        move |_| {
+                                                                            editing_list_index.set(Some(idx));
+                                                                            editing_list_value.set(value.clone());
+                                                                        }
+                                                                    },
+
+                                                                    EditIcon {}
+                                                                }
+
+                                                                button {
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(197, 48, 48, 0.18)",
+                                                                    color: "#f87171",
+                                                                    border: "1px solid rgba(248, 113, 113, 0.30)",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    title: "删除",
+                                                                    onclick: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        let value = value.clone();
+                                                                        move |_| {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            let value = value.clone();
+                                                                            spawn(async move {
+                                                                                list_action.set(Some("remove".to_string()));
+                                                                                match pool.list_remove(&key, 1, &value).await {
+                                                                                    Ok(_) => {
+                                                                                        list_status_message.set("删除成功".to_string());
+                                                                                        list_status_error.set(false);
+                                                                                        if let Err(error) = load_key_data(
+                                                                                            pool.clone(),
+                                                                                            key.clone(),
+                                                                                            key_info,
+                                                                                            string_value,
+                                                                                            hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
+                                                                                            is_binary,
+                                                                                            binary_format,
+                                                                                            loading,
+                                                                                        ).await {
+                                                                                            tracing::error!("{error}");
+                                                                                        } else {
+                                                                                            on_refresh.call(());
+                                                                                        }
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        list_status_message.set(format!("删除失败：{error}"));
+                                                                                        list_status_error.set(true);
+                                                                                    }
+                                                                                }
+                                                                                list_action.set(None);
+                                                                            });
+                                                                        }
+                                                                    },
+
+                                                                    DeleteIcon {}
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                         KeyType::Set => {
                             rsx! {
                                 div {
-                                    color: "#888",
+                                    display: "flex",
+                                    justify_content: "space_between",
+                                    align_items: "center",
+                                    gap: "12px",
                                     margin_bottom: "12px",
-                                    font_size: "14px",
 
-                                    "Set Members (use CLI to view)"
+                                    div {
+                                        display: "flex",
+                                        gap: "8px",
+                                        align_items: "center",
+
+                                        input {
+                                            width: "200px",
+                                            padding: "8px 10px",
+                                            background: "#2d2d2d",
+                                            border: "1px solid #3c3c3c",
+                                            border_radius: "6px",
+                                            color: "white",
+                                            value: "{set_search}",
+                                            placeholder: "搜索成员",
+                                            oninput: move |event| set_search.set(event.value()),
+                                        }
+
+                                        input {
+                                            width: "200px",
+                                            padding: "8px 10px",
+                                            background: "#2d2d2d",
+                                            border: "1px solid #3c3c3c",
+                                            border_radius: "6px",
+                                            color: "white",
+                                            value: "{new_set_member}",
+                                            placeholder: "输入新成员",
+                                            oninput: move |event| new_set_member.set(event.value()),
+                                        }
+
+                                        button {
+                                            padding: "8px 12px",
+                                            background: "#38a169",
+                                            color: "white",
+                                            border: "none",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            disabled: set_action().is_some(),
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    let member = new_set_member();
+                                                    spawn(async move {
+                                                        if member.trim().is_empty() {
+                                                            set_status_message.set("成员不能为空".to_string());
+                                                            set_status_error.set(true);
+                                                            return;
+                                                        }
+
+                                                        set_action.set(Some("add".to_string()));
+                                                        set_status_message.set(String::new());
+                                                        set_status_error.set(false);
+
+                                                        match pool.set_add(&key, &member).await {
+                                                            Ok(true) => {
+                                                                new_set_member.set(String::new());
+                                                                set_status_message.set("添加成功".to_string());
+                                                                set_status_error.set(false);
+                                                                if let Err(error) = load_key_data(
+                                                                    pool.clone(),
+                                                                    key.clone(),
+                                                                    key_info,
+                                                                    string_value,
+                                                                    hash_value,
+                                                                    list_value,
+                                                                    set_value,
+                                                                    zset_value,
+                                                                    is_binary,
+                                                                    binary_format,
+                                                                    loading,
+                                                                ).await {
+                                                                    tracing::error!("{error}");
+                                                                } else {
+                                                                    on_refresh.call(());
+                                                                }
+                                                            }
+                                                            Ok(false) => {
+                                                                set_status_message.set("成员已存在".to_string());
+                                                                set_status_error.set(true);
+                                                            }
+                                                            Err(error) => {
+                                                                set_status_message.set(format!("添加失败：{error}"));
+                                                                set_status_error.set(true);
+                                                            }
+                                                        }
+                                                        set_action.set(None);
+                                                    });
+                                                }
+                                            },
+
+                                            if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                                        }
+                                    }
+
+                                    div {
+                                        text_align: "right",
+
+                                        div {
+                                            color: "#888",
+                                            font_size: "13px",
+
+                                            "Set Members ({filtered_set_members.len()}/{set_val.len()})"
+                                        }
+                                    }
+                                }
+
+                                if !set_status_message.read().is_empty() {
+                                    div {
+                                        margin_bottom: "12px",
+                                        padding: "8px 12px",
+                                        background: if set_status_error() { "rgba(248, 113, 113, 0.1)" } else { "rgba(78, 201, 176, 0.1)" },
+                                        border_radius: "6px",
+                                        color: if set_status_error() { "#f87171" } else { "#4ec9b0" },
+                                        font_size: "13px",
+
+                                        "{set_status_message}"
+                                    }
+                                }
+
+                                div {
+                                    overflow_x: "auto",
+                                    border: "1px solid #3c3c3c",
+                                    border_radius: "8px",
+                                    background: "#252526",
+                                    max_height: "500px",
+                                    overflow_y: "auto",
+
+                                    table {
+                                        width: "100%",
+                                        border_collapse: "collapse",
+
+                                        thead {
+                                            tr {
+                                                background: "#2d2d2d",
+                                                position: "sticky",
+                                                top: "0",
+
+                                                th {
+                                                    width: "72px",
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+                                                    border_bottom: "1px solid #3c3c3c",
+
+                                                    "#"
+                                                }
+
+                                                th {
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+                                                    border_bottom: "1px solid #3c3c3c",
+
+                                                    "Member"
+                                                }
+
+                                                th {
+                                                    width: "100px",
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+                                                    border_bottom: "1px solid #3c3c3c",
+
+                                                    "Action"
+                                                }
+                                            }
+                                        }
+
+                                        tbody {
+                                            for (idx, member) in filtered_set_members.iter().enumerate() {
+                                                tr {
+                                                    key: "{member}",
+                                                    border_bottom: "1px solid #3c3c3c",
+                                                    background: if idx % 2 == 0 { "#252526" } else { "#1e1e1e" },
+
+                                                    td {
+                                                        padding: "10px 12px",
+                                                        color: "#888",
+
+                                                        "{idx + 1}"
+                                                    }
+
+                                                    td {
+                                                        padding: "10px 12px",
+                                                        color: "white",
+                                                        font_family: "Consolas, monospace",
+                                                        font_size: "13px",
+                                                        word_break: "break-all",
+
+                                                        "{member}"
+                                                    }
+
+                                                    td {
+                                                        padding: "10px 12px",
+
+                                                        div {
+                                                            display: "flex",
+                                                            gap: "6px",
+
+                                                            button {
+                                                                width: "32px",
+                                                                height: "32px",
+                                                                display: "flex",
+                                                                align_items: "center",
+                                                                justify_content: "center",
+                                                                background: "rgba(47, 133, 90, 0.16)",
+                                                                color: "#68d391",
+                                                                border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                                border_radius: "6px",
+                                                                cursor: "pointer",
+                                                                title: "复制",
+                                                                onclick: {
+                                                                    let member = member.clone();
+                                                                    move |_| {
+                                                                        match copy_value_to_clipboard(&member) {
+                                                                            Ok(_) => {
+                                                                                set_status_message.set("复制成功".to_string());
+                                                                                set_status_error.set(false);
+                                                                            }
+                                                                            Err(error) => {
+                                                                                set_status_message.set(format!("复制失败：{error}"));
+                                                                                set_status_error.set(true);
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+
+                                                                CopyIcon {}
+                                                            }
+
+                                                            button {
+                                                                width: "32px",
+                                                                height: "32px",
+                                                                display: "flex",
+                                                                align_items: "center",
+                                                                justify_content: "center",
+                                                                background: "rgba(197, 48, 48, 0.18)",
+                                                                color: "#f87171",
+                                                                border: "1px solid rgba(248, 113, 113, 0.30)",
+                                                                border_radius: "6px",
+                                                                cursor: "pointer",
+                                                                disabled: set_action().is_some(),
+                                                                title: "删除",
+                                                                onclick: {
+                                                                    let pool = connection_pool.clone();
+                                                                    let key = display_key.clone();
+                                                                    let member = member.clone();
+                                                                    move |_| {
+                                                                        let pool = pool.clone();
+                                                                        let key = key.clone();
+                                                                        let member = member.clone();
+                                                                        spawn(async move {
+                                                                            set_action.set(Some(format!("delete:{}", member)));
+                                                                            match pool.set_remove(&key, &member).await {
+                                                                                Ok(_) => {
+                                                                                    set_status_message.set("删除成功".to_string());
+                                                                                    set_status_error.set(false);
+                                                                                    if let Err(error) = load_key_data(
+                                                                                        pool.clone(),
+                                                                                        key.clone(),
+                                                                                        key_info,
+                                                                                        string_value,
+                                                                                        hash_value,
+                                                                                        list_value,
+                                                                                        set_value,
+                                                                                        zset_value,
+                                                                                        is_binary,
+                                                                                        binary_format,
+                                                                                        loading,
+                                                                                    ).await {
+                                                                                        tracing::error!("{error}");
+                                                                                    } else {
+                                                                                        on_refresh.call(());
+                                                                                    }
+                                                                                }
+                                                                                Err(error) => {
+                                                                                    set_status_message.set(format!("删除失败：{error}"));
+                                                                                    set_status_error.set(true);
+                                                                                }
+                                                                            }
+                                                                            set_action.set(None);
+                                                                        });
+                                                                    }
+                                                                },
+
+                                                                DeleteIcon {}
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                         KeyType::ZSet => {
                             rsx! {
                                 div {
-                                    color: "#888",
+                                    display: "flex",
+                                    justify_content: "space_between",
+                                    align_items: "center",
+                                    gap: "12px",
                                     margin_bottom: "12px",
-                                    font_size: "14px",
+                                    flex_wrap: "wrap",
 
-                                    "Sorted Set Members (use CLI to view)"
+                                    div {
+                                        display: "flex",
+                                        gap: "8px",
+                                        align_items: "center",
+                                        flex_wrap: "wrap",
+
+                                        input {
+                                            width: "160px",
+                                            padding: "8px 10px",
+                                            background: "#2d2d2d",
+                                            border: "1px solid #3c3c3c",
+                                            border_radius: "6px",
+                                            color: "white",
+                                            value: "{zset_search}",
+                                            placeholder: "搜索成员",
+                                            oninput: move |event| zset_search.set(event.value()),
+                                        }
+
+                                        input {
+                                            width: "80px",
+                                            padding: "8px 10px",
+                                            background: "#2d2d2d",
+                                            border: "1px solid #3c3c3c",
+                                            border_radius: "6px",
+                                            color: "white",
+                                            value: "{new_zset_score}",
+                                            placeholder: "Score",
+                                            oninput: move |event| new_zset_score.set(event.value()),
+                                        }
+
+                                        input {
+                                            width: "200px",
+                                            padding: "8px 10px",
+                                            background: "#2d2d2d",
+                                            border: "1px solid #3c3c3c",
+                                            border_radius: "6px",
+                                            color: "white",
+                                            value: "{new_zset_member}",
+                                            placeholder: "输入新成员",
+                                            oninput: move |event| new_zset_member.set(event.value()),
+                                        }
+
+                                        button {
+                                            padding: "8px 12px",
+                                            background: "#38a169",
+                                            color: "white",
+                                            border: "none",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            disabled: zset_action().is_some(),
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    let member = new_zset_member();
+                                                    let score_str = new_zset_score();
+                                                    spawn(async move {
+                                                        if member.trim().is_empty() {
+                                                            zset_status_message.set("成员不能为空".to_string());
+                                                            zset_status_error.set(true);
+                                                            return;
+                                                        }
+
+                                                        let score: f64 = match score_str.parse() {
+                                                            Ok(s) => s,
+                                                            Err(_) => {
+                                                                zset_status_message.set("Score 必须是有效数字".to_string());
+                                                                zset_status_error.set(true);
+                                                                return;
+                                                            }
+                                                        };
+
+                                                        zset_action.set(Some("add".to_string()));
+                                                        zset_status_message.set(String::new());
+                                                        zset_status_error.set(false);
+
+                                                        match pool.zset_add(&key, &member, score).await {
+                                                            Ok(_) => {
+                                                                new_zset_member.set(String::new());
+                                                                new_zset_score.set(String::new());
+                                                                zset_status_message.set("添加成功".to_string());
+                                                                zset_status_error.set(false);
+                                                                if let Err(error) = load_key_data(
+                                                                    pool.clone(),
+                                                                    key.clone(),
+                                                                    key_info,
+                                                                    string_value,
+                                                                    hash_value,
+                                                                    list_value,
+                                                                    set_value,
+                                                                    zset_value,
+                                                                    is_binary,
+                                                                    binary_format,
+                                                                    loading,
+                                                                ).await {
+                                                                    tracing::error!("{error}");
+                                                                } else {
+                                                                    on_refresh.call(());
+                                                                }
+                                                            }
+                                                            Err(error) => {
+                                                                zset_status_message.set(format!("添加失败：{error}"));
+                                                                zset_status_error.set(true);
+                                                            }
+                                                        }
+                                                        zset_action.set(None);
+                                                    });
+                                                }
+                                            },
+
+                                            if zset_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                                        }
+                                    }
+
+                                    div {
+                                        text_align: "right",
+
+                                        div {
+                                            color: "#888",
+                                            font_size: "13px",
+
+                                            "ZSet Members ({filtered_zset_members.len()}/{zset_val.len()})"
+                                        }
+                                    }
+                                }
+
+                                if !zset_status_message.read().is_empty() {
+                                    div {
+                                        margin_bottom: "12px",
+                                        padding: "8px 12px",
+                                        background: if zset_status_error() { "rgba(248, 113, 113, 0.1)" } else { "rgba(78, 201, 176, 0.1)" },
+                                        border_radius: "6px",
+                                        color: if zset_status_error() { "#f87171" } else { "#4ec9b0" },
+                                        font_size: "13px",
+
+                                        "{zset_status_message}"
+                                    }
+                                }
+
+                                div {
+                                    overflow_x: "auto",
+                                    border: "1px solid #3c3c3c",
+                                    border_radius: "8px",
+                                    background: "#252526",
+
+                                    table {
+                                        width: "100%",
+                                        border_collapse: "collapse",
+
+                                        thead {
+                                            tr {
+                                                background: "#2d2d2d",
+                                                border_bottom: "1px solid #3c3c3c",
+
+                                                th {
+                                                    width: "72px",
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+
+                                                    "#"
+                                                }
+
+                                                th {
+                                                    width: "100px",
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+
+                                                    "Score"
+                                                }
+
+                                                th {
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+
+                                                    "Member"
+                                                }
+
+                                                th {
+                                                    width: "100px",
+                                                    padding: "12px",
+                                                    color: "#888",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    text_align: "left",
+
+                                                    "Action"
+                                                }
+                                            }
+                                        }
+
+                                        tbody {
+                                            for (idx, (member, score)) in filtered_zset_members.iter().enumerate() {
+                                                if editing_zset_member() == Some(member.clone()) {
+                                                    tr {
+                                                        background: "#1f2937",
+                                                        border_bottom: "1px solid #3c3c3c",
+
+                                                        td {
+                                                            padding: "12px",
+                                                            color: "#888",
+
+                                                            "{idx + 1}"
+                                                        }
+
+                                                        td {
+                                                            padding: "12px",
+
+                                                            input {
+                                                                width: "80px",
+                                                                padding: "8px 10px",
+                                                                background: "#1e1e1e",
+                                                                border: "1px solid #555",
+                                                                border_radius: "6px",
+                                                                color: "white",
+                                                                value: "{editing_zset_score}",
+                                                                oninput: move |event| editing_zset_score.set(event.value()),
+                                                            }
+                                                        }
+
+                                                        td {
+                                                            padding: "12px",
+                                                            color: "#4ec9b0",
+
+                                                            "{member}"
+                                                        }
+
+                                                        td {
+                                                            padding: "12px",
+
+                                                            div {
+                                                                display: "flex",
+                                                                gap: "8px",
+
+                                                                button {
+                                                                    padding: "6px 10px",
+                                                                    background: "#38a169",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    disabled: zset_action().is_some(),
+                                                                    onclick: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        let member = member.clone();
+                                                                        move |_| {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            let member = member.clone();
+                                                                            let score_str = editing_zset_score();
+                                                                            spawn(async move {
+                                                                                let score: f64 = match score_str.parse() {
+                                                                                    Ok(s) => s,
+                                                                                    Err(_) => {
+                                                                                        zset_status_message.set("Score 必须是有效数字".to_string());
+                                                                                        zset_status_error.set(true);
+                                                                                        return;
+                                                                                    }
+                                                                                };
+
+                                                                                zset_action.set(Some("update".to_string()));
+                                                                                match pool.zset_add(&key, &member, score).await {
+                                                                                    Ok(_) => {
+                                                                                        editing_zset_member.set(None);
+                                                                                        zset_status_message.set("修改成功".to_string());
+                                                                                        zset_status_error.set(false);
+                                                                                        if let Err(error) = load_key_data(
+                                                                                            pool.clone(),
+                                                                                            key.clone(),
+                                                                                            key_info,
+                                                                                            string_value,
+                                                                                            hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
+                                                                                            is_binary,
+                                                                                            binary_format,
+                                                                                            loading,
+                                                                                        ).await {
+                                                                                            tracing::error!("{error}");
+                                                                                        } else {
+                                                                                            on_refresh.call(());
+                                                                                        }
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        zset_status_message.set(format!("修改失败：{error}"));
+                                                                                        zset_status_error.set(true);
+                                                                                    }
+                                                                                }
+                                                                                zset_action.set(None);
+                                                                            });
+                                                                        }
+                                                                    },
+
+                                                                    "保存"
+                                                                }
+
+                                                                button {
+                                                                    padding: "6px 10px",
+                                                                    background: "#5a5a5a",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    onclick: move |_| {
+                                                                        editing_zset_member.set(None);
+                                                                    },
+
+                                                                    "取消"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    tr {
+                                                        key: "{member}",
+                                                        border_bottom: "1px solid #3c3c3c",
+                                                        background: if idx % 2 == 0 { "#252526" } else { "#1e1e1e" },
+
+                                                        td {
+                                                            padding: "10px 12px",
+                                                            color: "#888",
+
+                                                            "{idx + 1}"
+                                                        }
+
+                                                        td {
+                                                            padding: "10px 12px",
+                                                            color: "#f59e0b",
+                                                            font_family: "Consolas, monospace",
+                                                            font_size: "13px",
+
+                                                            "{score}"
+                                                        }
+
+                                                        td {
+                                                            padding: "10px 12px",
+                                                            color: "white",
+                                                            font_family: "Consolas, monospace",
+                                                            font_size: "13px",
+                                                            word_break: "break-all",
+
+                                                            "{member}"
+                                                        }
+
+                                                        td {
+                                                            padding: "10px 12px",
+
+                                                            div {
+                                                                display: "flex",
+                                                                gap: "6px",
+
+                                                                button {
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(49, 130, 206, 0.18)",
+                                                                    color: "#63b3ed",
+                                                                    border: "1px solid rgba(99, 179, 237, 0.30)",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    title: "修改 Score",
+                                                                    onclick: {
+                                                                        let member = member.clone();
+                                                                        let score = *score;
+                                                                        move |_| {
+                                                                            editing_zset_member.set(Some(member.clone()));
+                                                                            editing_zset_score.set(score.to_string());
+                                                                        }
+                                                                    },
+
+                                                                    EditIcon {}
+                                                                }
+
+                                                                button {
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(197, 48, 48, 0.18)",
+                                                                    color: "#f87171",
+                                                                    border: "1px solid rgba(248, 113, 113, 0.30)",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    disabled: zset_action().is_some(),
+                                                                    title: "删除",
+                                                                    onclick: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        let member = member.clone();
+                                                                        move |_| {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            let member = member.clone();
+                                                                            spawn(async move {
+                                                                                zset_action.set(Some(format!("delete:{}", member)));
+                                                                                match pool.zset_remove(&key, &member).await {
+                                                                                    Ok(_) => {
+                                                                                        zset_status_message.set("删除成功".to_string());
+                                                                                        zset_status_error.set(false);
+                                                                                        if let Err(error) = load_key_data(
+                                                                                            pool.clone(),
+                                                                                            key.clone(),
+                                                                                            key_info,
+                                                                                            string_value,
+                                                                                            hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
+                                                                                            is_binary,
+                                                                                            binary_format,
+                                                                                            loading,
+                                                                                        ).await {
+                                                                                            tracing::error!("{error}");
+                                                                                        } else {
+                                                                                            on_refresh.call(());
+                                                                                        }
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        zset_status_message.set(format!("删除失败：{error}"));
+                                                                                        zset_status_error.set(true);
+                                                                                    }
+                                                                                }
+                                                                                zset_action.set(None);
+                                                                            });
+                                                                        }
+                                                                    },
+
+                                                                    DeleteIcon {}
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -600,4 +600,194 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
+
+    pub async fn list_push(&self, key: &str, value: &str, left: bool) -> Result<i64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i64 = if left {
+                conn.lpush(key, value)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+            } else {
+                conn.rpush(key, value)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+            };
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn list_pop(&self, key: &str, left: bool) -> Result<Option<String>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: Option<String> = if left {
+                conn.lpop(key, None)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+            } else {
+                conn.rpop(key, None)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+            };
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn list_set(&self, key: &str, index: i64, value: &str) -> Result<()> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let _: () = conn.lset(key, index as isize, value)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(())
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn list_remove(&self, key: &str, count: i64, value: &str) -> Result<i64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i64 = conn.lrem(key, count as isize, value)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn list_len(&self, key: &str) -> Result<u64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let len: u64 = conn.llen(key)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(len)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_add(&self, key: &str, member: &str) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i32 = conn.sadd(key, member)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_remove(&self, key: &str, member: &str) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i32 = conn.srem(key, member)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn zset_add(&self, key: &str, member: &str, score: f64) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i32 = conn.zadd(key, member, score)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn zset_remove(&self, key: &str, member: &str) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i32 = conn.zrem(key, member)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn zset_card(&self, key: &str) -> Result<u64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let count: u64 = conn.zcard(key)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(count)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn stream_delete(&self, key: &str, id: &str) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i32 = redis::cmd("XDEL")
+                .arg(key)
+                .arg(id)
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn stream_len(&self, key: &str) -> Result<u64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: u64 = redis::cmd("XLEN")
+                .arg(key)
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn stream_range(&self, key: &str, start: &str, end: &str) -> Result<Vec<(String, Vec<(String, String)>)>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: Vec<(String, Vec<(String, String)>)> = redis::cmd("XRANGE")
+                .arg(key)
+                .arg(start)
+                .arg(end)
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
 }
