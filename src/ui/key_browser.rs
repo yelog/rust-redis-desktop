@@ -8,6 +8,8 @@ use crate::ui::lazy_tree_node::{ContextMenuState, LazyTreeNode, TreeState};
 use arboard::Clipboard;
 use dioxus::prelude::*;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use uuid::Uuid;
 
 fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
@@ -19,6 +21,13 @@ fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
         keys.extend(collect_all_keys(&node.children));
     }
     keys
+}
+
+#[derive(Clone, Default)]
+pub struct ScanProgress {
+    pub scanned: usize,
+    pub current_batch: usize,
+    pub is_scanning: bool,
 }
 
 #[component]
@@ -41,6 +50,8 @@ pub fn KeyBrowser(
     let mut current_db = use_signal(|| 0u8);
     let db_keys_count = use_signal(HashMap::<u8, u64>::new);
     let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
+    let mut scan_progress = use_signal(ScanProgress::default);
+    let mut cancel_scan = use_signal(|| Arc::new(AtomicBool::new(false)));
 
     let selection_mode = tree_state.read().selection_mode;
     let selected_keys_count = tree_state.read().selected_keys.len();
@@ -81,6 +92,8 @@ pub fn KeyBrowser(
         let keys_count = keys_count.clone();
         let load_keyspace = load_keyspace.clone();
         let tree_state = tree_state.clone();
+        let scan_progress = scan_progress.clone();
+        let mut cancel_scan = cancel_scan.clone();
         move || {
             let pool = pool.clone();
             let pattern = if search_pattern.read().is_empty() {
@@ -93,26 +106,57 @@ pub fn KeyBrowser(
             let mut keys_count = keys_count.clone();
             let load_keyspace = load_keyspace.clone();
             let mut tree_state = tree_state.clone();
+            let mut scan_progress = scan_progress.clone();
+            let cancel_flag = Arc::new(AtomicBool::new(false));
+            cancel_scan.set(cancel_flag.clone());
 
             spawn(async move {
                 loading.set(true);
                 tree_nodes.set(Vec::new());
                 tree_state.write().selected_keys.clear();
+                scan_progress.write().is_scanning = true;
+                scan_progress.write().scanned = 0;
+                scan_progress.write().current_batch = 0;
 
-                match pool.scan_keys(&pattern, 500).await {
-                    Ok(keys) => {
-                        keys_count.set(keys.len());
+                let mut all_keys = Vec::new();
+                let mut cursor: u64 = 0;
+                let batch_size = 500usize;
 
-                        let builder = TreeBuilder::new(":");
-                        let tree = builder.build(keys);
-                        tree_nodes.set(tree);
+                loop {
+                    if cancel_flag.load(Ordering::Relaxed) {
+                        tracing::info!("Scan cancelled by user");
+                        break;
                     }
-                    Err(e) => {
-                        tracing::error!("Failed to load keys: {}", e);
+
+                    match pool.scan_keys_with_cursor(&pattern, cursor, batch_size).await {
+                        Ok((next_cursor, keys)) => {
+                            let batch_len = keys.len();
+                            all_keys.extend(keys);
+                            
+                            scan_progress.write().scanned = all_keys.len();
+                            scan_progress.write().current_batch = batch_len;
+                            
+                            cursor = next_cursor;
+                            
+                            if cursor == 0 {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to load keys: {}", e);
+                            break;
+                        }
                     }
                 }
 
+                keys_count.set(all_keys.len());
+
+                let builder = TreeBuilder::new(":");
+                let tree = builder.build(all_keys);
+                tree_nodes.set(tree);
+
                 loading.set(false);
+                scan_progress.write().is_scanning = false;
                 load_keyspace();
             });
         }
@@ -120,15 +164,14 @@ pub fn KeyBrowser(
 
     let select_db = {
         let pool = connection_pool.clone();
-        let load_keys = load_keys.clone();
+        let mut refresh_trigger = refresh_trigger.clone();
         move |db: u8| {
             let pool = pool.clone();
-            let load_keys = load_keys.clone();
             spawn(async move {
                 match pool.select_database(db).await {
                     Ok(_) => {
                         current_db.set(db);
-                        load_keys();
+                        refresh_trigger.set(refresh_trigger() + 1);
                     }
                     Err(e) => {
                         tracing::error!("Failed to select database: {}", e);
@@ -139,7 +182,7 @@ pub fn KeyBrowser(
     };
 
 use_effect({
-    let load_keys = load_keys.clone();
+    let mut load_keys = load_keys.clone();
     move || {
         let _ = refresh_trigger();
         let _ = connection_version;
@@ -214,12 +257,9 @@ use_effect({
                     placeholder: "Search keys...",
                     value: "{search_pattern}",
                     oninput: move |e| search_pattern.set(e.value()),
-                    onkeydown: {
-                        let load_keys = load_keys.clone();
-                        move |e| {
-                            if e.data().key() == Key::Enter {
-                                load_keys();
-                            }
+                    onkeydown: move |e| {
+                        if e.data().key() == Key::Enter {
+                            refresh_trigger.set(refresh_trigger() + 1);
                         }
                     },
                 }
@@ -246,21 +286,41 @@ use_effect({
                     "➕ 新增"
                 }
 
-                button {
-                    flex: "1",
-                    padding: "6px",
-                    background: "#3c3c3c",
-                    color: "white",
-                    border: "none",
-                    border_radius: "4px",
-                    cursor: "pointer",
-                    font_size: "12px",
-                    onclick: {
-                        let load_keys = load_keys.clone();
-                        move |_| load_keys()
-                    },
+                if scan_progress.read().is_scanning {
+                    button {
+                        flex: "1",
+                        padding: "6px",
+                        background: "#c53030",
+                        color: "white",
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "12px",
+                        onclick: {
+                            let cancel_scan = cancel_scan.clone();
+                            move |_| {
+                                cancel_scan.read().store(true, Ordering::Relaxed);
+                            }
+                        },
 
-                    if loading() { "Loading..." } else { "🔄 Refresh" }
+                        "✕ 取消扫描"
+                    }
+                } else {
+                    button {
+                        flex: "1",
+                        padding: "6px",
+                        background: "#3c3c3c",
+                        color: "white",
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "12px",
+                        onclick: move |_| {
+                            refresh_trigger.set(refresh_trigger() + 1);
+                        },
+
+                        "🔄 Refresh"
+                    }
                 }
 
                 if keys_count() > 0 {
@@ -271,6 +331,57 @@ use_effect({
                         "{keys_count} keys"
                     }
                 }
+            }
+
+            if scan_progress.read().is_scanning {
+                div {
+                    padding: "8px",
+                    border_bottom: "1px solid #3c3c3c",
+                    background: "#1a1a2e",
+
+                    div {
+                        display: "flex",
+                        justify_content: "space_between",
+                        align_items: "center",
+                        margin_bottom: "4px",
+
+                        span {
+                            color: "#888",
+                            font_size: "11px",
+
+                            "正在扫描..."
+                        }
+
+                        span {
+                            color: "#4ec9b0",
+                            font_size: "11px",
+
+                            "已找到 {scan_progress.read().scanned} 个 key"
+                        }
+                    }
+
+                    div {
+                        width: "100%",
+                        height: "4px",
+                        background: "#3c3c3c",
+                        border_radius: "2px",
+                        overflow: "hidden",
+
+                        div {
+                            width: "100%",
+                            height: "100%",
+                            background: "linear-gradient(90deg, #4ec9b0, #0e639c)",
+                            animation: "pulse 1.5s ease-in-out infinite",
+                        }
+                    }
+                }
+
+                style { {r#"
+                    @keyframes pulse {
+                        0%, 100% { opacity: 0.4; transform: scaleX(0.3); }
+                        50% { opacity: 1; transform: scaleX(1); }
+                    }
+                "#} }
             }
 
             if selection_mode {

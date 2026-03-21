@@ -69,6 +69,26 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
+
+    pub async fn scan_keys_with_cursor(&self, pattern: &str, cursor: u64, count: usize) -> Result<(u64, Vec<String>)> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(pattern)
+                .arg("COUNT")
+                .arg(count)
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
     
     pub async fn scan_keys_with_progress<F>(&self, pattern: &str, batch_size: usize, mut on_batch: F) -> Result<usize>
     where
