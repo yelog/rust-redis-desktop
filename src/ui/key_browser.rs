@@ -23,6 +23,19 @@ fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     keys
 }
 
+fn collect_leaf_keys_in_node(nodes: &[TreeNode], node_id: &str) -> Vec<String> {
+    for node in nodes {
+        if node.node_id == node_id {
+            return collect_all_keys(&node.children);
+        }
+        let keys = collect_leaf_keys_in_node(&node.children, node_id);
+        if !keys.is_empty() {
+            return keys;
+        }
+    }
+    Vec::new()
+}
+
 fn update_node_key_info(nodes: &mut [TreeNode], key_path: &str, key_info: KeyInfo) -> bool {
     for node in nodes.iter_mut() {
         if node.is_leaf && node.path == key_path {
@@ -34,6 +47,16 @@ fn update_node_key_info(nodes: &mut [TreeNode], key_path: &str, key_info: KeyInf
         }
     }
     false
+}
+
+fn update_multiple_key_info(nodes: &mut [TreeNode], updates: &[(String, KeyInfo)]) -> bool {
+    let mut changed = false;
+    for (key_path, key_info) in updates {
+        if update_node_key_info(nodes, key_path, key_info.clone()) {
+            changed = true;
+        }
+    }
+    changed
 }
 
 #[derive(Clone, Default)]
@@ -50,6 +73,7 @@ pub fn KeyBrowser(
     connection_pool: ConnectionPool,
     connection_version: u32,
     selected_key: Signal<String>,
+    current_db: Signal<u8>,
     on_key_select: EventHandler<String>,
 ) -> Element {
     let tree_nodes = use_signal(Vec::<TreeNode>::new);
@@ -61,7 +85,6 @@ pub fn KeyBrowser(
     let mut show_delete_dialog = use_signal(|| None::<Vec<DeleteTarget>>);
     let mut refresh_trigger = use_signal(|| 0u32);
     let mut show_add_key_dialog = use_signal(|| false);
-    let mut current_db = use_signal(|| 0u8);
     let db_keys_count = use_signal(HashMap::<u8, u64>::new);
     let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
     let mut scan_progress = use_signal(ScanProgress::default);
@@ -607,12 +630,62 @@ use_effect({
                                 }
                             },
                             on_expand: {
-                                move |path: String| {
-                                    let mut state = tree_state.write();
-                                    if state.expanded_nodes.contains(&path) {
-                                        state.expanded_nodes.remove(&path);
-                                    } else {
-                                        state.expanded_nodes.insert(path);
+                                let pool = connection_pool.clone();
+                                let key_type_cache = key_type_cache.clone();
+                                let tree_nodes = tree_nodes.clone();
+                                move |node_id: String| {
+                                    let is_expanding = {
+                                        let state = tree_state.read();
+                                        !state.expanded_nodes.contains(&node_id)
+                                    };
+                                    
+                                    {
+                                        let mut state = tree_state.write();
+                                        if state.expanded_nodes.contains(&node_id) {
+                                            state.expanded_nodes.remove(&node_id);
+                                        } else {
+                                            state.expanded_nodes.insert(node_id.clone());
+                                        }
+                                    }
+                                    
+                                    if is_expanding {
+                                        let leaf_keys = {
+                                            let nodes = tree_nodes.read();
+                                            collect_leaf_keys_in_node(&nodes, &node_id)
+                                        };
+                                        
+                                        let keys_to_fetch: Vec<String> = leaf_keys
+                                            .into_iter()
+                                            .filter(|k| !key_type_cache.read().contains_key(k))
+                                            .collect();
+                                        
+                                        if !keys_to_fetch.is_empty() {
+                                            let pool = pool.clone();
+                                            let mut key_type_cache = key_type_cache.clone();
+                                            let mut tree_nodes = tree_nodes.clone();
+                                            spawn(async move {
+                                                let mut updates = Vec::new();
+                                                for key in keys_to_fetch {
+                                                    match pool.get_key_info(&key).await {
+                                                        Ok(info) => {
+                                                            key_type_cache.write().insert(key.clone(), info.key_type.clone());
+                                                            updates.push((key, info));
+                                                        }
+                                                        Err(e) => {
+                                                            tracing::error!("Failed to get key type: {}", e);
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                if !updates.is_empty() {
+                                                    let mut nodes = tree_nodes.write();
+                                                    update_multiple_key_info(&mut nodes, &updates);
+                                                    drop(nodes);
+                                                    let nodes_clone = tree_nodes.read().clone();
+                                                    tree_nodes.set(nodes_clone);
+                                                }
+                                            });
+                                        }
                                     }
                                 }
                             },

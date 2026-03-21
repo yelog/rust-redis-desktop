@@ -74,7 +74,15 @@ pub fn LazyTreeNode(
     let is_partial = !node.is_leaf && selected_leaves > 0 && selected_leaves < total_leaves;
 
     let icon = if node.is_leaf {
-        "📄"
+        match node.key_info.as_ref().map(|k| &k.key_type) {
+            Some(crate::redis::KeyType::String) => "📝",
+            Some(crate::redis::KeyType::Hash) => "📦",
+            Some(crate::redis::KeyType::List) => "📋",
+            Some(crate::redis::KeyType::Set) => "🧩",
+            Some(crate::redis::KeyType::ZSet) => "📊",
+            Some(crate::redis::KeyType::Stream) => "🌊",
+            _ => "📄",
+        }
     } else {
         if is_expanded {
             "📂"
