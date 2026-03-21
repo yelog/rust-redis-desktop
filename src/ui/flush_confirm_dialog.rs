@@ -174,7 +174,7 @@ pub fn FlushConfirmDialog(
                             if processing() {
                                 "清空中..."
                             } else {
-                                "🗑️ 确认清空"
+                                "确认清空"
                             }
                         }
 

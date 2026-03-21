@@ -4,6 +4,7 @@ use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
+use crate::ui::icons::*;
 use crate::ui::lazy_tree_node::{ContextMenuState, LazyTreeNode, TreeState};
 use arboard::Clipboard;
 use dioxus::prelude::*;
@@ -344,7 +345,14 @@ pub fn KeyBrowser(
                             }
                         },
 
-                        "✕ 取消扫描"
+                        div {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "4px",
+                        
+                        IconX { size: Some(12) }
+                        " 取消扫描"
+                    }
                     }
                 } else {
                     button {
@@ -360,7 +368,14 @@ pub fn KeyBrowser(
                             refresh_trigger.set(refresh_trigger() + 1);
                         },
 
-                        "🔄 Refresh"
+                        div {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "4px",
+                        
+                        IconRefresh { size: Some(12) }
+                        " Refresh"
+                    }
                     }
                 }
 
@@ -492,7 +507,14 @@ pub fn KeyBrowser(
                             }
                         },
 
-                        "🗑️ 删除"
+                        div {
+                            display: "flex",
+                            align_items: "center",
+                            gap: "4px",
+                            
+                            IconTrash { size: Some(12) }
+                            " 删除"
+                        }
                     }
 
                     button {
@@ -511,7 +533,14 @@ pub fn KeyBrowser(
                             }
                         },
 
-                        "⏱️ TTL"
+                        div {
+                            display: "flex",
+                            align_items: "center",
+                            gap: "4px",
+                            
+                            IconRefresh { size: Some(12) }
+                            " TTL"
+                        }
                     }
 
                     button {
@@ -527,7 +556,14 @@ pub fn KeyBrowser(
                             tree_state.write().selected_keys.clear();
                         },
 
-                        "✕ 关闭"
+                        div {
+                            display: "flex",
+                            align_items: "center",
+                            gap: "4px",
+                            
+                            IconX { size: Some(12) }
+                            " 关闭"
+                        }
                     }
                 }
             }
@@ -706,7 +742,7 @@ pub fn KeyBrowser(
                 on_close: move |_| context_menu.set(None),
 
                 ContextMenuItem {
-                    icon: Some("📋".to_string()),
+                    icon: Some(rsx! { IconCopy { size: Some(14) } }),
                     label: "复制Key".to_string(),
                     danger: false,
                     onclick: {
@@ -721,7 +757,7 @@ pub fn KeyBrowser(
                 }
 
                 ContextMenuItem {
-                    icon: Some("✅".to_string()),
+                    icon: Some(rsx! { IconCheck { size: Some(14) } }),
                     label: "多选模式".to_string(),
                     danger: false,
                     onclick: move |_| {
@@ -731,7 +767,7 @@ pub fn KeyBrowser(
                 }
 
                 ContextMenuItem {
-                    icon: Some("🗑️".to_string()),
+                    icon: Some(rsx! { IconTrash { size: Some(14) } }),
                     label: "删除".to_string(),
                     danger: true,
                     onclick: {

@@ -1,4 +1,5 @@
 use crate::redis::TreeNode;
+use crate::ui::icons::*;
 use dioxus::prelude::*;
 
 #[component]
@@ -14,23 +15,6 @@ pub fn KeyItem(
     let mut is_expanded = use_signal(|| false);
 
     let indent = depth * 16;
-    let icon = if node.is_leaf {
-        match node.key_info.as_ref().map(|k| &k.key_type) {
-            Some(crate::redis::KeyType::String) => "📝",
-            Some(crate::redis::KeyType::Hash) => "📦",
-            Some(crate::redis::KeyType::List) => "📋",
-            Some(crate::redis::KeyType::Set) => "📁",
-            Some(crate::redis::KeyType::ZSet) => "📊",
-            Some(crate::redis::KeyType::Stream) => "🌊",
-            _ => "📄",
-        }
-    } else {
-        if is_expanded() {
-            "📂"
-        } else {
-            "📁"
-        }
-    };
 
     rsx! {
         div {
@@ -64,7 +48,19 @@ pub fn KeyItem(
                     span { width: "12px" }
                 }
 
-                span { "{icon}" }
+                if node.is_leaf {
+                    match node.key_info.as_ref().map(|k| &k.key_type) {
+                        Some(crate::redis::KeyType::String) => rsx! { IconFile { size: Some(14) } },
+                        Some(crate::redis::KeyType::Hash) => rsx! { IconHash { size: Some(14) } },
+                        Some(crate::redis::KeyType::List) => rsx! { IconList { size: Some(14) } },
+                        Some(crate::redis::KeyType::Set) => rsx! { IconSet { size: Some(14) } },
+                        Some(crate::redis::KeyType::ZSet) => rsx! { IconZSet { size: Some(14) } },
+                        Some(crate::redis::KeyType::Stream) => rsx! { IconStream { size: Some(14) } },
+                        _ => rsx! { IconFile { size: Some(14) } },
+                    }
+                } else {
+                    IconFolder { size: Some(14) }
+                }
 
                 span {
                     color: if is_selected { "white" } else { "#cccccc" },

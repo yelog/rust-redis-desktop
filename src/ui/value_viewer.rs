@@ -7,6 +7,7 @@ use crate::theme::{
     COLOR_TEXT_SOFT, COLOR_WARNING,
 };
 use crate::ui::editable_field::EditableField;
+use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
 use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
@@ -88,81 +89,6 @@ fn sorted_hash_entries(fields: &HashMap<String, String>) -> Vec<(String, String)
         .collect();
     entries.sort_by(|left, right| left.0.cmp(&right.0));
     entries
-}
-
-#[component]
-fn CopyIcon() -> Element {
-    rsx! {
-        svg {
-            width: "15",
-            height: "15",
-            view_box: "0 0 24 24",
-            fill: "none",
-            stroke: "currentColor",
-            stroke_width: "2",
-            stroke_linecap: "round",
-            stroke_linejoin: "round",
-
-            rect {
-                x: "9",
-                y: "9",
-                width: "13",
-                height: "13",
-                rx: "2",
-                ry: "2",
-            }
-
-            path {
-                d: "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1",
-            }
-        }
-    }
-}
-
-#[component]
-fn EditIcon() -> Element {
-    rsx! {
-        svg {
-            width: "15",
-            height: "15",
-            view_box: "0 0 24 24",
-            fill: "none",
-            stroke: "currentColor",
-            stroke_width: "2",
-            stroke_linecap: "round",
-            stroke_linejoin: "round",
-
-            path {
-                d: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7",
-            }
-
-            path {
-                d: "M18.375 2.625a1.5 1.5 0 1 1 3 3L12 15l-4 1 1-4Z",
-            }
-        }
-    }
-}
-
-#[component]
-fn DeleteIcon() -> Element {
-    rsx! {
-        svg {
-            width: "15",
-            height: "15",
-            view_box: "0 0 24 24",
-            fill: "none",
-            stroke: "currentColor",
-            stroke_width: "2",
-            stroke_linecap: "round",
-            stroke_linejoin: "round",
-
-            path { d: "M3 6h18" }
-            path { d: "M8 6V4h8v2" }
-            path { d: "M19 6l-1 14H6L5 6" }
-            path { d: "M10 11v6" }
-            path { d: "M14 11v6" }
-        }
-    }
 }
 
 async fn load_key_data(
@@ -1342,7 +1268,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        CopyIcon {}
+                                                                        IconCopy { size: Some(15) }
                                                                     }
 
                                                                     button {
@@ -1374,7 +1300,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        EditIcon {}
+                                                                        IconEdit { size: Some(15) }
                                                                     }
 
                                                                     button {
@@ -1398,7 +1324,7 @@ pub fn ValueViewer(
                                                                         title: "删除",
                                                                         aria_label: "删除",
 
-                                                                        DeleteIcon {}
+                                                                        IconTrash { size: Some(15) }
                                                                     }
                                                                 }
                                                             }
@@ -1947,7 +1873,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        EditIcon {}
+                                                                        IconEdit { size: Some(15) }
                                                                     }
 
                                                                     button {
@@ -2005,7 +1931,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        DeleteIcon {}
+                                                                        IconTrash { size: Some(15) }
                                                                     }
                                                                 }
                                                             }
@@ -2401,7 +2327,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        CopyIcon {}
+                                                                        IconCopy { size: Some(15) }
                                                                     }
 
                                                                     button {
@@ -2425,7 +2351,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        EditIcon {}
+                                                                        IconEdit { size: Some(15) }
                                                                     }
 
                                                                     button {
@@ -2484,7 +2410,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        DeleteIcon {}
+                                                                        IconTrash { size: Some(15) }
                                                                     }
                                                                 }
                                                             }
@@ -2900,7 +2826,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        EditIcon {}
+                                                                        IconEdit { size: Some(15) }
                                                                     }
 
                                                                     button {
@@ -2959,7 +2885,7 @@ pub fn ValueViewer(
                                                                             }
                                                                         },
 
-                                                                        DeleteIcon {}
+                                                                        IconTrash { size: Some(15) }
                                                                     }
                                                                 }
                                                             }

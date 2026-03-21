@@ -1,4 +1,5 @@
 use crate::redis::TreeNode;
+use crate::ui::icons::*;
 use dioxus::prelude::*;
 
 #[component]
@@ -34,7 +35,6 @@ pub fn VirtualKeyList(
                     {
                         let top = idx as i32 * item_height;
                         let is_selected = node.is_leaf && selected_key == node.path;
-                        let icon = if node.is_leaf { "📄" } else { "📁" };
 
                         rsx! {
                             div {
@@ -66,10 +66,10 @@ pub fn VirtualKeyList(
                                     if !node.is_leaf { "▶" } else { "" }
                                 }
 
-                                span {
-                                    color: "#888",
-
-                                    "{icon}"
+                                if node.is_leaf {
+                                    IconFile { size: Some(14) }
+                                } else {
+                                    IconFolder { size: Some(14) }
                                 }
 
                                 span {

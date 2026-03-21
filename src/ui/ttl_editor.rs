@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::ui::icons::*;
 use dioxus::prelude::*;
 
 #[component]
@@ -24,8 +25,12 @@ pub fn TTLEditor(
             h3 {
                 color: "white",
                 margin_bottom: "16px",
+                display: "flex",
+                align_items: "center",
+                gap: "6px",
 
-                "⏱️ TTL Settings"
+                IconRefresh { size: Some(16) }
+                " TTL Settings"
             }
 
             div {
@@ -130,7 +135,14 @@ pub fn TTLEditor(
                     cursor: "pointer",
                     onclick: move |_| on_cancel.call(()),
 
-                    "✖ Cancel"
+                    div {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "4px",
+
+                    IconX { size: Some(12) }
+                    " Cancel"
+                }
                 }
             }
         }

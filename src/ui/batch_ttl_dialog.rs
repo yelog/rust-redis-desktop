@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::ui::icons::*;
 use dioxus::prelude::*;
 
 #[component]
@@ -44,7 +45,8 @@ pub fn BatchTtlDialog(
                     align_items: "center",
                     gap: "8px",
 
-                    "⏱️ 批量设置 TTL"
+                    IconRefresh { size: Some(16) }
+                    " 批量设置 TTL"
                 }
 
                 div {

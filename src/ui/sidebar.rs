@@ -1,5 +1,6 @@
 use crate::connection::ConnectionState;
 use crate::theme::ThemeColors;
+use crate::ui::icons::*;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -165,7 +166,14 @@ pub fn Sidebar(
                         let _ = target;
                     },
 
-                    "⚙️ 设置"
+                    div {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "4px",
+
+                        IconSettings { size: Some(14) }
+                        " 设置"
+                    }
                 }
             }
         }
@@ -189,6 +197,9 @@ pub fn Sidebar(
                     color: "{colors.text}",
                     font_size: "13px",
                     background: if hover_reconnect() { colors.success } else { "transparent" },
+                    display: "flex",
+                    align_items: "center",
+                    gap: "6px",
 
                     onmouseenter: move |_| hover_reconnect.set(true),
                     onmouseleave: move |_| hover_reconnect.set(false),
@@ -201,7 +212,8 @@ pub fn Sidebar(
                         }
                     },
 
-                    "🔄 Reconnect"
+                    IconRefresh { size: Some(14) }
+                    "Reconnect"
                 }
 
                 div {
@@ -210,6 +222,9 @@ pub fn Sidebar(
                     color: "{colors.text}",
                     font_size: "13px",
                     background: if hover_close() { colors.warning } else { "transparent" },
+                    display: "flex",
+                    align_items: "center",
+                    gap: "6px",
 
                     onmouseenter: move |_| hover_close.set(true),
                     onmouseleave: move |_| hover_close.set(false),
@@ -222,7 +237,8 @@ pub fn Sidebar(
                         }
                     },
 
-                    "✖️ Close"
+                    IconX { size: Some(14) }
+                    "Close"
                 }
 
                 div {
@@ -231,6 +247,9 @@ pub fn Sidebar(
                     color: "{colors.error}",
                     font_size: "13px",
                     background: if hover_flush() { colors.error } else { "transparent" },
+                    display: "flex",
+                    align_items: "center",
+                    gap: "6px",
 
                     onmouseenter: move |_| hover_flush.set(true),
                     onmouseleave: move |_| hover_flush.set(false),
@@ -243,7 +262,8 @@ pub fn Sidebar(
                         }
                     },
 
-                    "⚠️ FlushDB"
+                    IconAlert { size: Some(14) }
+                    "FlushDB"
                 }
 
                 div {
@@ -258,6 +278,9 @@ pub fn Sidebar(
                     color: "{colors.text}",
                     font_size: "13px",
                     background: if hover_edit() { colors.primary } else { "transparent" },
+                    display: "flex",
+                    align_items: "center",
+                    gap: "6px",
 
                     onmouseenter: move |_| hover_edit.set(true),
                     onmouseleave: move |_| hover_edit.set(false),
@@ -270,7 +293,8 @@ pub fn Sidebar(
                         }
                     },
 
-                    "✏️ Edit"
+                    IconEdit { size: Some(14) }
+                    "Edit"
                 }
 
                 div {
@@ -279,6 +303,9 @@ pub fn Sidebar(
                     color: "{colors.text}",
                     font_size: "13px",
                     background: if hover_delete() { colors.error } else { "transparent" },
+                    display: "flex",
+                    align_items: "center",
+                    gap: "6px",
 
                     onmouseenter: move |_| hover_delete.set(true),
                     onmouseleave: move |_| hover_delete.set(false),
@@ -291,7 +318,8 @@ pub fn Sidebar(
                         }
                     },
 
-                    "🗑️ Delete"
+                    IconTrash { size: Some(14) }
+                    "Delete"
                 }
             }
 

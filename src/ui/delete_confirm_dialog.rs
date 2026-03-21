@@ -184,7 +184,7 @@ pub fn DeleteConfirmDialog(
                             if processing() {
                                 "删除中..."
                             } else {
-                                "🗑️ 确认删除 ({keys_to_delete.read().len()})"
+                                "确认删除 ({keys_to_delete.read().len()})"
                             }
                         }
 

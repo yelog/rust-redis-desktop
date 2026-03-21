@@ -1,5 +1,6 @@
 use crate::connection::ConnectionPool;
 use crate::redis::KeyType;
+use crate::ui::icons::*;
 use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq, Default)]
@@ -265,7 +266,7 @@ pub fn AddKeyDialog(
                                                 }
                                             },
 
-                                            "✕"
+                                            IconX { size: Some(12) }
                                         }
                                     }
                                 }
@@ -340,7 +341,7 @@ pub fn AddKeyDialog(
                                                 }
                                             },
 
-                                            "✕"
+                                            IconX { size: Some(12) }
                                         }
                                     }
                                 }
@@ -407,7 +408,7 @@ pub fn AddKeyDialog(
                                                 }
                                             },
 
-                                            "✕"
+                                            IconX { size: Some(12) }
                                         }
                                     }
                                 }
@@ -494,7 +495,7 @@ pub fn AddKeyDialog(
                                                 }
                                             },
 
-                                            "✕"
+                                            IconX { size: Some(12) }
                                         }
                                     }
                                 }
@@ -600,7 +601,7 @@ pub fn AddKeyDialog(
                                                 }
                                             },
 
-                                            "✕"
+                                            IconX { size: Some(12) }
                                         }
                                     }
                                 }

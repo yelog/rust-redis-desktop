@@ -38,7 +38,7 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
 
 #[component]
 pub fn ContextMenuItem(
-    icon: Option<String>,
+    icon: Option<Element>,
     label: String,
     danger: bool,
     onclick: EventHandler<()>,
@@ -61,8 +61,8 @@ pub fn ContextMenuItem(
 
             onclick: move |_| onclick.call(()),
 
-            if let Some(icon_str) = icon {
-                span { "{icon_str}" }
+            if let Some(icon_el) = icon {
+                {icon_el}
             }
 
             span { "{label}" }

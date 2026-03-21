@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::ui::icons::*;
 use dioxus::prelude::*;
 
 #[component]
@@ -28,7 +29,14 @@ pub fn KeyActions(
                 font_size: "12px",
                 onclick: move |_| show_delete_confirm.set(true),
 
-                "🗑️ Delete"
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "4px",
+
+                    IconTrash { size: Some(12) }
+                    " Delete"
+                }
             }
 
             button {
@@ -47,7 +55,14 @@ pub fn KeyActions(
                     }
                 },
 
-                "✏️ Rename"
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "4px",
+
+                    IconEdit { size: Some(12) }
+                    " Rename"
+                }
             }
         }
 
@@ -73,8 +88,12 @@ pub fn KeyActions(
                     h3 {
                         color: "white",
                         margin_bottom: "16px",
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
 
-                        "⚠️ Confirm Delete"
+                        IconAlert { size: Some(16) }
+                        " Confirm Delete"
                     }
 
                     p {
@@ -121,7 +140,14 @@ pub fn KeyActions(
                                 }
                             },
 
-                            if processing() { "Deleting..." } else { "🗑️ Delete" }
+                            if processing() { "Deleting..." } else { div {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "4px",
+
+                    IconTrash { size: Some(12) }
+                    " Delete"
+                } }
                         }
 
                         button {
