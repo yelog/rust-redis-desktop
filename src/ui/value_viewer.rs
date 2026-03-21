@@ -579,6 +579,8 @@ pub fn ValueViewer(
     let mut set_action = use_signal(|| None::<String>);
     let mut set_search = use_signal(String::new);
     let mut deleting_set_member = use_signal(|| None::<String>);
+    let mut editing_set_member = use_signal(|| None::<String>);
+    let mut editing_set_member_value = use_signal(String::new);
 
     let mut zset_status_message = use_signal(String::new);
     let mut zset_status_error = use_signal(|| false);
@@ -635,6 +637,8 @@ pub fn ValueViewer(
         set_action.set(None);
         set_search.set(String::new());
         deleting_set_member.set(None);
+        editing_set_member.set(None);
+        editing_set_member_value.set(String::new());
         set_page.set(0);
         set_total.set(0);
 
@@ -2409,123 +2413,279 @@ if let Err(error) = load_key_data(
 
                                         tbody {
                                             for (idx, member) in filtered_set_members.iter().enumerate() {
-                                                tr {
-                                                    key: "{member}",
-                                                    border_bottom: "1px solid #3c3c3c",
-                                                    background: if idx % 2 == 0 { "#252526" } else { "#1e1e1e" },
+                                                if editing_set_member() == Some(member.clone()) {
+                                                    tr {
+                                                        key: "edit-{member}",
+                                                        background: "#1f2937",
+                                                        border_bottom: "1px solid #3c3c3c",
 
-                                                    td {
-                                                        padding: "10px 12px",
-                                                        color: "#888",
+                                                        td {
+                                                            padding: "10px 12px",
+                                                            color: "#888",
 
-                                                        "{idx + 1}"
-                                                    }
+                                                            "{idx + 1}"
+                                                        }
 
-                                                    td {
-                                                        padding: "10px 12px",
-                                                        color: "white",
-                                                        font_family: "Consolas, monospace",
-                                                        font_size: "13px",
-                                                        word_break: "break-all",
+                                                        td {
+                                                            padding: "10px 12px",
 
-                                                        "{member}"
-                                                    }
-
-                                                    td {
-                                                        padding: "10px 12px",
-
-                                                        div {
-                                                            display: "flex",
-                                                            gap: "6px",
-
-                                                            button {
-                                                                width: "32px",
-                                                                height: "32px",
-                                                                display: "flex",
-                                                                align_items: "center",
-                                                                justify_content: "center",
-                                                                background: "rgba(47, 133, 90, 0.16)",
-                                                                color: "#68d391",
-                                                                border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                            input {
+                                                                width: "100%",
+                                                                padding: "8px 10px",
+                                                                background: "#1e1e1e",
+                                                                border: "1px solid #555",
                                                                 border_radius: "6px",
-                                                                cursor: "pointer",
-                                                                title: "复制",
-                                                                onclick: {
-                                                                    let member = member.clone();
-                                                                    move |_| {
-                                                                        match copy_value_to_clipboard(&member) {
-                                                                            Ok(_) => {
-                                                                                set_status_message.set("复制成功".to_string());
-                                                                                set_status_error.set(false);
-                                                                            }
-                                                                            Err(error) => {
-                                                                                set_status_message.set(format!("复制失败：{error}"));
-                                                                                set_status_error.set(true);
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                },
-
-                                                                CopyIcon {}
+                                                                color: "white",
+                                                                font_family: "Consolas, monospace",
+                                                                font_size: "13px",
+                                                                value: "{editing_set_member_value}",
+                                                                oninput: move |event| editing_set_member_value.set(event.value()),
                                                             }
+                                                        }
 
-                                                            button {
-                                                                width: "32px",
-                                                                height: "32px",
+                                                        td {
+                                                            padding: "10px 12px",
+
+                                                            div {
                                                                 display: "flex",
-                                                                align_items: "center",
-                                                                justify_content: "center",
-                                                                background: "rgba(197, 48, 48, 0.18)",
-                                                                color: "#f87171",
-                                                                border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                border_radius: "6px",
-                                                                cursor: "pointer",
-                                                                disabled: set_action().is_some(),
-                                                                title: "删除",
-                                                                onclick: {
-                                                                    let pool = connection_pool.clone();
-                                                                    let key = display_key.clone();
-                                                                    let member = member.clone();
-                                                                    move |_| {
-                                                                        let pool = pool.clone();
-                                                                        let key = key.clone();
-                                                                        let member = member.clone();
-                                                                        spawn(async move {
-                                                                            set_action.set(Some(format!("delete:{}", member)));
-                                                                            match pool.set_remove(&key, &member).await {
-                                                                                Ok(_) => {
-                                                                                    set_status_message.set("删除成功".to_string());
-                                                                                    set_status_error.set(false);
-                                                                                    if let Err(error) = load_key_data(
-                                                                                        pool.clone(),
-                                                                                        key.clone(),
-                                                                                        key_info,
-                                                                                        string_value,
-                                                                                        hash_value,
-                                                                                        list_value,
-                                                                                        set_value,
-                                                                                        zset_value,
-                                                                                        is_binary,
-                                                                                        binary_format,
-                                                                                        java_serialization_info,
-                                                                                        loading,
-                                                                                    ).await {
-                                                                                        tracing::error!("{error}");
-                                                                                    } else {
-                                                                                        on_refresh.call(());
+                                                                gap: "6px",
+
+                                                                button {
+                                                                    padding: "6px 10px",
+                                                                    background: "#38a169",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    disabled: set_action().is_some(),
+                                                                    onclick: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        let old_member = member.clone();
+                                                                        move |_| {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            let old_member = old_member.clone();
+                                                                            let new_member = editing_set_member_value();
+                                                                            spawn(async move {
+                                                                                if new_member.trim().is_empty() {
+                                                                                    set_status_message.set("成员不能为空".to_string());
+                                                                                    set_status_error.set(true);
+                                                                                    return;
+                                                                                }
+
+                                                                                set_action.set(Some(format!("edit:{}", old_member)));
+                                                                                set_status_message.set(String::new());
+                                                                                set_status_error.set(false);
+
+                                                                                let edit_result = if new_member == old_member {
+                                                                                    Ok(())
+                                                                                } else {
+                                                                                    match pool.set_remove(&key, &old_member).await {
+                                                                                        Ok(_) => pool.set_add(&key, &new_member).await.map(|_| ()),
+                                                                                        Err(e) => Err(e),
+                                                                                    }
+                                                                                };
+
+                                                                                match edit_result {
+                                                                                    Ok(_) => {
+                                                                                        editing_set_member.set(None);
+                                                                                        editing_set_member_value.set(String::new());
+                                                                                        set_status_message.set("修改成功".to_string());
+                                                                                        set_status_error.set(false);
+                                                                                        if let Err(error) = load_key_data(
+                                                                                            pool.clone(),
+                                                                                            key.clone(),
+                                                                                            key_info,
+                                                                                            string_value,
+                                                                                            hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
+                                                                                            is_binary,
+                                                                                            binary_format,
+                                                                                            java_serialization_info,
+                                                                                            loading,
+                                                                                        ).await {
+                                                                                            tracing::error!("{error}");
+                                                                                        } else {
+                                                                                            on_refresh.call(());
+                                                                                        }
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        set_status_message.set(format!("修改失败：{error}"));
+                                                                                        set_status_error.set(true);
                                                                                     }
                                                                                 }
+
+                                                                                set_action.set(None);
+                                                                            });
+                                                                        }
+                                                                    },
+
+                                                                    if set_action().as_deref() == Some(format!("edit:{}", member).as_str()) { "保存中..." } else { "保存" }
+                                                                }
+
+                                                                button {
+                                                                    padding: "6px 10px",
+                                                                    background: "#5a5a5a",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    onclick: move |_| {
+                                                                        editing_set_member.set(None);
+                                                                        editing_set_member_value.set(String::new());
+                                                                    },
+
+                                                                    "取消"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    tr {
+                                                        key: "{member}",
+                                                        border_bottom: "1px solid #3c3c3c",
+                                                        background: if idx % 2 == 0 { "#252526" } else { "#1e1e1e" },
+
+                                                        td {
+                                                            padding: "10px 12px",
+                                                            color: "#888",
+
+                                                            "{idx + 1}"
+                                                        }
+
+                                                        td {
+                                                            padding: "10px 12px",
+                                                            color: "white",
+                                                            font_family: "Consolas, monospace",
+                                                            font_size: "13px",
+                                                            word_break: "break-all",
+
+                                                            "{member}"
+                                                        }
+
+                                                        td {
+                                                            padding: "10px 12px",
+
+                                                            div {
+                                                                display: "flex",
+                                                                gap: "6px",
+
+                                                                button {
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(47, 133, 90, 0.16)",
+                                                                    color: "#68d391",
+                                                                    border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    title: "复制",
+                                                                    onclick: {
+                                                                        let member = member.clone();
+                                                                        move |_| {
+                                                                            match copy_value_to_clipboard(&member) {
+                                                                                Ok(_) => {
+                                                                                    set_status_message.set("复制成功".to_string());
+                                                                                    set_status_error.set(false);
+                                                                                }
                                                                                 Err(error) => {
-                                                                                    set_status_message.set(format!("删除失败：{error}"));
+                                                                                    set_status_message.set(format!("复制失败：{error}"));
                                                                                     set_status_error.set(true);
                                                                                 }
                                                                             }
-                                                                            set_action.set(None);
-                                                                        });
-                                                                    }
-                                                                },
+                                                                        }
+                                                                    },
 
-                                                                DeleteIcon {}
+                                                                    CopyIcon {}
+                                                                }
+
+                                                                button {
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(49, 130, 206, 0.18)",
+                                                                    color: "#63b3ed",
+                                                                    border: "1px solid rgba(99, 179, 237, 0.30)",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    disabled: set_action().is_some(),
+                                                                    title: "编辑",
+                                                                    onclick: {
+                                                                        let member = member.clone();
+                                                                        move |_| {
+                                                                            editing_set_member.set(Some(member.clone()));
+                                                                            editing_set_member_value.set(member.clone());
+                                                                        }
+                                                                    },
+
+                                                                    EditIcon {}
+                                                                }
+
+                                                                button {
+                                                                    width: "32px",
+                                                                    height: "32px",
+                                                                    display: "flex",
+                                                                    align_items: "center",
+                                                                    justify_content: "center",
+                                                                    background: "rgba(197, 48, 48, 0.18)",
+                                                                    color: "#f87171",
+                                                                    border: "1px solid rgba(248, 113, 113, 0.30)",
+                                                                    border_radius: "6px",
+                                                                    cursor: "pointer",
+                                                                    disabled: set_action().is_some(),
+                                                                    title: "删除",
+                                                                    onclick: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        let member = member.clone();
+                                                                        move |_| {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            let member = member.clone();
+                                                                            spawn(async move {
+                                                                                set_action.set(Some(format!("delete:{}", member)));
+                                                                                match pool.set_remove(&key, &member).await {
+                                                                                    Ok(_) => {
+                                                                                        set_status_message.set("删除成功".to_string());
+                                                                                        set_status_error.set(false);
+                                                                                        if let Err(error) = load_key_data(
+                                                                                            pool.clone(),
+                                                                                            key.clone(),
+                                                                                            key_info,
+                                                                                            string_value,
+                                                                                            hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
+                                                                                            is_binary,
+                                                                                            binary_format,
+                                                                                            java_serialization_info,
+                                                                                            loading,
+                                                                                        ).await {
+                                                                                            tracing::error!("{error}");
+                                                                                        } else {
+                                                                                            on_refresh.call(());
+                                                                                        }
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        set_status_message.set(format!("删除失败：{error}"));
+                                                                                        set_status_error.set(true);
+                                                                                    }
+                                                                                }
+                                                                                set_action.set(None);
+                                                                            });
+                                                                        }
+                                                                    },
+
+                                                                    DeleteIcon {}
+                                                                }
                                                             }
                                                         }
                                                     }
