@@ -164,7 +164,7 @@ async fn load_key_data(
     mut set_value: Signal<Vec<String>>,
     mut zset_value: Signal<Vec<(String, f64)>>,
     mut is_binary: Signal<bool>,
-    binary_format: Signal<BinaryFormat>,
+    mut binary_format: Signal<BinaryFormat>,
     mut java_serialization_info: Signal<Option<Vec<u8>>>,
     mut loading: Signal<bool>,
 ) -> Result<(), String> {
@@ -211,6 +211,7 @@ async fn load_key_data(
                     if is_java_serialization(&bytes) {
                         tracing::info!("Java serialization detected");
                         java_serialization_info.set(Some(bytes.clone()));
+                        binary_format.set(BinaryFormat::JavaSerialized);
                     } else {
                         java_serialization_info.set(None);
                     }
