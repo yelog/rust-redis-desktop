@@ -6,6 +6,8 @@ use std::collections::HashSet;
 pub struct TreeState {
     pub expanded_nodes: HashSet<String>,
     pub loaded_nodes: HashSet<String>,
+    pub selected_keys: HashSet<String>,
+    pub selection_mode: bool,
 }
 
 impl Default for TreeState {
@@ -13,6 +15,8 @@ impl Default for TreeState {
         Self {
             expanded_nodes: HashSet::new(),
             loaded_nodes: HashSet::new(),
+            selected_keys: HashSet::new(),
+            selection_mode: false,
         }
     }
 }
@@ -37,6 +41,8 @@ pub fn LazyTreeNode(
 ) -> Element {
     let is_expanded = tree_state.read().expanded_nodes.contains(&node.node_id);
     let is_selected = node.is_leaf && selected_key == node.path;
+    let is_checked = tree_state.read().selected_keys.contains(&node.path);
+    let selection_mode = tree_state.read().selection_mode;
     let has_children = !node.children.is_empty();
     let indent = depth * 16;
 
@@ -66,14 +72,21 @@ pub fn LazyTreeNode(
                 display: "flex",
                 align_items: "center",
                 gap: "6px",
-                background: if is_selected { "#094771" } else { "transparent" },
+                background: if is_selected { "#094771" } else if is_checked { "#1a4a1a" } else { "transparent" },
                 cursor: "pointer",
 
                 onclick: {
                     let node_id = node.node_id.clone();
                     let path = node.path.clone();
                     move |_| {
-                        if !node.is_leaf {
+                        if selection_mode {
+                            let mut state = tree_state.write();
+                            if state.selected_keys.contains(&path) {
+                                state.selected_keys.remove(&path);
+                            } else if node.is_leaf {
+                                state.selected_keys.insert(path.clone());
+                            }
+                        } else if !node.is_leaf {
                             on_expand.call(node_id.clone());
                         } else {
                             on_select.call(path.clone());
@@ -98,6 +111,25 @@ pub fn LazyTreeNode(
                     }
                 },
 
+                if selection_mode && node.is_leaf {
+                    input {
+                        r#type: "checkbox",
+                        checked: is_checked,
+                        onclick: move |e| e.stop_propagation(),
+                        onchange: {
+                            let path = node.path.clone();
+                            move |_| {
+                                let mut state = tree_state.write();
+                                if state.selected_keys.contains(&path) {
+                                    state.selected_keys.remove(&path);
+                                } else {
+                                    state.selected_keys.insert(path.clone());
+                                }
+                            }
+                        },
+                    }
+                }
+
                 if !node.is_leaf && has_children {
                     span {
                         color: "#888",
@@ -116,7 +148,7 @@ pub fn LazyTreeNode(
                 }
 
                 span {
-                    color: if is_selected { "white" } else if node.name.is_empty() { "#f59e0b" } else { "#cccccc" },
+                    color: if is_selected { "white" } else if is_checked { "#68d391" } else if node.name.is_empty() { "#f59e0b" } else { "#cccccc" },
                     font_size: "13px",
                     overflow: "hidden",
                     text_overflow: "ellipsis",

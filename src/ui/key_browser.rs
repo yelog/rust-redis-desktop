@@ -1,6 +1,7 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{TreeBuilder, TreeNode};
 use crate::ui::add_key_dialog::AddKeyDialog;
+use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::lazy_tree_node::{ContextMenuState, LazyTreeNode, TreeState};
@@ -8,6 +9,17 @@ use arboard::Clipboard;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
+
+fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
+    let mut keys = Vec::new();
+    for node in nodes {
+        if node.is_leaf {
+            keys.push(node.path.clone());
+        }
+        keys.extend(collect_all_keys(&node.children));
+    }
+    keys
+}
 
 #[component]
 pub fn KeyBrowser(
@@ -28,6 +40,11 @@ pub fn KeyBrowser(
     let mut show_add_key_dialog = use_signal(|| false);
     let mut current_db = use_signal(|| 0u8);
     let db_keys_count = use_signal(HashMap::<u8, u64>::new);
+    let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
+
+    let selection_mode = tree_state.read().selection_mode;
+    let selected_keys_count = tree_state.read().selected_keys.len();
+    let selected_keys: Vec<String> = tree_state.read().selected_keys.iter().cloned().collect();
 
     let load_keyspace = {
         let pool = connection_pool.clone();
@@ -63,6 +80,7 @@ pub fn KeyBrowser(
         let tree_nodes = tree_nodes.clone();
         let keys_count = keys_count.clone();
         let load_keyspace = load_keyspace.clone();
+        let tree_state = tree_state.clone();
         move || {
             let pool = pool.clone();
             let pattern = if search_pattern.read().is_empty() {
@@ -74,10 +92,12 @@ pub fn KeyBrowser(
             let mut tree_nodes = tree_nodes.clone();
             let mut keys_count = keys_count.clone();
             let load_keyspace = load_keyspace.clone();
+            let mut tree_state = tree_state.clone();
 
             spawn(async move {
                 loading.set(true);
                 tree_nodes.set(Vec::new());
+                tree_state.write().selected_keys.clear();
 
                 match pool.scan_keys(&pattern, 500).await {
                     Ok(keys) => {
@@ -211,6 +231,7 @@ use_effect({
                 display: "flex",
                 gap: "8px",
                 align_items: "center",
+                flex_wrap: "wrap",
 
                 button {
                     padding: "6px 12px",
@@ -249,6 +270,142 @@ use_effect({
 
                         "{keys_count} keys"
                     }
+                }
+            }
+
+            if selection_mode {
+                div {
+                    padding: "8px",
+                    border_bottom: "1px solid #3c3c3c",
+                    background: "#1a3a1a",
+                    display: "flex",
+                    gap: "8px",
+                    align_items: "center",
+                    flex_wrap: "wrap",
+
+                    span {
+                        color: "#68d391",
+                        font_size: "12px",
+
+                        "已选 {selected_keys_count} 项"
+                    }
+
+                    button {
+                        padding: "4px 8px",
+                        background: "#38a169",
+                        color: "white",
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "11px",
+                        onclick: move |_| {
+                            let all_keys = collect_all_keys(&tree_nodes());
+                            tree_state.write().selected_keys = all_keys.into_iter().collect();
+                        },
+
+                        "全选"
+                    }
+
+                    button {
+                        padding: "4px 8px",
+                        background: "#5a5a5a",
+                        color: "white",
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "11px",
+                        onclick: move |_| {
+                            tree_state.write().selected_keys.clear();
+                        },
+
+                        "清空"
+                    }
+
+                    button {
+                        padding: "4px 8px",
+                        background: "#c53030",
+                        color: "white",
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "11px",
+                        disabled: selected_keys_count == 0,
+                        onclick: {
+                            let selected_keys = selected_keys.clone();
+                            move |_| {
+                                let targets: Vec<DeleteTarget> = selected_keys.iter()
+                                    .map(|k| DeleteTarget { key: k.clone(), is_folder: false })
+                                    .collect();
+                                show_delete_dialog.set(Some(targets));
+                            }
+                        },
+
+                        "🗑️ 删除"
+                    }
+
+                    button {
+                        padding: "4px 8px",
+                        background: "#0e639c",
+                        color: "white",
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "11px",
+                        disabled: selected_keys_count == 0,
+                        onclick: {
+                            let selected_keys = selected_keys.clone();
+                            move |_| {
+                                show_batch_ttl_dialog.set(Some(selected_keys.clone()));
+                            }
+                        },
+
+                        "⏱️ TTL"
+                    }
+
+                    button {
+                        padding: "4px 8px",
+                        background: "#5a5a5a",
+                        color: "white",
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "11px",
+                        onclick: move |_| {
+                            tree_state.write().selection_mode = false;
+                            tree_state.write().selected_keys.clear();
+                        },
+
+                        "✕ 关闭"
+                    }
+                }
+            }
+
+            div {
+                padding: "4px 8px",
+                border_bottom: "1px solid #3c3c3c",
+                display: "flex",
+                justify_content: "flex_end",
+
+                label {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "6px",
+                    color: "#888",
+                    font_size: "11px",
+                    cursor: "pointer",
+
+                    input {
+                        r#type: "checkbox",
+                        checked: selection_mode,
+                        onchange: move |e| {
+                            tree_state.write().selection_mode = e.checked();
+                            if !e.checked() {
+                                tree_state.write().selected_keys.clear();
+                            }
+                        },
+                    }
+
+                    "多选模式"
                 }
             }
 
@@ -323,6 +480,16 @@ use_effect({
                 }
 
                 ContextMenuItem {
+                    icon: Some("✅".to_string()),
+                    label: "多选模式".to_string(),
+                    danger: false,
+                    onclick: move |_| {
+                        tree_state.write().selection_mode = true;
+                        context_menu.set(None);
+                    },
+                }
+
+                ContextMenuItem {
                     icon: Some("🗑️".to_string()),
                     label: "删除".to_string(),
                     danger: true,
@@ -346,6 +513,7 @@ use_effect({
                 targets: targets.clone(),
                 on_confirm: move |_| {
                     show_delete_dialog.set(None);
+                    tree_state.write().selected_keys.clear();
                     selected_key.set(String::new());
                     refresh_trigger.set(refresh_trigger() + 1);
                 },
@@ -366,6 +534,19 @@ use_effect({
                     }
                 },
                 on_cancel: move |_| show_add_key_dialog.set(false),
+            }
+        }
+
+        if let Some(keys) = show_batch_ttl_dialog() {
+            BatchTtlDialog {
+                connection_pool: connection_pool.clone(),
+                keys: keys.clone(),
+                on_confirm: move |_| {
+                    show_batch_ttl_dialog.set(None);
+                    tree_state.write().selected_keys.clear();
+                    refresh_trigger.set(refresh_trigger() + 1);
+                },
+                on_cancel: move |_| show_batch_ttl_dialog.set(None),
             }
         }
     }
