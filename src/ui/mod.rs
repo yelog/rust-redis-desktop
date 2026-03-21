@@ -7,6 +7,7 @@ mod context_menu;
 mod delete_confirm_dialog;
 mod editable_field;
 mod flush_confirm_dialog;
+mod java_viewer;
 mod json_viewer;
 mod key_browser;
 mod key_item;

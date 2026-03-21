@@ -3591,6 +3591,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jaded"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b96233dc141cbbef6c5bc6447610a49603de4385f5b5448d78216261aa6c889"
+dependencies = [
+ "jaded-derive",
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "jaded-derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01ace1118ca3aa06c6977058b748d1e5233bb6cd6b2dea4b4f8372425786b900"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "javascriptcore-rs"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5600,6 +5623,7 @@ dependencies = [
  "dioxus 0.7.3",
  "dirs",
  "freya",
+ "jaded",
  "redis",
  "serde",
  "serde_json",

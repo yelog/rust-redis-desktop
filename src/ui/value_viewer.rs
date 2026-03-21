@@ -1,7 +1,8 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
-use crate::serialization::{is_java_serialization, parse_java_serialization, JavaClassInfo, JavaFieldValue, JavaSerializationInfo};
+use crate::serialization::is_java_serialization;
 use crate::ui::editable_field::EditableField;
+use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::{LargeKeyWarning, PageInfo};
 use arboard::Clipboard;
@@ -54,60 +55,11 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
         }
         BinaryFormat::JavaSerialized => {
             if is_java_serialization(data) {
-                match parse_java_serialization(data) {
-                    Ok(info) => format_java_info(&info),
-                    Err(e) => format!("Java 序列化解析失败: {}\n\n原始 Hex:\n{}", e, 
-                        data.iter()
-                            .map(|b| format!("{:02x}", b))
-                            .collect::<Vec<_>>()
-                            .join(" "))
-                }
+                format!("Java 序列化对象 ({} 字节)\n\n请切换到 Java 视图查看解析结果", data.len())
             } else {
                 "非 Java 序列化数据".to_string()
             }
         }
-    }
-}
-
-fn format_java_info(info: &JavaSerializationInfo) -> String {
-    let mut result = String::new();
-    
-    result.push_str(&format_class_info(&info.root_class, 0));
-    
-    result
-}
-
-fn format_class_info(class_info: &JavaClassInfo, indent: usize) -> String {
-    let mut result = String::new();
-    let indent_str = "  ".repeat(indent);
-    
-    result.push_str(&format!("{}类名: {}\n", indent_str, class_info.simple_class_name()));
-    if class_info.class_name.contains('.') {
-        result.push_str(&format!("{}完整路径: {}\n", indent_str, class_info.class_name));
-    }
-    result.push_str(&format!("{}SerialVersionUID: 0x{:016X}\n", indent_str, class_info.serial_version_uid));
-    
-    if !class_info.fields.is_empty() {
-        result.push_str(&format!("\n{}字段 ({}):\n", indent_str, class_info.fields.len()));
-        for field in &class_info.fields {
-            let type_display = field.display_type();
-            result.push_str(&format!("{}  - {}: {}\n", indent_str, field.name, type_display));
-        }
-    }
-    
-    if let Some(ref super_class) = class_info.super_class {
-        result.push_str(&format!("\n{}父类:\n", indent_str));
-        result.push_str(&format_class_info(super_class, indent + 1));
-    }
-    
-    result
-}
-
-fn check_java_serialized(data: &[u8]) -> Option<JavaSerializationInfo> {
-    if is_java_serialization(data) {
-        parse_java_serialization(data).ok()
-    } else {
-        None
     }
 }
 
@@ -202,224 +154,6 @@ fn DeleteIcon() -> Element {
     }
 }
 
-#[component]
-fn JavaSerializedViewer(info: JavaSerializationInfo) -> Element {
-    rsx! {
-        div {
-            padding: "16px",
-            background: "#252526",
-            border: "1px solid #3c3c3c",
-            border_radius: "8px",
-            
-            div {
-                display: "flex",
-                align_items: "center",
-                gap: "8px",
-                margin_bottom: "16px",
-                padding_bottom: "12px",
-                border_bottom: "1px solid #3c3c3c",
-
-                svg {
-                    width: "20",
-                    height: "20",
-                    view_box: "0 0 24 24",
-                    fill: "none",
-                    stroke: "#22c55e",
-                    stroke_width: "2",
-
-                    rect {
-                        x: "3",
-                        y: "3",
-                        width: "18",
-                        height: "18",
-                        rx: "2",
-                    }
-                    path {
-                        d: "M9 9h6v6H9z",
-                    }
-                }
-
-                span {
-                    color: "#22c55e",
-                    font_size: "14px",
-                    font_weight: "600",
-
-                    "Java 序列化对象"
-                }
-            }
-
-            JavaClassView { class_info: info.root_class.clone(), depth: 0 }
-        }
-    }
-}
-
-#[component]
-fn JavaClassView(class_info: JavaClassInfo, depth: usize) -> Element {
-    let indent = depth * 20;
-    let has_fields = !class_info.fields.is_empty();
-    let has_super = class_info.super_class.is_some();
-    
-    rsx! {
-        div {
-            margin_left: "{indent}px",
-            
-            div {
-                margin_bottom: "12px",
-                
-                div {
-                    display: "flex",
-                    align_items: "baseline",
-                    gap: "8px",
-                    margin_bottom: "4px",
-                    
-                    span {
-                        color: "#4ec9b0",
-                        font_size: "15px",
-                        font_weight: "600",
-                        
-                        "{class_info.simple_class_name()}"
-                    }
-                }
-                
-                if class_info.class_name.contains('.') {
-                    div {
-                        color: "#6b7280",
-                        font_size: "12px",
-                        margin_bottom: "4px",
-                        
-                        "{class_info.class_name}"
-                    }
-                }
-                
-                div {
-                    color: "#888",
-                    font_size: "12px",
-                    
-                    "SerialVersionUID: 0x{class_info.serial_version_uid:016X}"
-                }
-            }
-            
-            if has_fields {
-                div {
-                    margin_top: "12px",
-                    
-                    div {
-                        color: "#888",
-                        font_size: "12px",
-                        margin_bottom: "8px",
-                        
-                        "字段 ({class_info.fields.len()})"
-                    }
-                    
-                    div {
-                        background: "#1e1e1e",
-                        border_radius: "6px",
-                        padding: "12px",
-                        
-                        div {
-                            display: "flex",
-                            padding: "8px 0",
-                            border_bottom: "1px solid #444",
-                            color: "#666",
-                            font_size: "11px",
-                            font_weight: "600",
-                            
-                            div {
-                                width: "25%",
-                                padding_right: "12px",
-                                "字段名"
-                            }
-                            
-                            div {
-                                width: "25%",
-                                padding_right: "12px",
-                                "类型"
-                            }
-                            
-                            div {
-                                flex: "1",
-                                "值"
-                            }
-                        }
-                        
-                        for field in class_info.fields.iter() {
-                            {
-                                let value_display = field.value.display_value();
-                                let value_color = match &field.value {
-                                    JavaFieldValue::String(Some(_)) => "#ce9178",
-                                    JavaFieldValue::Int(_) | JavaFieldValue::Long(_) => "#b5cea8",
-                                    JavaFieldValue::Boolean(_) => "#569cd6",
-                                    JavaFieldValue::Null => "#808080",
-                                    JavaFieldValue::NotParsed => "#666666",
-                                    _ => "#dcdcaa",
-                                };
-                                
-                                rsx! {
-                                    div {
-                                        display: "flex",
-                                        padding: "6px 0",
-                                        border_bottom: "1px solid #333",
-                                        
-                                        div {
-                                            width: "25%",
-                                            color: "#9cdcfe",
-                                            font_size: "13px",
-                                            font_family: "Consolas, monospace",
-                                            padding_right: "12px",
-                                            
-                                            "{field.name}"
-                                        }
-                                        
-                                        div {
-                                            width: "25%",
-                                            color: "#4ec9b0",
-                                            font_size: "13px",
-                                            font_family: "Consolas, monospace",
-                                            padding_right: "12px",
-                                            
-                                            "{field.display_type()}"
-                                        }
-                                        
-                                        div {
-                                            flex: "1",
-                                            color: "{value_color}",
-                                            font_size: "13px",
-                                            font_family: "Consolas, monospace",
-                                            word_break: "break_all",
-                                            
-                                            "{value_display}"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if has_super {
-                if let Some(ref super_class) = class_info.super_class {
-                    div {
-                        margin_top: "16px",
-                        padding_top: "12px",
-                        border_top: "1px dashed #3c3c3c",
-                        
-                        div {
-                            color: "#888",
-                            font_size: "12px",
-                            margin_bottom: "8px",
-                            
-                            "父类"
-                        }
-                        
-                        JavaClassView { class_info: (**super_class).clone(), depth: depth + 1 }
-                    }
-                }
-            }
-        }
-    }
-}
-
 async fn load_key_data(
     pool: ConnectionPool,
     key: String,
@@ -431,7 +165,7 @@ async fn load_key_data(
     mut zset_value: Signal<Vec<(String, f64)>>,
     mut is_binary: Signal<bool>,
     binary_format: Signal<BinaryFormat>,
-    mut java_serialization_info: Signal<Option<JavaSerializationInfo>>,
+    mut java_serialization_info: Signal<Option<Vec<u8>>>,
     mut loading: Signal<bool>,
 ) -> Result<(), String> {
     if key.is_empty() {
@@ -474,9 +208,12 @@ async fn load_key_data(
                 if is_binary_data(&bytes) {
                     is_binary.set(true);
                     
-                    let java_info = check_java_serialized(&bytes);
-                    tracing::info!("Java serialization check: is_java={}", java_info.is_some());
-                    java_serialization_info.set(java_info);
+                    if is_java_serialization(&bytes) {
+                        tracing::info!("Java serialization detected");
+                        java_serialization_info.set(Some(bytes.clone()));
+                    } else {
+                        java_serialization_info.set(None);
+                    }
                     
                     let formatted = format_bytes(&bytes, binary_format());
                     string_value.set(formatted);
@@ -603,7 +340,7 @@ pub fn ValueViewer(
     let mut saving = use_signal(|| false);
     let mut is_binary = use_signal(|| false);
     let mut binary_format = use_signal(BinaryFormat::default);
-    let mut java_serialization_info = use_signal(|| None::<JavaSerializationInfo>);
+    let mut java_serialization_info = use_signal(|| None::<Vec<u8>>);
 
     let mut hash_search = use_signal(String::new);
     let mut hash_status_message = use_signal(String::new);
@@ -978,9 +715,9 @@ pub fn ValueViewer(
                                     }
 
                                     if is_binary() && binary_format() == BinaryFormat::JavaSerialized {
-                                        if let Some(ref java_info) = java_info_val {
+                                        if let Some(ref data) = java_info_val {
                                             JavaSerializedViewer {
-                                                info: java_info.clone(),
+                                                data: data.clone(),
                                             }
                                         } else {
                                             div {
