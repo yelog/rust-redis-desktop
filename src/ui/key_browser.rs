@@ -25,6 +25,17 @@ fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     keys
 }
 
+fn collect_all_folder_ids(nodes: &[TreeNode]) -> Vec<String> {
+    let mut ids = Vec::new();
+    for node in nodes {
+        if !node.is_leaf {
+            ids.push(node.node_id.clone());
+            ids.extend(collect_all_folder_ids(&node.children));
+        }
+    }
+    ids
+}
+
 fn collect_leaf_keys_in_node(nodes: &[TreeNode], node_id: &str) -> Vec<String> {
     for node in nodes {
         if node.node_id == node_id {
@@ -196,6 +207,19 @@ pub fn KeyBrowser(
 
                 let builder = TreeBuilder::new(":");
                 let tree = builder.build(all_keys);
+                
+                let search_is_active = !search_pattern.read().is_empty();
+                if search_is_active {
+                    let folder_ids = collect_all_folder_ids(&tree);
+                    let mut state = tree_state.write();
+                    state.expanded_nodes.clear();
+                    for id in folder_ids {
+                        state.expanded_nodes.insert(id);
+                    }
+                } else {
+                    tree_state.write().expanded_nodes.clear();
+                }
+                
                 tree_nodes.set(tree);
 
                 loading.set(false);
