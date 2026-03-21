@@ -166,16 +166,19 @@ pub fn KeyBrowser(
                         break;
                     }
 
-                    match pool.scan_keys_with_cursor(&pattern, cursor, batch_size).await {
+                    match pool
+                        .scan_keys_with_cursor(&pattern, cursor, batch_size)
+                        .await
+                    {
                         Ok((next_cursor, keys)) => {
                             let batch_len = keys.len();
                             all_keys.extend(keys);
-                            
+
                             scan_progress.write().scanned = all_keys.len();
                             scan_progress.write().current_batch = batch_len;
-                            
+
                             cursor = next_cursor;
-                            
+
                             if cursor == 0 {
                                 break;
                             }
@@ -219,14 +222,14 @@ pub fn KeyBrowser(
         }
     };
 
-use_effect({
-    let mut load_keys = load_keys.clone();
-    move || {
-        let _ = refresh_trigger();
-        let _ = connection_version;
-        load_keys();
-    }
-});
+    use_effect({
+        let mut load_keys = load_keys.clone();
+        move || {
+            let _ = refresh_trigger();
+            let _ = connection_version;
+            load_keys();
+        }
+    });
 
     rsx! {
         div {
@@ -600,7 +603,7 @@ use_effect({
                                         let cache = key_type_cache.read();
                                         !cache.contains_key(&key_clone)
                                     };
-                                    
+
                                     if needs_fetch {
                                         let pool = pool.clone();
                                         let mut key_type_cache = key_type_cache.clone();
@@ -625,7 +628,7 @@ use_effect({
                                             }
                                         });
                                     }
-                                    
+
                                     on_key_select.call(key_clone);
                                 }
                             },
@@ -638,7 +641,7 @@ use_effect({
                                         let state = tree_state.read();
                                         !state.expanded_nodes.contains(&node_id)
                                     };
-                                    
+
                                     {
                                         let mut state = tree_state.write();
                                         if state.expanded_nodes.contains(&node_id) {
@@ -647,18 +650,18 @@ use_effect({
                                             state.expanded_nodes.insert(node_id.clone());
                                         }
                                     }
-                                    
+
                                     if is_expanding {
                                         let leaf_keys = {
                                             let nodes = tree_nodes.read();
                                             collect_leaf_keys_in_node(&nodes, &node_id)
                                         };
-                                        
+
                                         let keys_to_fetch: Vec<String> = leaf_keys
                                             .into_iter()
                                             .filter(|k| !key_type_cache.read().contains_key(k))
                                             .collect();
-                                        
+
                                         if !keys_to_fetch.is_empty() {
                                             let pool = pool.clone();
                                             let mut key_type_cache = key_type_cache.clone();
@@ -676,7 +679,7 @@ use_effect({
                                                         }
                                                     }
                                                 }
-                                                
+
                                                 if !updates.is_empty() {
                                                     let mut nodes = tree_nodes.write();
                                                     update_multiple_key_info(&mut nodes, &updates);

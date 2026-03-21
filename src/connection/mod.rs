@@ -1,12 +1,12 @@
 mod config;
-mod pool;
-mod manager;
 mod error;
+mod manager;
+mod pool;
 
 pub use config::*;
-pub use pool::*;
-pub use manager::*;
 pub use error::*;
+pub use manager::*;
+pub use pool::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ConnectionState {

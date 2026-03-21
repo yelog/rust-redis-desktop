@@ -1,8 +1,8 @@
 use super::{ConnectionConfig, ConnectionPool, Result};
 use std::collections::HashMap;
-use uuid::Uuid;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use uuid::Uuid;
 
 pub struct ConnectionManager {
     connections: Arc<RwLock<HashMap<Uuid, ConnectionPool>>>,
@@ -14,27 +14,27 @@ impl ConnectionManager {
             connections: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     pub async fn add_connection(&self, config: ConnectionConfig) -> Result<Uuid> {
         let id = config.id;
         let pool = ConnectionPool::new(config).await?;
-        
+
         let mut connections = self.connections.write().await;
         connections.insert(id, pool);
-        
+
         Ok(id)
     }
-    
+
     pub async fn remove_connection(&self, id: Uuid) {
         let mut connections = self.connections.write().await;
         connections.remove(&id);
     }
-    
+
     pub async fn get_connection(&self, id: Uuid) -> Option<ConnectionPool> {
         let connections = self.connections.read().await;
         connections.get(&id).cloned()
     }
-    
+
     pub async fn list_connections(&self) -> Vec<(Uuid, String)> {
         let connections = self.connections.read().await;
         connections

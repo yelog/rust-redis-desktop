@@ -1,6 +1,6 @@
 use super::{KeyInfo, KeyType};
 use crate::connection::{ConnectionError, ConnectionPool, Result};
-use crate::ui::add_key_dialog::{HashField, ListValue, SetValue, ZSetMember, StreamEntry};
+use crate::ui::add_key_dialog::{HashField, ListValue, SetValue, StreamEntry, ZSetMember};
 use redis::AsyncCommands;
 use std::collections::HashMap;
 
@@ -40,11 +40,11 @@ pub struct ServerInfo {
 impl ConnectionPool {
     pub async fn scan_keys(&self, pattern: &str, count: usize) -> Result<Vec<String>> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let mut keys = Vec::new();
             let mut cursor: u64 = 0;
-            
+
             loop {
                 let result: (u64, Vec<String>) = redis::cmd("SCAN")
                     .arg(cursor)
@@ -55,22 +55,27 @@ impl ConnectionPool {
                     .query_async(conn)
                     .await
                     .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-                
+
                 cursor = result.0;
                 keys.extend(result.1);
-                
+
                 if cursor == 0 {
                     break;
                 }
             }
-            
+
             Ok(keys)
         } else {
             Err(ConnectionError::Closed)
         }
     }
 
-    pub async fn scan_keys_with_cursor(&self, pattern: &str, cursor: u64, count: usize) -> Result<(u64, Vec<String>)> {
+    pub async fn scan_keys_with_cursor(
+        &self,
+        pattern: &str,
+        cursor: u64,
+        count: usize,
+    ) -> Result<(u64, Vec<String>)> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -89,17 +94,22 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
-    pub async fn scan_keys_with_progress<F>(&self, pattern: &str, batch_size: usize, mut on_batch: F) -> Result<usize>
+
+    pub async fn scan_keys_with_progress<F>(
+        &self,
+        pattern: &str,
+        batch_size: usize,
+        mut on_batch: F,
+    ) -> Result<usize>
     where
         F: FnMut(usize) + Send,
     {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let mut total_count = 0;
             let mut cursor: u64 = 0;
-            
+
             loop {
                 let result: (u64, Vec<String>) = redis::cmd("SCAN")
                     .arg(cursor)
@@ -110,53 +120,53 @@ impl ConnectionPool {
                     .query_async(conn)
                     .await
                     .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-                
+
                 cursor = result.0;
                 let batch_len = result.1.len();
                 total_count += batch_len;
-                
+
                 on_batch(total_count);
-                
+
                 if cursor == 0 {
                     break;
                 }
             }
-            
+
             Ok(total_count)
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_key_type(&self, key: &str) -> Result<KeyType> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let type_str: String = redis::cmd("TYPE")
                 .arg(key)
                 .query_async(conn)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             Ok(KeyType::from(type_str))
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_key_info(&self, key: &str) -> Result<KeyInfo> {
         let key_type = self.get_key_type(key).await?;
-        
+
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let ttl: i64 = conn
                 .ttl(key)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             let ttl = if ttl == -1 { None } else { Some(ttl) };
-            
+
             Ok(KeyInfo {
                 name: key.to_string(),
                 key_type,
@@ -167,10 +177,10 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_string_value(&self, key: &str) -> Result<String> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.get(key)
                 .await
@@ -179,10 +189,10 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_string_bytes(&self, key: &str) -> Result<Vec<u8>> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.get(key)
                 .await
@@ -191,10 +201,10 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn set_string_value(&self, key: &str, value: &str) -> Result<()> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.set(key, value)
                 .await
@@ -203,25 +213,25 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn delete_key(&self, key: &str) -> Result<bool> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let deleted: i32 = conn
                 .del(key)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             Ok(deleted > 0)
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_hash_all(&self, key: &str) -> Result<HashMap<String, String>> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.hgetall(key)
                 .await
@@ -230,10 +240,10 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_list_range(&self, key: &str, start: i64, stop: i64) -> Result<Vec<String>> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.lrange(key, start as isize, stop as isize)
                 .await
@@ -242,10 +252,10 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_set_members(&self, key: &str) -> Result<Vec<String>> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.smembers(key)
                 .await
@@ -254,55 +264,60 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
-    pub async fn get_zset_range(&self, key: &str, start: i64, stop: i64) -> Result<Vec<(String, f64)>> {
+
+    pub async fn get_zset_range(
+        &self,
+        key: &str,
+        start: i64,
+        stop: i64,
+    ) -> Result<Vec<(String, f64)>> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let result: Vec<(String, f64)> = conn
                 .zrange_withscores(key, start as isize, stop as isize)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             Ok(result)
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn set_ttl(&self, key: &str, ttl: i64) -> Result<bool> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let result: i32 = conn
                 .expire(key, ttl)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn remove_ttl(&self, key: &str) -> Result<bool> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let result: i32 = conn
                 .persist(key)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn rename_key(&self, old_key: &str, new_key: &str) -> Result<()> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.rename(old_key, new_key)
                 .await
@@ -311,10 +326,10 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn hash_set_field(&self, key: &str, field: &str, value: &str) -> Result<()> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.hset(key, field, value)
                 .await
@@ -323,75 +338,75 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn hash_delete_field(&self, key: &str, field: &str) -> Result<bool> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let deleted: i32 = conn
                 .hdel(key, field)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             Ok(deleted > 0)
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn execute_raw_command(&self, command: &str) -> Result<String> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let parts: Vec<&str> = command.split_whitespace().collect();
             if parts.is_empty() {
                 return Ok("Empty command".to_string());
             }
-            
+
             let cmd_name = parts[0].to_uppercase();
             let args: Vec<&str> = parts[1..].to_vec();
-            
+
             let mut redis_cmd = redis::cmd(&cmd_name);
             for arg in args {
                 redis_cmd.arg(arg);
             }
-            
+
             let result: redis::Value = redis_cmd
                 .query_async(conn)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             let formatted = format_redis_value(&result);
             Ok(formatted)
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_server_info(&self) -> Result<ServerInfo> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let info: String = redis::cmd("INFO")
                 .query_async(conn)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             Ok(parse_server_info(&info))
         } else {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn get_raw_info(&self) -> Result<String> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             let info: String = redis::cmd("INFO")
                 .query_async(conn)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            
+
             Ok(info)
         } else {
             Err(ConnectionError::Closed)
@@ -403,12 +418,10 @@ fn format_redis_value(value: &redis::Value) -> String {
     match value {
         redis::Value::Nil => "(nil)".to_string(),
         redis::Value::Int(i) => format!("(integer) {}", i),
-        redis::Value::BulkString(data) => {
-            match String::from_utf8(data.clone()) {
-                Ok(s) => format!("\"{}\"", s),
-                Err(_) => format!("{:?}", data),
-            }
-        }
+        redis::Value::BulkString(data) => match String::from_utf8(data.clone()) {
+            Ok(s) => format!("\"{}\"", s),
+            Err(_) => format!("{:?}", data),
+        },
         redis::Value::Array(items) => {
             if items.is_empty() {
                 "(empty list or set)".to_string()
@@ -429,17 +442,17 @@ fn format_redis_value(value: &redis::Value) -> String {
 
 fn parse_server_info(info: &str) -> ServerInfo {
     let mut server_info = ServerInfo::default();
-    
+
     for line in info.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        
+
         if let Some((key, value)) = line.split_once(':') {
             let key = key.trim();
             let value = value.trim();
-            
+
             match key {
                 "redis_version" => server_info.redis_version = Some(value.to_string()),
                 "redis_mode" => server_info.redis_mode = Some(value.to_string()),
@@ -455,22 +468,36 @@ fn parse_server_info(info: &str) -> ServerInfo {
                 }
                 "connected_clients" => server_info.connected_clients = value.parse().ok(),
                 "maxclients" => server_info.max_clients = value.parse().ok(),
-                "total_connections_received" => server_info.total_connections_received = value.parse().ok(),
-                "total_commands_processed" => server_info.total_commands_processed = value.parse().ok(),
-                "instantaneous_ops_per_sec" => server_info.instantaneous_ops_per_sec = value.parse().ok(),
+                "total_connections_received" => {
+                    server_info.total_connections_received = value.parse().ok()
+                }
+                "total_commands_processed" => {
+                    server_info.total_commands_processed = value.parse().ok()
+                }
+                "instantaneous_ops_per_sec" => {
+                    server_info.instantaneous_ops_per_sec = value.parse().ok()
+                }
                 "total_net_input_bytes" => server_info.total_net_input_bytes = value.parse().ok(),
                 "total_net_output_bytes" => server_info.total_net_output_bytes = value.parse().ok(),
                 "used_memory" => server_info.used_memory = value.parse().ok(),
                 "used_memory_human" => server_info.used_memory_human = Some(value.to_string()),
                 "used_memory_peak" => server_info.used_memory_peak = value.parse().ok(),
-                "used_memory_peak_human" => server_info.used_memory_peak_human = Some(value.to_string()),
+                "used_memory_peak_human" => {
+                    server_info.used_memory_peak_human = Some(value.to_string())
+                }
                 "used_memory_rss" => server_info.used_memory_rss = value.parse().ok(),
-                "mem_fragmentation_ratio" => server_info.mem_fragmentation_ratio = value.parse().ok(),
+                "mem_fragmentation_ratio" => {
+                    server_info.mem_fragmentation_ratio = value.parse().ok()
+                }
                 "mem_allocator" => server_info.mem_allocator = Some(value.to_string()),
                 "rdb_last_save_time" => server_info.rdb_last_save_time = value.parse().ok(),
-                "rdb_changes_since_last_save" => server_info.rdb_changes_since_last_save = value.parse().ok(),
+                "rdb_changes_since_last_save" => {
+                    server_info.rdb_changes_since_last_save = value.parse().ok()
+                }
                 "aof_enabled" => server_info.aof_enabled = value.parse().ok(),
-                "aof_rewrite_in_progress" => server_info.aof_rewrite_in_progress = value.parse().ok(),
+                "aof_rewrite_in_progress" => {
+                    server_info.aof_rewrite_in_progress = value.parse().ok()
+                }
                 key if key.starts_with("db") => {
                     if let Some(stats) = parse_db_stats(value) {
                         server_info.keyspace.insert(key.to_string(), stats.keys);
@@ -482,7 +509,7 @@ fn parse_server_info(info: &str) -> ServerInfo {
             }
         }
     }
-    
+
     server_info
 }
 
@@ -494,7 +521,7 @@ struct DbStats {
 fn parse_db_stats(value: &str) -> Option<DbStats> {
     let mut keys = 0u64;
     let mut expires = 0u64;
-    
+
     for part in value.split(',') {
         if let Some((k, v)) = part.split_once('=') {
             match k.trim() {
@@ -504,7 +531,7 @@ fn parse_db_stats(value: &str) -> Option<DbStats> {
             }
         }
     }
-    
+
     Some(DbStats { keys, expires })
 }
 
@@ -663,7 +690,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let _: () = conn.lset(key, index as isize, value)
+            let _: () = conn
+                .lset(key, index as isize, value)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(())
@@ -676,7 +704,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let result: i64 = conn.lrem(key, count as isize, value)
+            let result: i64 = conn
+                .lrem(key, count as isize, value)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(result)
@@ -689,7 +718,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let len: u64 = conn.llen(key)
+            let len: u64 = conn
+                .llen(key)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(len)
@@ -702,7 +732,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let result: i32 = conn.sadd(key, member)
+            let result: i32 = conn
+                .sadd(key, member)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(result > 0)
@@ -715,7 +746,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let result: i32 = conn.srem(key, member)
+            let result: i32 = conn
+                .srem(key, member)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(result > 0)
@@ -728,7 +760,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let result: i32 = conn.zadd(key, member, score)
+            let result: i32 = conn
+                .zadd(key, member, score)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(result > 0)
@@ -741,7 +774,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let result: i32 = conn.zrem(key, member)
+            let result: i32 = conn
+                .zrem(key, member)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(result > 0)
@@ -754,7 +788,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let count: u64 = conn.zcard(key)
+            let count: u64 = conn
+                .zcard(key)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(count)
@@ -794,7 +829,12 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn stream_range(&self, key: &str, start: &str, end: &str) -> Result<Vec<(String, Vec<(String, String)>)>> {
+    pub async fn stream_range(
+        &self,
+        key: &str,
+        start: &str,
+        end: &str,
+    ) -> Result<Vec<(String, Vec<(String, String)>)>> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -815,7 +855,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let len: u64 = conn.hlen(key)
+            let len: u64 = conn
+                .hlen(key)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(len)
@@ -828,7 +869,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let len: u64 = conn.scard(key)
+            let len: u64 = conn
+                .scard(key)
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
             Ok(len)
@@ -837,7 +879,12 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn get_hash_page(&self, key: &str, cursor: u64, count: usize) -> Result<(u64, Vec<(String, String)>)> {
+    pub async fn get_hash_page(
+        &self,
+        key: &str,
+        cursor: u64,
+        count: usize,
+    ) -> Result<(u64, Vec<(String, String)>)> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -855,7 +902,12 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn get_set_page(&self, key: &str, cursor: u64, count: usize) -> Result<(u64, Vec<String>)> {
+    pub async fn get_set_page(
+        &self,
+        key: &str,
+        cursor: u64,
+        count: usize,
+    ) -> Result<(u64, Vec<String>)> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -873,7 +925,12 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn get_zset_page(&self, key: &str, cursor: u64, count: usize) -> Result<(u64, Vec<(String, f64)>)> {
+    pub async fn get_zset_page(
+        &self,
+        key: &str,
+        cursor: u64,
+        count: usize,
+    ) -> Result<(u64, Vec<(String, f64)>)> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {

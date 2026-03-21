@@ -31,18 +31,18 @@ impl ConnectionPool {
             config,
             connection: Arc::new(Mutex::new(None)),
         };
-        
+
         pool.connect().await?;
-        
+
         Ok(pool)
     }
-    
+
     async fn connect(&self) -> Result<()> {
         let url = self.config.to_redis_url();
-        
+
         let client = redis::Client::open(url.as_str())
             .map_err(|e| ConnectionError::InvalidConfig(e.to_string()))?;
-        
+
         let conn = tokio::time::timeout(
             std::time::Duration::from_millis(self.config.connection_timeout),
             client.get_connection_manager(),
@@ -50,16 +50,16 @@ impl ConnectionPool {
         .await
         .map_err(|_| ConnectionError::Timeout)?
         .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-        
+
         let mut connection = self.connection.lock().await;
         *connection = Some(conn);
-        
+
         Ok(())
     }
-    
+
     pub async fn ping(&self) -> Result<String> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             conn.ping()
                 .await
@@ -68,18 +68,18 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
-    
+
     pub async fn reconnect(&self) -> Result<()> {
         self.connect().await
     }
-    
+
     pub fn config(&self) -> &ConnectionConfig {
         &self.config
     }
 
     pub async fn select_database(&self, db: u8) -> Result<()> {
         let mut connection = self.connection.lock().await;
-        
+
         if let Some(ref mut conn) = *connection {
             redis::cmd("SELECT")
                 .arg(db)
@@ -87,7 +87,7 @@ impl ConnectionPool {
                 .await
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
         }
-        
+
         Ok(())
     }
 }

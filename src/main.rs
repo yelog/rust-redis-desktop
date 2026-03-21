@@ -1,5 +1,5 @@
-mod connection;
 mod config;
+mod connection;
 mod redis;
 mod serialization;
 mod theme;
@@ -14,8 +14,8 @@ fn main() {
         .with_thread_ids(false)
         .pretty()
         .init();
-    
+
     tracing::info!("Starting Redis Desktop Manager");
-    
+
     dioxus::launch(App);
 }
