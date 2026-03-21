@@ -83,7 +83,7 @@ pub fn LazyTreeNode(
                             let mut state = tree_state.write();
                             if state.selected_keys.contains(&path) {
                                 state.selected_keys.remove(&path);
-                            } else if node.is_leaf {
+                            } else {
                                 state.selected_keys.insert(path.clone());
                             }
                         } else if !node.is_leaf {
@@ -111,7 +111,7 @@ pub fn LazyTreeNode(
                     }
                 },
 
-                if selection_mode && node.is_leaf {
+                if selection_mode {
                     input {
                         r#type: "checkbox",
                         checked: is_checked,
@@ -134,6 +134,14 @@ pub fn LazyTreeNode(
                     span {
                         color: "#888",
                         font_size: "12px",
+                        cursor: "pointer",
+                        onclick: {
+                            let node_id = node.node_id.clone();
+                            move |e| {
+                                e.stop_propagation();
+                                on_expand.call(node_id.clone());
+                            }
+                        },
 
                         if is_expanded { "▼" } else { "▶" }
                     }
