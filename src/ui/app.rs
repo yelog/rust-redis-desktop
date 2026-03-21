@@ -248,6 +248,7 @@ pub fn App() -> Element {
                         connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
                         selected_key: selected_key,
                         current_db: current_db,
+                        refresh_trigger: refresh_trigger,
                         on_key_select: move |key: String| {
                             selected_key.set(key);
                             current_tab.set(Tab::Data);

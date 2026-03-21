@@ -74,6 +74,7 @@ pub fn KeyBrowser(
     connection_version: u32,
     selected_key: Signal<String>,
     current_db: Signal<u8>,
+    refresh_trigger: Signal<u32>,
     on_key_select: EventHandler<String>,
 ) -> Element {
     let tree_nodes = use_signal(Vec::<TreeNode>::new);
@@ -83,7 +84,6 @@ pub fn KeyBrowser(
     let mut tree_state = use_signal(TreeState::default);
     let mut context_menu = use_signal(|| None::<ContextMenuState>);
     let mut show_delete_dialog = use_signal(|| None::<Vec<DeleteTarget>>);
-    let mut refresh_trigger = use_signal(|| 0u32);
     let mut show_add_key_dialog = use_signal(|| false);
     let db_keys_count = use_signal(HashMap::<u8, u64>::new);
     let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
