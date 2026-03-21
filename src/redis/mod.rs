@@ -1,7 +1,9 @@
+mod command_docs;
 mod commands;
-mod types;
 mod tree;
+mod types;
 
+pub use command_docs::*;
 pub use commands::*;
-pub use types::*;
 pub use tree::*;
+pub use types::*;
