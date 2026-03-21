@@ -21,6 +21,47 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
+fn format_time(timestamp: u64) -> String {
+    use chrono::{TimeZone, Utc};
+    if let Some(dt) = Utc.timestamp_opt(timestamp as i64, 0).single() {
+        dt.format("%H:%M:%S").to_string()
+    } else {
+        "--:--:--".to_string()
+    }
+}
+
+fn format_memory_axis(max_value: u64) -> Vec<String> {
+    if max_value == 0 {
+        return vec!["0 B".to_string()];
+    }
+    
+    let mut ticks = Vec::new();
+    let steps = 4;
+    for i in 0..=steps {
+        let value = max_value * i / steps;
+        ticks.push(format_bytes(value));
+    }
+    ticks
+}
+
+fn format_ops_axis(max_value: u64) -> Vec<String> {
+    if max_value == 0 {
+        return vec!["0".to_string()];
+    }
+    
+    let mut ticks = Vec::new();
+    let steps = 4;
+    for i in 0..=steps {
+        let value = max_value * i / steps;
+        if value >= 10000 {
+            ticks.push(format!("{:.1}K", value as f64 / 1000.0));
+        } else {
+            ticks.push(value.to_string());
+        }
+    }
+    ticks
+}
+
 #[derive(Clone, Default)]
 pub struct MonitorData {
     pub timestamp: u64,
@@ -161,6 +202,8 @@ pub fn MonitorPanel(
     let max_ops = data.iter().map(|d| d.ops_per_sec).max().unwrap_or(1);
 
     rsx! {
+        style { {include_str!("monitor_panel.css")} }
+        
         div {
             height: "100%",
             display: "flex",
@@ -386,30 +429,75 @@ pub fn MonitorPanel(
                         }
 
                         div {
+                            class: "chart-container",
                             background: "#252526",
                             border: "1px solid #3c3c3c",
                             border_radius: "8px",
                             padding: "16px",
-                            height: "120px",
-                            display: "flex",
-                            align_items: "flex_end",
-                            gap: "2px",
 
-                            for d in data.iter() {
-                                {
-                                    let height = if max_memory > 0 {
-                                        (d.used_memory as f64 / max_memory as f64 * 100.0) as u32
-                                    } else {
-                                        0
-                                    };
-                                    rsx! {
+                            div {
+                                display: "flex",
+
+                                div {
+                                    class: "y-axis",
+                                    width: "60px",
+
+                                    for label in format_memory_axis(max_memory).iter().rev() {
                                         div {
-                                            flex: "1",
-                                            background: "linear-gradient(to top, #4ec9b0, #38a169)",
-                                            border_radius: "2px 2px 0 0",
-                                            min_width: "4px",
-                                            height: "{height}%",
-                                            title: "{format_bytes(d.used_memory)}",
+                                            class: "y-axis-label",
+                                            "{label}"
+                                        }
+                                    }
+                                }
+
+                                div {
+                                    class: "chart-content",
+
+                                    div {
+                                        class: "chart-bars",
+
+                                        for (idx, d) in data.iter().enumerate() {
+                                            {
+                                                let height = if max_memory > 0 {
+                                                    (d.used_memory as f64 / max_memory as f64 * 100.0) as u32
+                                                } else {
+                                                    0
+                                                };
+                                                let time_str = format_time(d.timestamp);
+                                                let memory_str = format_bytes(d.used_memory);
+                                                let show_time = data.len() < 10 || idx % (data.len() / 5).max(1) == 0 || idx == data.len() - 1;
+                                                rsx! {
+                                                    div {
+                                                        class: "bar-wrapper",
+
+                                                        div {
+                                                            class: "bar bar-memory",
+                                                            style: "height: {height}%",
+
+                                                            div {
+                                                                class: "tooltip",
+
+                                                                div {
+                                                                    class: "tooltip-value tooltip-value-memory",
+                                                                    "{memory_str}"
+                                                                }
+
+                                                                div {
+                                                                    class: "tooltip-time",
+                                                                    "{time_str}"
+                                                                }
+                                                            }
+                                                        }
+
+                                                        if show_time {
+                                                            div {
+                                                                class: "x-axis-label",
+                                                                "{time_str}"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -429,30 +517,75 @@ pub fn MonitorPanel(
                         }
 
                         div {
+                            class: "chart-container",
                             background: "#252526",
                             border: "1px solid #3c3c3c",
                             border_radius: "8px",
                             padding: "16px",
-                            height: "120px",
-                            display: "flex",
-                            align_items: "flex_end",
-                            gap: "2px",
 
-                            for d in data.iter() {
-                                {
-                                    let height = if max_ops > 0 {
-                                        (d.ops_per_sec as f64 / max_ops as f64 * 100.0) as u32
-                                    } else {
-                                        0
-                                    };
-                                    rsx! {
+                            div {
+                                display: "flex",
+
+                                div {
+                                    class: "y-axis",
+                                    width: "60px",
+
+                                    for label in format_ops_axis(max_ops).iter().rev() {
                                         div {
-                                            flex: "1",
-                                            background: "linear-gradient(to top, #f59e0b, #d97706)",
-                                            border_radius: "2px 2px 0 0",
-                                            min_width: "4px",
-                                            height: "{height}%",
-                                            title: "{d.ops_per_sec} ops/sec",
+                                            class: "y-axis-label",
+                                            "{label}"
+                                        }
+                                    }
+                                }
+
+                                div {
+                                    class: "chart-content",
+
+                                    div {
+                                        class: "chart-bars",
+
+                                        for (idx, d) in data.iter().enumerate() {
+                                            {
+                                                let height = if max_ops > 0 {
+                                                    (d.ops_per_sec as f64 / max_ops as f64 * 100.0) as u32
+                                                } else {
+                                                    0
+                                                };
+                                                let time_str = format_time(d.timestamp);
+                                                let ops_str = d.ops_per_sec.to_string();
+                                                let show_time = data.len() < 10 || idx % (data.len() / 5).max(1) == 0 || idx == data.len() - 1;
+                                                rsx! {
+                                                    div {
+                                                        class: "bar-wrapper",
+
+                                                        div {
+                                                            class: "bar bar-ops",
+                                                            style: "height: {height}%",
+
+                                                            div {
+                                                                class: "tooltip",
+
+                                                                div {
+                                                                    class: "tooltip-value tooltip-value-ops",
+                                                                    "{ops_str} ops/sec"
+                                                                }
+
+                                                                div {
+                                                                    class: "tooltip-time",
+                                                                    "{time_str}"
+                                                                }
+                                                            }
+                                                        }
+
+                                                        if show_time {
+                                                            div {
+                                                                class: "x-axis-label",
+                                                                "{time_str}"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
