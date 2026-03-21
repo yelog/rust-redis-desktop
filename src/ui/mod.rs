@@ -1,6 +1,7 @@
 pub mod add_key_dialog;
 mod app;
 mod batch_ttl_dialog;
+mod clients_panel;
 mod connection_form;
 mod context_menu;
 mod delete_confirm_dialog;
@@ -22,6 +23,7 @@ mod virtual_key_list;
 pub use add_key_dialog::*;
 pub use app::*;
 pub use batch_ttl_dialog::*;
+pub use clients_panel::*;
 pub use connection_form::*;
 pub use key_browser::*;
 pub use key_item::*;

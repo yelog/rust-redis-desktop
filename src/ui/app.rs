@@ -1,8 +1,8 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::ui::{
-    ConnectionForm, KeyBrowser, MonitorPanel, ServerInfoPanel, SettingsDialog, Sidebar,
-    SlowLogPanel, Terminal, ValueViewer,
+    ClientsPanel, ConnectionForm, KeyBrowser, MonitorPanel, ServerInfoPanel, SettingsDialog,
+    Sidebar, SlowLogPanel, Terminal, ValueViewer,
 };
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -14,6 +14,7 @@ pub enum Tab {
     Terminal,
     Monitor,
     SlowLog,
+    Clients,
 }
 
 #[derive(Clone, PartialEq)]
@@ -303,6 +304,19 @@ pub fn App() -> Element {
 
                                 "🐌 SlowLog"
                             }
+
+                            button {
+                                padding: "10px 20px",
+                                background: if current_tab() == Tab::Clients { "#1e1e1e" } else { "transparent" },
+                                color: if current_tab() == Tab::Clients { "white" } else { "#888" },
+                                border: "none",
+                                border_bottom: if current_tab() == Tab::Clients { "2px solid #4ec9b0" } else { "none" },
+                                cursor: "pointer",
+                                font_size: "13px",
+                                onclick: move |_| current_tab.set(Tab::Clients),
+
+                                "👥 Clients"
+                            }
                         }
 
                         // Tab content
@@ -335,8 +349,12 @@ pub fn App() -> Element {
                                     connection_pool: pool,
                                     auto_refresh_interval: app_settings.read().auto_refresh_interval,
                                 }
-                            } else {
+                            } else if current_tab() == Tab::SlowLog {
                                 SlowLogPanel {
+                                    connection_pool: pool,
+                                }
+                            } else {
+                                ClientsPanel {
                                     connection_pool: pool,
                                 }
                             }
