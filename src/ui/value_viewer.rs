@@ -2,9 +2,13 @@ use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
 use crate::ui::editable_field::EditableField;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
+use crate::ui::pagination::{LargeKeyWarning, PageInfo};
 use arboard::Clipboard;
 use dioxus::prelude::*;
 use std::collections::HashMap;
+
+const LARGE_KEY_THRESHOLD: usize = 1000;
+const PAGE_SIZE: usize = 100;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum BinaryFormat {
@@ -342,6 +346,14 @@ pub fn ValueViewer(
     let mut editing_zset_member = use_signal(|| None::<String>);
     let mut editing_zset_score = use_signal(String::new);
 
+    let mut list_page = use_signal(|| 0usize);
+    let mut list_total = use_signal(|| 0usize);
+    let mut set_page = use_signal(|| 0usize);
+    let mut set_total = use_signal(|| 0usize);
+    let mut zset_page = use_signal(|| 0usize);
+    let mut zset_total = use_signal(|| 0usize);
+    let mut show_large_key_warning = use_signal(|| false);
+
     let pool = connection_pool.clone();
     let pool_for_edit = connection_pool.clone();
     let pool_for_reload = connection_pool.clone();
@@ -368,6 +380,8 @@ pub fn ValueViewer(
         list_action.set(None);
         editing_list_index.set(None);
         editing_list_value.set(String::new());
+        list_page.set(0);
+        list_total.set(0);
 
         set_status_message.set(String::new());
         set_status_error.set(false);
@@ -375,6 +389,8 @@ pub fn ValueViewer(
         set_action.set(None);
         set_search.set(String::new());
         deleting_set_member.set(None);
+        set_page.set(0);
+        set_total.set(0);
 
         zset_status_message.set(String::new());
         zset_status_error.set(false);
@@ -385,6 +401,10 @@ pub fn ValueViewer(
         deleting_zset_member.set(None);
         editing_zset_member.set(None);
         editing_zset_score.set(String::new());
+        zset_page.set(0);
+        zset_total.set(0);
+
+        show_large_key_warning.set(false);
 
         let pool = pool.clone();
 
@@ -1615,6 +1635,14 @@ pub fn ValueViewer(
                                     }
                                 }
 
+                                if list_val.len() > LARGE_KEY_THRESHOLD {
+                                    LargeKeyWarning {
+                                        key_type: "List".to_string(),
+                                        size: list_val.len(),
+                                        threshold: LARGE_KEY_THRESHOLD,
+                                    }
+                                }
+
                                 div {
                                     overflow_x: "auto",
                                     border: "1px solid #3c3c3c",
@@ -2019,6 +2047,14 @@ pub fn ValueViewer(
                                     }
                                 }
 
+                                if set_val.len() > LARGE_KEY_THRESHOLD {
+                                    LargeKeyWarning {
+                                        key_type: "Set".to_string(),
+                                        size: set_val.len(),
+                                        threshold: LARGE_KEY_THRESHOLD,
+                                    }
+                                }
+
                                 div {
                                     overflow_x: "auto",
                                     border: "1px solid #3c3c3c",
@@ -2350,6 +2386,14 @@ pub fn ValueViewer(
                                         font_size: "13px",
 
                                         "{zset_status_message}"
+                                    }
+                                }
+
+                                if zset_val.len() > LARGE_KEY_THRESHOLD {
+                                    LargeKeyWarning {
+                                        key_type: "ZSet".to_string(),
+                                        size: zset_val.len(),
+                                        threshold: LARGE_KEY_THRESHOLD,
                                     }
                                 }
 

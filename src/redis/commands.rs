@@ -790,4 +790,100 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
+
+    pub async fn hash_len(&self, key: &str) -> Result<u64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let len: u64 = conn.hlen(key)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(len)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_len(&self, key: &str) -> Result<u64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let len: u64 = conn.scard(key)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(len)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_hash_page(&self, key: &str, cursor: u64, count: usize) -> Result<(u64, Vec<(String, String)>)> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: (u64, Vec<(String, String)>) = redis::cmd("HSCAN")
+                .arg(key)
+                .arg(cursor)
+                .arg("COUNT")
+                .arg(count)
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_set_page(&self, key: &str, cursor: u64, count: usize) -> Result<(u64, Vec<String>)> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: (u64, Vec<String>) = redis::cmd("SSCAN")
+                .arg(key)
+                .arg(cursor)
+                .arg("COUNT")
+                .arg(count)
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_zset_page(&self, key: &str, cursor: u64, count: usize) -> Result<(u64, Vec<(String, f64)>)> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: (u64, Vec<(String, f64)>) = redis::cmd("ZSCAN")
+                .arg(key)
+                .arg(cursor)
+                .arg("COUNT")
+                .arg(count)
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn memory_usage(&self, key: &str) -> Result<Option<u64>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: Option<u64> = redis::cmd("MEMORY")
+                .arg("USAGE")
+                .arg(key)
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
 }
