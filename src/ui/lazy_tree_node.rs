@@ -2,6 +2,17 @@ use crate::redis::TreeNode;
 use dioxus::prelude::*;
 use std::collections::HashSet;
 
+fn collect_leaf_paths(node: &TreeNode) -> Vec<String> {
+    let mut paths = Vec::new();
+    if node.is_leaf {
+        paths.push(node.path.clone());
+    }
+    for child in &node.children {
+        paths.extend(collect_leaf_paths(child));
+    }
+    paths
+}
+
 #[derive(Clone, PartialEq)]
 pub struct TreeState {
     pub expanded_nodes: HashSet<String>,
@@ -41,10 +52,26 @@ pub fn LazyTreeNode(
 ) -> Element {
     let is_expanded = tree_state.read().expanded_nodes.contains(&node.node_id);
     let is_selected = node.is_leaf && selected_key == node.path;
-    let is_checked = tree_state.read().selected_keys.contains(&node.path);
     let selection_mode = tree_state.read().selection_mode;
     let has_children = !node.children.is_empty();
     let indent = depth * 16;
+
+    let leaf_paths = if node.is_leaf {
+        vec![node.path.clone()]
+    } else {
+        collect_leaf_paths(&node)
+    };
+    let total_leaves = leaf_paths.len();
+    let selected_leaves = leaf_paths
+        .iter()
+        .filter(|p| tree_state.read().selected_keys.contains(*p))
+        .count();
+    let is_checked = if node.is_leaf {
+        selected_leaves > 0
+    } else {
+        selected_leaves == total_leaves && total_leaves > 0
+    };
+    let is_partial = !node.is_leaf && selected_leaves > 0 && selected_leaves < total_leaves;
 
     let icon = if node.is_leaf {
         "📄"
@@ -72,24 +99,31 @@ pub fn LazyTreeNode(
                 display: "flex",
                 align_items: "center",
                 gap: "6px",
-                background: if is_selected { "#094771" } else if is_checked { "#1a4a1a" } else { "transparent" },
+                background: if is_selected { "#094771" } else if is_checked || is_partial { "#1a4a1a" } else { "transparent" },
                 cursor: "pointer",
 
                 onclick: {
                     let node_id = node.node_id.clone();
-                    let path = node.path.clone();
+                    let node_path = node.path.clone();
+                    let leaf_paths = leaf_paths.clone();
+                    let is_leaf = node.is_leaf;
                     move |_| {
                         if selection_mode {
                             let mut state = tree_state.write();
-                            if state.selected_keys.contains(&path) {
-                                state.selected_keys.remove(&path);
+                            let all_selected = leaf_paths.iter().all(|p| state.selected_keys.contains(p));
+                            if all_selected {
+                                for p in &leaf_paths {
+                                    state.selected_keys.remove(p);
+                                }
                             } else {
-                                state.selected_keys.insert(path.clone());
+                                for p in &leaf_paths {
+                                    state.selected_keys.insert(p.clone());
+                                }
                             }
-                        } else if !node.is_leaf {
+                        } else if !is_leaf {
                             on_expand.call(node_id.clone());
                         } else {
-                            on_select.call(path.clone());
+                            on_select.call(node_path.clone());
                         }
                     }
                 },
@@ -117,13 +151,18 @@ pub fn LazyTreeNode(
                         checked: is_checked,
                         onclick: move |e| e.stop_propagation(),
                         onchange: {
-                            let path = node.path.clone();
+                            let leaf_paths = leaf_paths.clone();
                             move |_| {
                                 let mut state = tree_state.write();
-                                if state.selected_keys.contains(&path) {
-                                    state.selected_keys.remove(&path);
+                                let all_selected = leaf_paths.iter().all(|p| state.selected_keys.contains(p));
+                                if all_selected {
+                                    for p in &leaf_paths {
+                                        state.selected_keys.remove(p);
+                                    }
                                 } else {
-                                    state.selected_keys.insert(path.clone());
+                                    for p in &leaf_paths {
+                                        state.selected_keys.insert(p.clone());
+                                    }
                                 }
                             }
                         },
@@ -156,7 +195,7 @@ pub fn LazyTreeNode(
                 }
 
                 span {
-                    color: if is_selected { "white" } else if is_checked { "#68d391" } else if node.name.is_empty() { "#f59e0b" } else { "#cccccc" },
+                    color: if is_selected { "white" } else if is_checked || is_partial { "#68d391" } else if node.name.is_empty() { "#f59e0b" } else { "#cccccc" },
                     font_size: "13px",
                     overflow: "hidden",
                     text_overflow: "ellipsis",
