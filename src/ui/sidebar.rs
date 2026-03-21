@@ -116,13 +116,6 @@ pub fn Sidebar(
                                             on_select_connection.call(id)
                                         }
                                     },
-                                    ondoubleclick: {
-                                        let id = id;
-                                        move |_| {
-                                            context_menu.set(None);
-                                            on_reconnect_connection.call(id)
-                                        }
-                                    },
                                     cursor: "pointer",
                                     display: "flex",
                                     align_items: "center",
