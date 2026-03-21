@@ -7,6 +7,77 @@ use dioxus::prelude::*;
 use serde_json::Value as JsonValue;
 use std::io::Cursor;
 
+fn extract_inner_value(json: JsonValue) -> JsonValue {
+    match json {
+        JsonValue::Object(ref obj) => {
+            if let Some(inner) = obj.get("Object") {
+                extract_inner_value(inner.clone())
+            } else if let Some(inner) = obj.get("JavaString") {
+                inner.clone()
+            } else if let Some(inner) = obj.get("Primitive") {
+                extract_inner_value(inner.clone())
+            } else if let Some(inner) = obj.get("Array") {
+                extract_inner_value(inner.clone())
+            } else if let Some(inner) = obj.get("Enum") {
+                if let Some(arr) = inner.as_array() {
+                    if arr.len() == 2 {
+                        JsonValue::String(format!("{}::{}", 
+                            simplify_class_name(arr[0].as_str().unwrap_or("")),
+                            arr[1].as_str().unwrap_or("")))
+                    } else {
+                        inner.clone()
+                    }
+                } else {
+                    inner.clone()
+                }
+            } else if let Some(inner) = obj.get("Class") {
+                JsonValue::String(format!("class {}", inner.as_str().unwrap_or("")))
+            } else if obj.contains_key("Block") {
+                JsonValue::String("<Block data>".to_string())
+            } else if obj.contains_key("Loop") {
+                JsonValue::String("<循环引用>".to_string())
+            } else if obj.get("Null").map(|v| v.is_string()).unwrap_or(false) {
+                JsonValue::Null
+            } else if obj.contains_key("class") {
+                let mut result = serde_json::Map::new();
+                result.insert("class".to_string(), obj.get("class").cloned().unwrap_or(JsonValue::Null));
+                
+                if let Some(fields) = obj.get("fields") {
+                    let extracted_fields = extract_fields(fields);
+                    result.insert("fields".to_string(), JsonValue::Object(extracted_fields));
+                }
+                
+                if let Some(annotations) = obj.get("annotations") {
+                    result.insert("annotations".to_string(), annotations.clone());
+                }
+                
+                JsonValue::Object(result)
+            } else {
+                let extracted: serde_json::Map<String, JsonValue> = obj
+                    .iter()
+                    .map(|(k, v)| (k.clone(), extract_inner_value(v.clone())))
+                    .collect();
+                JsonValue::Object(extracted)
+            }
+        }
+        JsonValue::Array(arr) => {
+            JsonValue::Array(arr.into_iter().map(extract_inner_value).collect())
+        }
+        other => other,
+    }
+}
+
+fn extract_fields(fields: &JsonValue) -> serde_json::Map<String, JsonValue> {
+    match fields {
+        JsonValue::Object(obj) => {
+            obj.iter()
+                .map(|(k, v)| (k.clone(), extract_inner_value(v.clone())))
+                .collect()
+        }
+        _ => serde_json::Map::new(),
+    }
+}
+
 #[component]
 pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
     let parse_result = use_resource(move || {
@@ -149,6 +220,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                             Content::Object(value) => {
                                 match serde_json::to_value(value) {
                                     Ok(json) => {
+                                        let json = extract_inner_value(json);
                                         if *show_raw_json.read() {
                                             let json_str = serde_json::to_string_pretty(&json).unwrap_or_else(|_| "序列化失败".to_string());
                                             rsx! {
