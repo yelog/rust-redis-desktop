@@ -24,6 +24,8 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
     });
 
     let mut expand_all = use_signal(|| true);
+    let mut search_query = use_signal(String::new);
+    let mut show_raw_json = use_signal(|| false);
 
     rsx! {
         div {
@@ -36,7 +38,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                 display: "flex",
                 align_items: "center",
                 justify_content: "space_between",
-                margin_bottom: "16px",
+                margin_bottom: "12px",
                 padding_bottom: "12px",
                 border_bottom: "1px solid #3c3c3c",
 
@@ -73,38 +75,69 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                         "Java 序列化对象"
                     }
                 }
+            }
 
-                div {
-                    display: "flex",
-                    gap: "4px",
+            div {
+                display: "flex",
+                gap: "8px",
+                margin_bottom: "12px",
+                flex_wrap: "wrap",
 
-                    button {
-                        font_size: "11px",
-                        padding: "4px 8px",
-                        background: "#333",
-                        border: "1px solid #444",
-                        color: "#ccc",
-                        border_radius: "4px",
-                        cursor: "pointer",
+                input {
+                    r#type: "text",
+                    placeholder: "搜索字段名...",
+                    value: "{search_query}",
+                    oninput: move |e| search_query.set(e.value()),
+                    font_size: "12px",
+                    padding: "4px 8px",
+                    background: "#1e1e1e",
+                    border: "1px solid #3c3c3c",
+                    border_radius: "4px",
+                    color: "#ccc",
+                    flex: "1",
+                    min_width: "150px",
+                }
 
-                        onclick: move |_| expand_all.set(true),
+                button {
+                    font_size: "11px",
+                    padding: "4px 8px",
+                    background: "#333",
+                    border: "1px solid #444",
+                    color: "#ccc",
+                    border_radius: "4px",
+                    cursor: "pointer",
 
-                        "全部展开"
-                    }
+                    onclick: move |_| expand_all.set(true),
 
-                    button {
-                        font_size: "11px",
-                        padding: "4px 8px",
-                        background: "#333",
-                        border: "1px solid #444",
-                        color: "#ccc",
-                        border_radius: "4px",
-                        cursor: "pointer",
+                    "全部展开"
+                }
 
-                        onclick: move |_| expand_all.set(false),
+                button {
+                    font_size: "11px",
+                    padding: "4px 8px",
+                    background: "#333",
+                    border: "1px solid #444",
+                    color: "#ccc",
+                    border_radius: "4px",
+                    cursor: "pointer",
 
-                        "全部折叠"
-                    }
+                    onclick: move |_| expand_all.set(false),
+
+                    "全部折叠"
+                }
+
+                button {
+                    font_size: "11px",
+                    padding: "4px 8px",
+                    background: if *show_raw_json.read() { "#1e4620" } else { "#333" },
+                    border: "1px solid #444",
+                    color: if *show_raw_json.read() { "#22c55e" } else { "#ccc" },
+                    border_radius: "4px",
+                    cursor: "pointer",
+
+                    onclick: move |_| show_raw_json.toggle(),
+
+                    "JSON"
                 }
             }
 
@@ -115,12 +148,36 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                         match content {
                             Content::Object(value) => {
                                 match serde_json::to_value(value) {
-                                    Ok(json) => rsx! { 
-                                        JsonTreeNode { 
-                                            value: json, 
-                                            depth: 0,
-                                            expand_all,
-                                        } 
+                                    Ok(json) => {
+                                        if *show_raw_json.read() {
+                                            let json_str = serde_json::to_string_pretty(&json).unwrap_or_else(|_| "序列化失败".to_string());
+                                            rsx! {
+                                                pre {
+                                                    color: "#ccc",
+                                                    font_size: "11px",
+                                                    font_family: "Consolas, monospace",
+                                                    white_space: "pre_wrap",
+                                                    word_break: "break_all",
+                                                    margin: "0",
+                                                    padding: "8px",
+                                                    background: "#1e1e1e",
+                                                    border_radius: "4px",
+                                                    max_height: "500px",
+                                                    overflow_y: "auto",
+
+                                                    "{json_str}"
+                                                }
+                                            }
+                                        } else {
+                                            rsx! {
+                                                JsonTreeNode {
+                                                    value: json,
+                                                    depth: 0,
+                                                    expand_all,
+                                                    search_query: search_query.read().to_lowercase(),
+                                                }
+                                            }
+                                        }
                                     },
                                     Err(_) => rsx! {
                                         div {
@@ -164,13 +221,28 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
 }
 
 #[component]
-fn JsonTreeNode(value: JsonValue, depth: usize, expand_all: Signal<bool>) -> Element {
+fn JsonTreeNode(
+    value: JsonValue,
+    depth: usize,
+    expand_all: Signal<bool>,
+    search_query: String,
+) -> Element {
     match &value {
         JsonValue::Object(obj) => rsx! {
-            JsonObjectNode { obj: obj.clone(), depth, expand_all }
+            JsonObjectNode {
+                obj: obj.clone(),
+                depth,
+                expand_all,
+                search_query,
+            }
         },
         JsonValue::Array(arr) => rsx! {
-            JsonArrayNode { arr: arr.clone(), depth, expand_all }
+            JsonArrayNode {
+                arr: arr.clone(),
+                depth,
+                expand_all,
+                search_query,
+            }
         },
         _ => rsx! {
             JsonPrimitiveNode { value: value.clone(), depth }
@@ -178,14 +250,22 @@ fn JsonTreeNode(value: JsonValue, depth: usize, expand_all: Signal<bool>) -> Ele
     }
 }
 
+fn matches_search(key: &str, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    key.to_lowercase().contains(query)
+}
+
 #[component]
 fn JsonObjectNode(
     obj: serde_json::Map<String, JsonValue>,
     depth: usize,
     expand_all: Signal<bool>,
+    search_query: String,
 ) -> Element {
     let mut expanded = use_signal(|| depth == 0 || *expand_all.read());
-    
+
     let has_fields = !obj.is_empty();
     let indent = depth * 16;
 
@@ -215,6 +295,9 @@ fn JsonObjectNode(
         .unwrap_or(0);
 
     let has_annotations = annotation_count > 0;
+    let has_content = has_fields || has_annotations;
+
+    let class_matches_search = matches_search(class_name, &search_query);
 
     rsx! {
         div {
@@ -226,15 +309,15 @@ fn JsonObjectNode(
                 align_items: "center",
                 gap: "6px",
                 padding: "2px 0",
-                cursor: if has_fields || has_annotations { "pointer" } else { "default" },
+                cursor: if has_content { "pointer" } else { "default" },
 
                 onclick: move |_| {
-                    if has_fields || has_annotations {
+                    if has_content {
                         expanded.toggle();
                     }
                 },
 
-                if has_fields || has_annotations {
+                if has_content {
                     span {
                         color: "#888",
                         font_size: "12px",
@@ -291,35 +374,53 @@ fn JsonObjectNode(
 
             if *expanded.read() {
                 if let Some(fields) = fields_obj {
-                    if !fields.is_empty() {
-                        div {
-                            margin_left: "18px",
-                            border_left: "1px solid #3c3c3c",
-                            padding_left: "8px",
-                            margin_top: "2px",
+                    {
+                        let filtered_fields: Vec<_> = fields
+                            .iter()
+                            .filter(|(k, _)| class_matches_search || matches_search(k, &search_query))
+                            .collect();
 
-                            for (key, val) in fields.iter() {
+                        if !filtered_fields.is_empty() {
+                            rsx! {
                                 div {
-                                    display: "flex",
-                                    align_items: "flex_start",
-                                    gap: "6px",
-                                    padding: "1px 0",
+                                    margin_left: "18px",
+                                    border_left: "1px solid #3c3c3c",
+                                    padding_left: "8px",
+                                    margin_top: "2px",
 
-                                    span {
-                                        color: "#9cdcfe",
-                                        font_size: "12px",
-                                        min_width: "80px",
+                                    for (key, val) in filtered_fields.iter() {
+                                        {
+                                            let highlight = !search_query.is_empty() && matches_search(key, &search_query);
+                                            let val_clone = (*val).clone();
+                                            rsx! {
+                                                div {
+                                                    display: "flex",
+                                                    align_items: "flex_start",
+                                                    gap: "6px",
+                                                    padding: "1px 0",
 
-                                        "{key}:"
-                                    }
+                                                    span {
+                                                        color: if highlight { "#f59e0b" } else { "#9cdcfe" },
+                                                        font_size: "12px",
+                                                        min_width: "80px",
 
-                                    JsonTreeNode {
-                                        value: val.clone(),
-                                        depth: depth + 1,
-                                        expand_all,
+                                                        "{key}:"
+                                                    }
+
+                                                    JsonTreeNode {
+                                                        value: val_clone,
+                                                        depth: depth + 1,
+                                                        expand_all,
+                                                        search_query: search_query.clone(),
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
+                        } else {
+                            rsx! {}
                         }
                     }
                 }
@@ -359,6 +460,7 @@ fn JsonObjectNode(
                                         value: annotation.clone(),
                                         depth: depth + 1,
                                         expand_all,
+                                        search_query: search_query.clone(),
                                     }
                                 }
                             }
@@ -375,6 +477,7 @@ fn JsonArrayNode(
     arr: Vec<JsonValue>,
     depth: usize,
     expand_all: Signal<bool>,
+    search_query: String,
 ) -> Element {
     let mut expanded = use_signal(|| depth == 0 || *expand_all.read());
     let indent = depth * 16;
@@ -434,6 +537,7 @@ fn JsonArrayNode(
                                 value: item.clone(),
                                 depth: depth + 1,
                                 expand_all,
+                                search_query: search_query.clone(),
                             }
                         }
                     }
