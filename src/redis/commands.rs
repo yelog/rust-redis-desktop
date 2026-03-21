@@ -920,4 +920,18 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
+
+    pub async fn db_size(&self) -> Result<u64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let size: u64 = redis::cmd("DBSIZE")
+                .query_async(conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            Ok(size)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
 }

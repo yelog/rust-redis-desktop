@@ -40,8 +40,9 @@ pub fn App() -> Element {
     let mut app_settings = use_signal(AppSettings::default);
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
-    let mut sidebar_width = use_signal(|| 250.0);
-    let mut key_browser_width = use_signal(|| 300.0);
+    let mut current_db = use_signal(|| 0u8);
+    let sidebar_width = use_signal(|| 250.0);
+    let key_browser_width = use_signal(|| 300.0);
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -246,6 +247,7 @@ pub fn App() -> Element {
                         connection_pool: pool.clone(),
                         connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
                         selected_key: selected_key,
+                        current_db: current_db,
                         on_key_select: move |key: String| {
                             selected_key.set(key);
                             current_tab.set(Tab::Data);
@@ -476,6 +478,7 @@ pub fn App() -> Element {
             if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
                 FlushConfirmDialog {
                     connection_pool: pool,
+                    current_db: current_db(),
                     on_confirm: move |_| {
                         show_flush_dialog.set(None);
                         refresh_trigger.set(refresh_trigger() + 1);

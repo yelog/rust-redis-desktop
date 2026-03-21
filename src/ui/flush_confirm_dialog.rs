@@ -4,10 +4,29 @@ use dioxus::prelude::*;
 #[component]
 pub fn FlushConfirmDialog(
     connection_pool: ConnectionPool,
+    current_db: u8,
     on_confirm: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
     let mut processing = use_signal(|| false);
+    let mut db_size = use_signal(|| None::<u64>);
+    let mut loading = use_signal(|| true);
+
+    use_effect({
+        let pool = connection_pool.clone();
+        move || {
+            if db_size().is_none() {
+                let pool = pool.clone();
+                spawn(async move {
+                    match pool.db_size().await {
+                        Ok(size) => db_size.set(Some(size)),
+                        Err(e) => tracing::error!("Failed to get db size: {}", e),
+                    }
+                    loading.set(false);
+                });
+            }
+        }
+    });
 
     rsx! {
         div {
@@ -35,30 +54,88 @@ pub fn FlushConfirmDialog(
                     align_items: "center",
                     gap: "8px",
 
-                    "⚠️ 确认清空数据"
-                }
-
-                div {
-                    color: "#888",
-                    margin_bottom: "16px",
-                    line_height: "1.6",
-
-                    "此操作将清空当前数据库的所有 key，且不可恢复！"
+                    "⚠️ 确认清空数据库"
                 }
 
                 div {
                     background: "#1e1e1e",
                     border: "1px solid #3c3c3c",
                     border_radius: "4px",
-                    padding: "12px",
+                    padding: "16px",
                     margin_bottom: "16px",
 
                     div {
-                        color: "#f87171",
+                        color: "#888",
                         font_size: "13px",
+                        margin_bottom: "12px",
 
-                        "⚠️ 危险操作：所有数据将被永久删除"
+                            "将要清空的数据库："
                     }
+
+div {
+                        display: "flex",
+                        justify_content: "space-between",
+                        align_items: "center",
+                        padding: "8px 0",
+
+                        span {
+                            color: "#cccccc",
+                            font_size: "14px",
+
+                            "数据库"
+                        }
+
+                        span {
+                            color: "#4ec9b0",
+                            font_size: "14px",
+                            font_weight: "bold",
+
+                            "DB {current_db}"
+                        }
+                    }
+
+                    div {
+                        display: "flex",
+                        justify_content: "space-between",
+                        align_items: "center",
+                        padding: "8px 0",
+
+                        span {
+                            color: "#cccccc",
+                            font_size: "14px",
+
+                            "Key 数量"
+                        }
+
+                        span {
+                            color: if loading() {
+                                "#888"
+                            } else if db_size().unwrap_or(0) > 0 {
+                                "#f87171"
+                            } else {
+                                "#68d391"
+                            },
+                            font_size: "14px",
+                            font_weight: "bold",
+
+                            if loading() {
+                                "加载中..."
+                            } else {
+                                "{db_size().unwrap_or(0)}"
+                            }
+                        }
+                    }
+                }
+
+                div {
+                    color: "#f87171",
+                    font_size: "13px",
+                    margin_bottom: "16px",
+                    padding: "8px 12px",
+                    background: "rgba(248, 113, 113, 0.1)",
+                    border_radius: "4px",
+
+                    "⚠️ 此操作将清空 DB{current_db} 的所有 key，且不可恢复！"
                 }
 
                 div {
@@ -73,7 +150,7 @@ pub fn FlushConfirmDialog(
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
-                        disabled: processing(),
+                        disabled: processing() || loading(),
                         onclick: {
                             let pool = connection_pool.clone();
                             let on_confirm = on_confirm.clone();

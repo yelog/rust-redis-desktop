@@ -245,7 +245,7 @@ pub fn Sidebar(
                         }
                     },
 
-                    "⚠️ Flush Data"
+                    "⚠️ FlushDB"
                 }
 
                 div {
