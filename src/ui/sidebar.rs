@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 #[component]
 pub fn Sidebar(
+    width: f64,
     connections: Vec<(Uuid, String)>,
     connection_states: HashMap<Uuid, ConnectionState>,
     on_add_connection: EventHandler<()>,
@@ -29,7 +30,7 @@ pub fn Sidebar(
             }
         "#} }
         div {
-            width: "250px",
+            width: "{width}px",
             height: "100%",
             background: "#1e1e1e",
             padding: "16px",

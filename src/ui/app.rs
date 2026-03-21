@@ -1,8 +1,8 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::ui::{
-    ClientsPanel, ConnectionForm, KeyBrowser, MonitorPanel, ServerInfoPanel, SettingsDialog,
-    Sidebar, SlowLogPanel, Terminal, ValueViewer,
+    ClientsPanel, ConnectionForm, KeyBrowser, MonitorPanel, ResizableDivider, ServerInfoPanel,
+    SettingsDialog, Sidebar, SlowLogPanel, Terminal, ValueViewer,
 };
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -39,6 +39,8 @@ pub fn App() -> Element {
     let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
     let mut app_settings = use_signal(AppSettings::default);
     let mut show_settings = use_signal(|| false);
+    let mut sidebar_width = use_signal(|| 250.0);
+    let mut key_browser_width = use_signal(|| 300.0);
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -81,6 +83,7 @@ pub fn App() -> Element {
             },
 
             Sidebar {
+                width: sidebar_width(),
                 connections: connections(),
                 connection_states: connection_states(),
                 on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
@@ -160,7 +163,6 @@ pub fn App() -> Element {
                     });
                 },
                 on_edit_connection: move |id: Uuid| {
-                    // Load connection config
                     if let Some(storage) = config_storage.read().as_ref() {
                         if let Ok(saved) = storage.load_connections() {
                             if let Some(config) = saved.into_iter().find(|c| c.id == id) {
@@ -192,6 +194,12 @@ pub fn App() -> Element {
                     });
                 },
                 on_open_settings: move |_| show_settings.set(true),
+            }
+
+            ResizableDivider {
+                width: sidebar_width,
+                min_width: 150.0,
+                max_width: 400.0,
             }
 
             if let Some(conn_id) = selected_connection() {
@@ -229,6 +237,7 @@ pub fn App() -> Element {
                     }
                 } else if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
                     KeyBrowser {
+                        width: key_browser_width(),
                         connection_id: conn_id,
                         connection_pool: pool.clone(),
                         connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
@@ -237,6 +246,12 @@ pub fn App() -> Element {
                             selected_key.set(key);
                             current_tab.set(Tab::Data);
                         },
+                    }
+
+                    ResizableDivider {
+                        width: key_browser_width,
+                        min_width: 200.0,
+                        max_width: 500.0,
                     }
 
                     div {

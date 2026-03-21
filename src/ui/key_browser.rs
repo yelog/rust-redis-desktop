@@ -32,6 +32,7 @@ pub struct ScanProgress {
 
 #[component]
 pub fn KeyBrowser(
+    width: f64,
     connection_id: Uuid,
     connection_pool: ConnectionPool,
     connection_version: u32,
@@ -192,7 +193,7 @@ use_effect({
 
     rsx! {
         div {
-            width: "300px",
+            width: "{width}px",
             height: "100%",
             background: "#252526",
             border_right: "1px solid #3c3c3c",
