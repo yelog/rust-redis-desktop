@@ -1,3 +1,6 @@
+use crate::serialization::java_converters::{
+    get_collection_display_name, is_collection_type, is_map_type, is_set_type,
+};
 use crate::serialization::{simplify_class_name, Content, Parser};
 use arboard::Clipboard;
 use dioxus::prelude::*;
@@ -20,6 +23,8 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
         }
     });
 
+    let mut expand_all = use_signal(|| true);
+
     rsx! {
         div {
             padding: "16px",
@@ -30,37 +35,76 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
             div {
                 display: "flex",
                 align_items: "center",
-                gap: "8px",
+                justify_content: "space_between",
                 margin_bottom: "16px",
                 padding_bottom: "12px",
                 border_bottom: "1px solid #3c3c3c",
 
-                svg {
-                    width: "20",
-                    height: "20",
-                    view_box: "0 0 24 24",
-                    fill: "none",
-                    stroke: "#22c55e",
-                    stroke_width: "2",
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
 
-                    rect {
-                        x: "3",
-                        y: "3",
-                        width: "18",
-                        height: "18",
-                        rx: "2",
+                    svg {
+                        width: "20",
+                        height: "20",
+                        view_box: "0 0 24 24",
+                        fill: "none",
+                        stroke: "#22c55e",
+                        stroke_width: "2",
+
+                        rect {
+                            x: "3",
+                            y: "3",
+                            width: "18",
+                            height: "18",
+                            rx: "2",
+                        }
+                        path {
+                            d: "M9 9h6v6H9z",
+                        }
                     }
-                    path {
-                        d: "M9 9h6v6H9z",
+
+                    span {
+                        color: "#22c55e",
+                        font_size: "14px",
+                        font_weight: "600",
+
+                        "Java 序列化对象"
                     }
                 }
 
-                span {
-                    color: "#22c55e",
-                    font_size: "14px",
-                    font_weight: "600",
+                div {
+                    display: "flex",
+                    gap: "4px",
 
-                    "Java 序列化对象"
+                    button {
+                        font_size: "11px",
+                        padding: "4px 8px",
+                        background: "#333",
+                        border: "1px solid #444",
+                        color: "#ccc",
+                        border_radius: "4px",
+                        cursor: "pointer",
+
+                        onclick: move |_| expand_all.set(true),
+
+                        "全部展开"
+                    }
+
+                    button {
+                        font_size: "11px",
+                        padding: "4px 8px",
+                        background: "#333",
+                        border: "1px solid #444",
+                        color: "#ccc",
+                        border_radius: "4px",
+                        cursor: "pointer",
+
+                        onclick: move |_| expand_all.set(false),
+
+                        "全部折叠"
+                    }
                 }
             }
 
@@ -71,7 +115,13 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                         match content {
                             Content::Object(value) => {
                                 match serde_json::to_value(value) {
-                                    Ok(json) => rsx! { JsonTreeNode { value: json, depth: 0 } },
+                                    Ok(json) => rsx! { 
+                                        JsonTreeNode { 
+                                            value: json, 
+                                            depth: 0,
+                                            expand_all,
+                                        } 
+                                    },
                                     Err(_) => rsx! {
                                         div {
                                             color: "#888",
@@ -114,13 +164,13 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
 }
 
 #[component]
-fn JsonTreeNode(value: JsonValue, depth: usize) -> Element {
+fn JsonTreeNode(value: JsonValue, depth: usize, expand_all: Signal<bool>) -> Element {
     match &value {
         JsonValue::Object(obj) => rsx! {
-            JsonObjectNode { obj: obj.clone(), depth }
+            JsonObjectNode { obj: obj.clone(), depth, expand_all }
         },
         JsonValue::Array(arr) => rsx! {
-            JsonArrayNode { arr: arr.clone(), depth }
+            JsonArrayNode { arr: arr.clone(), depth, expand_all }
         },
         _ => rsx! {
             JsonPrimitiveNode { value: value.clone(), depth }
@@ -129,20 +179,42 @@ fn JsonTreeNode(value: JsonValue, depth: usize) -> Element {
 }
 
 #[component]
-fn JsonObjectNode(obj: serde_json::Map<String, JsonValue>, depth: usize) -> Element {
-    let mut expanded = use_signal(|| depth == 0);
+fn JsonObjectNode(
+    obj: serde_json::Map<String, JsonValue>,
+    depth: usize,
+    expand_all: Signal<bool>,
+) -> Element {
+    let mut expanded = use_signal(|| depth == 0 || *expand_all.read());
+    
     let has_fields = !obj.is_empty();
     let indent = depth * 16;
-    
+
     let is_java_object = obj.contains_key("class") && obj.contains_key("fields");
     let class_name = obj.get("class").and_then(|v| v.as_str()).unwrap_or("Object");
     let simple_name = simplify_class_name(class_name);
     let has_full_name = class_name != simple_name;
-    
-    let field_count = obj.get("fields")
-        .and_then(|f| f.as_object())
-        .map(|f| f.len())
-        .unwrap_or(obj.len());
+
+    let is_collection = is_collection_type(class_name);
+    let is_map = is_map_type(class_name);
+    let is_set = is_set_type(class_name);
+    let is_std_lib = is_collection || is_map || is_set;
+
+    let display_name = if is_std_lib {
+        get_collection_display_name(class_name)
+    } else {
+        &simple_name
+    };
+
+    let fields_obj = obj.get("fields").and_then(|f| f.as_object());
+    let field_count = fields_obj.map(|f| f.len()).unwrap_or(0);
+
+    let annotation_count = obj
+        .get("annotations")
+        .and_then(|a| a.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+
+    let has_annotations = annotation_count > 0;
 
     rsx! {
         div {
@@ -154,15 +226,15 @@ fn JsonObjectNode(obj: serde_json::Map<String, JsonValue>, depth: usize) -> Elem
                 align_items: "center",
                 gap: "6px",
                 padding: "2px 0",
-                cursor: if has_fields { "pointer" } else { "default" },
+                cursor: if has_fields || has_annotations { "pointer" } else { "default" },
 
                 onclick: move |_| {
-                    if has_fields {
+                    if has_fields || has_annotations {
                         expanded.toggle();
                     }
                 },
 
-                if has_fields {
+                if has_fields || has_annotations {
                     span {
                         color: "#888",
                         font_size: "12px",
@@ -176,39 +248,32 @@ fn JsonObjectNode(obj: serde_json::Map<String, JsonValue>, depth: usize) -> Elem
                     }
                 }
 
-                if is_java_object {
+                span {
+                    color: if is_std_lib { "#dcdcaa" } else { "#4ec9b0" },
+                    font_size: "13px",
+                    font_weight: "600",
+
+                    "{display_name}"
+                }
+
+                if has_full_name && !is_std_lib {
                     span {
-                        color: "#4ec9b0",
-                        font_size: "13px",
-                        font_weight: "600",
+                        color: "#6b7280",
+                        font_size: "10px",
 
-                        "{simple_name}"
-                    }
-
-                    if has_full_name {
-                        span {
-                            color: "#6b7280",
-                            font_size: "10px",
-
-                            "({class_name})"
-                        }
-                    }
-                } else {
-                    span {
-                        color: "#dcdcaa",
-                        font_size: "12px",
-
-                        "Object"
+                        "({class_name})"
                     }
                 }
 
                 {
                     let count_str = if field_count > 0 {
                         format!("{{{}}}", field_count)
+                    } else if has_annotations {
+                        format!("{{{} annotations}}", annotation_count)
                     } else {
                         "{}".to_string()
                     };
-                    
+
                     rsx! {
                         span {
                             color: "#888",
@@ -224,31 +289,78 @@ fn JsonObjectNode(obj: serde_json::Map<String, JsonValue>, depth: usize) -> Elem
                 }
             }
 
-            if *expanded.read() && has_fields {
-                div {
-                    margin_left: "18px",
-                    border_left: "1px solid #3c3c3c",
-                    padding_left: "8px",
-                    margin_top: "2px",
-
-                    for (key, val) in obj.iter() {
+            if *expanded.read() {
+                if let Some(fields) = fields_obj {
+                    if !fields.is_empty() {
                         div {
-                            display: "flex",
-                            align_items: "flex_start",
-                            gap: "6px",
-                            padding: "1px 0",
+                            margin_left: "18px",
+                            border_left: "1px solid #3c3c3c",
+                            padding_left: "8px",
+                            margin_top: "2px",
 
-                            span {
-                                color: "#9cdcfe",
-                                font_size: "12px",
-                                min_width: "80px",
+                            for (key, val) in fields.iter() {
+                                div {
+                                    display: "flex",
+                                    align_items: "flex_start",
+                                    gap: "6px",
+                                    padding: "1px 0",
 
-                                "{key}:"
+                                    span {
+                                        color: "#9cdcfe",
+                                        font_size: "12px",
+                                        min_width: "80px",
+
+                                        "{key}:"
+                                    }
+
+                                    JsonTreeNode {
+                                        value: val.clone(),
+                                        depth: depth + 1,
+                                        expand_all,
+                                    }
+                                }
                             }
+                        }
+                    }
+                }
 
-                            JsonTreeNode {
-                                value: val.clone(),
-                                depth: depth + 1,
+                if has_annotations {
+                    div {
+                        margin_left: "18px",
+                        border_left: "1px dashed #444",
+                        padding_left: "8px",
+                        margin_top: "4px",
+
+                        div {
+                            color: "#f59e0b",
+                            font_size: "10px",
+                            margin_bottom: "4px",
+
+                            "Annotations ({annotation_count})"
+                        }
+
+                        if let Some(annotations) = obj.get("annotations").and_then(|a| a.as_array()) {
+                            for (i, annotation) in annotations.iter().enumerate() {
+                                div {
+                                    display: "flex",
+                                    align_items: "flex_start",
+                                    gap: "6px",
+                                    padding: "1px 0",
+
+                                    span {
+                                        color: "#666",
+                                        font_size: "11px",
+                                        min_width: "30px",
+
+                                        "[{i}]"
+                                    }
+
+                                    JsonTreeNode {
+                                        value: annotation.clone(),
+                                        depth: depth + 1,
+                                        expand_all,
+                                    }
+                                }
                             }
                         }
                     }
@@ -259,8 +371,12 @@ fn JsonObjectNode(obj: serde_json::Map<String, JsonValue>, depth: usize) -> Elem
 }
 
 #[component]
-fn JsonArrayNode(arr: Vec<JsonValue>, depth: usize) -> Element {
-    let mut expanded = use_signal(|| depth == 0);
+fn JsonArrayNode(
+    arr: Vec<JsonValue>,
+    depth: usize,
+    expand_all: Signal<bool>,
+) -> Element {
+    let mut expanded = use_signal(|| depth == 0 || *expand_all.read());
     let indent = depth * 16;
     let len = arr.len();
 
@@ -317,6 +433,7 @@ fn JsonArrayNode(arr: Vec<JsonValue>, depth: usize) -> Element {
                             JsonTreeNode {
                                 value: item.clone(),
                                 depth: depth + 1,
+                                expand_all,
                             }
                         }
                     }
@@ -343,7 +460,7 @@ fn JsonPrimitiveNode(value: JsonValue, depth: usize) -> Element {
         }
         _ => (value.to_string(), "#dcdcaa"),
     };
-    
+
     let copy_text = match &value {
         JsonValue::String(s) => Some(s.clone()),
         _ => None,
@@ -394,11 +511,7 @@ fn CopyButton(text: String) -> Element {
                 }
             },
 
-            if *copied.read() {
-                "✓"
-            } else {
-                "复制"
-            }
+            if *copied.read() { "✓" } else { "复制" }
         }
     }
 }

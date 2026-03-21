@@ -1,6 +1,6 @@
 pub mod java_converters;
 
-pub use jaded::{Content, Parser, PrimitiveType, Value};
+pub use jaded::{Content, Parser};
 
 /// Check if data is Java serialization format
 pub fn is_java_serialization(data: &[u8]) -> bool {
