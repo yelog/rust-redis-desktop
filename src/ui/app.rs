@@ -95,6 +95,8 @@ pub fn App() -> Element {
 
                     spawn(async move {
                         if connection_pools.read().contains_key(&id) {
+                            let version = connection_versions.read().get(&id).copied().unwrap_or(0);
+                            connection_versions.write().insert(id, version + 1);
                             return;
                         }
 
@@ -242,6 +244,7 @@ pub fn App() -> Element {
                     }
                 } else if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
                     KeyBrowser {
+                        key: "{conn_id}-{connection_versions.read().get(&conn_id).copied().unwrap_or(0)}",
                         width: key_browser_width(),
                         connection_id: conn_id,
                         connection_pool: pool.clone(),
@@ -349,6 +352,7 @@ pub fn App() -> Element {
                             if current_tab() == Tab::Data {
                                 if !selected_key.read().is_empty() {
                                     ValueViewer {
+                                        key: "{conn_id}",
                                         connection_pool: pool,
                                         selected_key: selected_key,
                                         on_refresh: move |_| {
@@ -357,6 +361,7 @@ pub fn App() -> Element {
                                     }
                                 } else {
                                     ServerInfoPanel {
+                                        key: "{conn_id}",
                                         connection_pool: pool,
                                         connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
                                         auto_refresh_interval: app_settings.read().auto_refresh_interval,
@@ -364,19 +369,23 @@ pub fn App() -> Element {
                                 }
                             } else if current_tab() == Tab::Terminal {
                                 Terminal {
+                                    key: "{conn_id}",
                                     connection_pool: pool,
                                 }
                             } else if current_tab() == Tab::Monitor {
                                 MonitorPanel {
+                                    key: "{conn_id}",
                                     connection_pool: pool,
                                     auto_refresh_interval: app_settings.read().auto_refresh_interval,
                                 }
                             } else if current_tab() == Tab::SlowLog {
                                 SlowLogPanel {
+                                    key: "{conn_id}",
                                     connection_pool: pool,
                                 }
                             } else {
                                 ClientsPanel {
+                                    key: "{conn_id}",
                                     connection_pool: pool,
                                 }
                             }
