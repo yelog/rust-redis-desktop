@@ -298,7 +298,7 @@ jobs:
 
           cp target/release/rust-redis-desktop AppDir/usr/bin/
 
-          cat > AppDir/usr/share/applications/rust-redis-desktop.desktop << 'EOF'
+          cat > AppDir/rust-redis-desktop.desktop << 'EOF'
           [Desktop Entry]
           Name=Rust Redis Desktop
           Comment=A Redis desktop manager written in Rust
@@ -309,6 +309,8 @@ jobs:
           Categories=Development;Database;
           StartupWMClass=rust-redis-desktop
           EOF
+
+          cp AppDir/rust-redis-desktop.desktop AppDir/usr/share/applications/
 
           cat > AppDir/usr/share/metainfo/rust-redis-desktop.metainfo.xml << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -337,6 +339,8 @@ jobs:
           exec "${HERE}/usr/bin/rust-redis-desktop" "$@"
           EOF
           chmod +x AppDir/AppRun
+
+          touch AppDir/rust-redis-desktop.png
 
       - name: Build AppImage
         run: |
