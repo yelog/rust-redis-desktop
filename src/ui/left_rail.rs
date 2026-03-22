@@ -1,9 +1,6 @@
 use crate::connection::ConnectionState;
 use crate::theme::ThemeColors;
-use crate::ui::icons::{
-    IconActivity, IconClock, IconDatabase, IconEdit, IconPlus, IconRefresh, IconSettings,
-    IconTerminal, IconTrash, IconUsers, IconX,
-};
+use crate::ui::icons::{IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconX};
 use dioxus::prelude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -23,7 +20,6 @@ pub fn LeftRail(
     connections: Vec<(Uuid, String)>,
     connection_states: HashMap<Uuid, ConnectionState>,
     selected_connection: Option<Uuid>,
-    selected_section: String,
     colors: ThemeColors,
     on_add_connection: EventHandler<()>,
     on_select_connection: EventHandler<Uuid>,
@@ -32,7 +28,6 @@ pub fn LeftRail(
     on_reconnect_connection: EventHandler<Uuid>,
     on_close_connection: EventHandler<Uuid>,
     on_flush_connection: EventHandler<Uuid>,
-    on_select_section: EventHandler<String>,
     on_open_settings: EventHandler<()>,
 ) -> Element {
     let has_connections = !connections.is_empty();
@@ -52,14 +47,6 @@ pub fn LeftRail(
         ConnectionState::Disconnected => colors.text_subtle,
         ConnectionState::Error => colors.error,
     };
-
-    let section_items = [
-        ("explorer", "浏览器"),
-        ("terminal", "终端"),
-        ("monitor", "监控"),
-        ("slowlog", "慢日志"),
-        ("clients", "客户端"),
-    ];
 
     rsx! {
         div {
@@ -237,59 +224,6 @@ pub fn LeftRail(
 
                     IconPlus { size: Some(14) }
                     "新建连接"
-                }
-            }
-
-            div {
-                padding: "12px 12px 8px",
-                display: "flex",
-                flex_direction: "column",
-                gap: "6px",
-                border_bottom: "1px solid {colors.border}",
-
-                for (key, label) in section_items {
-                    {
-                        let is_active = selected_section == key;
-                        rsx! {
-                            button {
-                                padding: "10px 12px",
-                                background: if is_active { colors.background } else { "transparent" },
-                                color: if is_active { colors.accent } else { colors.text_secondary },
-                                border: if is_active {
-                                    format!("1px solid {}", colors.border)
-                                } else {
-                                    "1px solid transparent".to_string()
-                                },
-                                border_left: if is_active {
-                                    format!("2px solid {}", colors.accent)
-                                } else {
-                                    "2px solid transparent".to_string()
-                                },
-                                border_radius: "8px",
-                                cursor: "pointer",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "10px",
-                                font_size: "13px",
-                                font_weight: "600",
-                                onclick: move |_| on_select_section.call(key.to_string()),
-
-                                if key == "explorer" {
-                                    IconDatabase { size: Some(15) }
-                                } else if key == "terminal" {
-                                    IconTerminal { size: Some(15) }
-                                } else if key == "monitor" {
-                                    IconActivity { size: Some(15) }
-                                } else if key == "slowlog" {
-                                    IconClock { size: Some(15) }
-                                } else {
-                                    IconUsers { size: Some(15) }
-                                }
-
-                                "{label}"
-                            }
-                        }
-                    }
                 }
             }
 

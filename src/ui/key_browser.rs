@@ -178,11 +178,13 @@ pub fn KeyBrowser(
     let select_db = {
         let pool = connection_pool.clone();
         let mut refresh_trigger = refresh_trigger.clone();
+        let mut selected_key = selected_key.clone();
         move |db: u8| {
             let pool = pool.clone();
             spawn(async move {
                 match pool.select_database(db).await {
                     Ok(_) => {
+                        selected_key.set(String::new());
                         current_db.set(db);
                         refresh_trigger.set(refresh_trigger() + 1);
                     }

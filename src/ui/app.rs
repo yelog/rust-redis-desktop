@@ -2,9 +2,8 @@ use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::theme::{ThemeColors, ThemeMode};
 use crate::ui::{
-    ClientsPanel, ConnectionForm, DividerDirection, FlushConfirmDialog, KeyBrowser, LeftRail,
-    MonitorPanel, ResizableDivider, ServerInfoPanel, SettingsDialog, SlowLogPanel, Terminal,
-    TopNav, ValueViewer,
+    ClientsPanel, ConnectionForm, FlushConfirmDialog, KeyBrowser, LeftRail, MonitorPanel,
+    SettingsDialog, SlowLogPanel, Terminal,
 };
 use dioxus::prelude::*;
 use serde_json::json;
@@ -24,32 +23,6 @@ pub enum Tab {
 pub enum FormMode {
     New,
     Edit(ConnectionConfig),
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum DataDetailMode {
-    Editor,
-    Overview,
-}
-
-fn tab_section_key(tab: Tab) -> &'static str {
-    match tab {
-        Tab::Data => "explorer",
-        Tab::Terminal => "terminal",
-        Tab::Monitor => "monitor",
-        Tab::SlowLog => "slowlog",
-        Tab::Clients => "clients",
-    }
-}
-
-fn section_to_tab(section: &str) -> Tab {
-    match section {
-        "terminal" => Tab::Terminal,
-        "monitor" => Tab::Monitor,
-        "slowlog" => Tab::SlowLog,
-        "clients" => Tab::Clients,
-        _ => Tab::Data,
-    }
 }
 
 fn system_theme_is_dark() -> bool {
@@ -488,10 +461,7 @@ pub fn App() -> Element {
     let mut app_settings = use_signal(AppSettings::default);
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
-    let current_db = use_signal(|| 0u8);
-    let mut detail_height = use_signal(|| 300.0);
-    let mut show_editor_pane = use_signal(|| false);
-    let mut show_server_overview = use_signal(|| false);
+    let mut current_db = use_signal(|| 0u8);
     let mut theme_mode = use_signal(ThemeMode::default);
     let mut system_theme_dark = use_signal(system_theme_is_dark);
     let left_rail_width = 280.0;
@@ -564,25 +534,9 @@ await new Promise(() => {});
         }
     };
 
-    let selected_section = tab_section_key(current_tab()).to_string();
     let selected_conn_state = selected_connection()
         .and_then(|id| connection_states.read().get(&id).copied())
         .unwrap_or(ConnectionState::Disconnected);
-    let selected_key_value = selected_key.read().clone();
-    let has_selected_key = !selected_key_value.is_empty();
-    let active_detail_mode = if show_server_overview() {
-        Some(DataDetailMode::Overview)
-    } else if show_editor_pane() && has_selected_key {
-        Some(DataDetailMode::Editor)
-    } else {
-        None
-    };
-
-    use_effect(move || {
-        if selected_key.read().is_empty() && show_editor_pane() {
-            show_editor_pane.set(false);
-        }
-    });
 
     rsx! {
             div {
@@ -600,11 +554,6 @@ await new Promise(() => {});
                     }
                 },
 
-                TopNav {
-                    colors: colors.clone(),
-                    on_open_settings: move |_| show_settings.set(true),
-                }
-
                 div {
                     flex: "1",
                     min_height: "0",
@@ -616,20 +565,32 @@ await new Promise(() => {});
                         connections: connections(),
                         connection_states: connection_states(),
                         selected_connection: selected_connection(),
-                        selected_section: selected_section,
                         colors: colors.clone(),
                         on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
                         on_select_connection: move |id: Uuid| {
                             selected_connection.set(Some(id));
                             selected_key.set(String::new());
-                            show_editor_pane.set(false);
-                            show_server_overview.set(false);
-                            detail_height.set(300.0);
                             current_tab.set(Tab::Data);
 
+                            if let Some(pool) = connection_pools.read().get(&id).cloned() {
+                                current_db.set(pool.current_db());
+                            } else if let Some(storage) = config_storage.read().as_ref() {
+                                if let Ok(saved) = storage.load_connections() {
+                                    if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                        current_db.set(config.db);
+                                    }
+                                }
+                            }
+
                             spawn(async move {
-                                if connection_pools.read().contains_key(&id) {
-                                    let version = connection_versions.read().get(&id).copied().unwrap_or(0);
+                                if let Some(pool) = connection_pools.read().get(&id).cloned() {
+                                    let db = pool.current_db();
+                                    if let Err(error) = pool.select_database(db).await {
+                                        tracing::error!("Failed to sync database for connection {id}: {error}");
+                                    }
+
+                                    let version =
+                                        connection_versions.read().get(&id).copied().unwrap_or(0);
                                     connection_versions.write().insert(id, version + 1);
                                     return;
                                 }
@@ -637,6 +598,11 @@ await new Promise(() => {});
                                 connection_states.write().insert(id, ConnectionState::Connecting);
 
                                 if let Some(pool) = connection_manager.read().get_connection(id).await {
+                                    let db = pool.current_db();
+                                    if let Err(error) = pool.select_database(db).await {
+                                        tracing::error!("Failed to sync database for connection {id}: {error}");
+                                    }
+                                    current_db.set(db);
                                     connection_pools.write().insert(id, pool);
                                     connection_states.write().insert(id, ConnectionState::Connected);
                                     return;
@@ -647,6 +613,7 @@ await new Promise(() => {});
                                         if let Some(config) = saved.into_iter().find(|c| c.id == id) {
                                             match ConnectionPool::new(config.clone()).await {
                                                 Ok(pool) => {
+                                                    current_db.set(pool.current_db());
                                                     let _ = connection_manager.read().add_connection(config).await;
                                                     connection_pools.write().insert(id, pool);
                                                     connection_states.write().insert(id, ConnectionState::Connected);
@@ -670,12 +637,16 @@ await new Promise(() => {});
                                         if let Some(config) = saved.into_iter().find(|c| c.id == id) {
                                             match ConnectionPool::new(config.clone()).await {
                                                 Ok(pool) => {
+                                                    let db = pool.current_db();
                                                     connection_pools.write().insert(id, pool);
                                                     let _ = connection_manager.read().add_connection(config).await;
 
                                                     let version = connection_versions.read().get(&id).copied().unwrap_or(0);
                                                     connection_versions.write().insert(id, version + 1);
                                                     connection_states.write().insert(id, ConnectionState::Connected);
+                                                    if selected_connection() == Some(id) {
+                                                        current_db.set(db);
+                                                    }
                                                 }
                                                 Err(_) => {
                                                     connection_states.write().insert(id, ConnectionState::Error);
@@ -697,8 +668,7 @@ await new Promise(() => {});
                                 if selected_connection() == Some(id) {
                                     selected_connection.set(None);
                                     selected_key.set(String::new());
-                                    show_editor_pane.set(false);
-                                    show_server_overview.set(false);
+                                    current_db.set(0);
                                 }
                             });
                         },
@@ -730,16 +700,12 @@ await new Promise(() => {});
                                 if selected_connection() == Some(id) {
                                     selected_connection.set(None);
                                     selected_key.set(String::new());
-                                    show_editor_pane.set(false);
-                                    show_server_overview.set(false);
+                                    current_db.set(0);
                                 }
                             });
                         },
                         on_flush_connection: move |id: Uuid| {
                             show_flush_dialog.set(Some(id));
-                        },
-                        on_select_section: move |section: String| {
-                            current_tab.set(section_to_tab(&section));
                         },
                         on_open_settings: move |_| show_settings.set(true),
                     }
@@ -926,10 +892,10 @@ await new Promise(() => {});
                                     overflow: "hidden",
 
                                 if current_tab() == Tab::Data {
-                                    div {
-                                        flex: "1",
-                                        min_height: if active_detail_mode.is_some() { "320px" } else { "0px" },
-                                        overflow: "hidden",
+                                div {
+                                    flex: "1",
+                                    min_height: "0px",
+                                    overflow: "hidden",
 
                                         KeyBrowser {
                                             key: "{conn_id}-{connection_versions.read().get(&conn_id).copied().unwrap_or(0)}-{resolved_theme_key}",
@@ -941,187 +907,8 @@ await new Promise(() => {});
                                             refresh_trigger: refresh_trigger,
                                             on_key_select: move |key: String| {
                                                 selected_key.set(key);
-                                                show_editor_pane.set(true);
-                                                show_server_overview.set(false);
                                                 current_tab.set(Tab::Data);
                                             },
-                                        }
-                                    }
-
-                                    if let Some(detail_mode) = active_detail_mode {
-                                        ResizableDivider {
-                                            size: detail_height,
-                                            min_size: 220.0,
-                                            max_size: 460.0,
-                                            direction: Some(DividerDirection::Horizontal),
-                                        }
-
-                                        div {
-                                            height: "{detail_height()}px",
-                                            min_height: "220px",
-                                            flex_shrink: "0",
-                                            display: "flex",
-                                            flex_direction: "column",
-                                            overflow: "hidden",
-                                            background: "{colors.background_secondary}",
-                                            border_top: "1px solid {colors.border}",
-
-                                            div {
-                                                height: "46px",
-                                                padding: "0 16px",
-                                                border_bottom: "1px solid {colors.border}",
-                                                display: "flex",
-                                                align_items: "center",
-                                                justify_content: "space_between",
-                                                gap: "12px",
-                                                background: "{colors.surface_low}",
-
-                                                div {
-                                                    color: "{colors.text_secondary}",
-                                                    font_size: "12px",
-
-                                                    if detail_mode == DataDetailMode::Editor {
-                                                        "值编辑器 · {selected_key_value}"
-                                                    } else {
-                                                        "服务器概览"
-                                                    }
-                                                }
-
-                                                div {
-                                                    display: "flex",
-                                                    align_items: "center",
-                                                    gap: "8px",
-
-                                                    button {
-                                                        padding: "6px 10px",
-                                                        background: "{colors.surface_high}",
-                                                        color: "{colors.text}",
-                                                        border: "1px solid {colors.border}",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
-                                                        onclick: move |_| detail_height.set(300.0),
-
-                                                        "恢复默认高度"
-                                                    }
-
-                                                    button {
-                                                        padding: "6px 10px",
-                                                        background: "transparent",
-                                                        color: "{colors.text_secondary}",
-                                                        border: "1px solid {colors.border}",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
-                                                        onclick: move |_| {
-                                                            show_editor_pane.set(false);
-                                                            show_server_overview.set(false);
-                                                        },
-
-                                                        "收起详情"
-                                                    }
-                                                }
-                                            }
-
-                                            div {
-                                                flex: "1",
-                                                min_height: "0",
-                                                display: "flex",
-                                                flex_direction: "column",
-                                                overflow: "hidden",
-                                                background: "{colors.background}",
-
-                                                if detail_mode == DataDetailMode::Editor {
-                                                    ValueViewer {
-                                                        key: "{conn_id}",
-                                                        connection_pool: pool.clone(),
-                                                        selected_key: selected_key,
-                                                        on_refresh: move |_| {
-                                                            refresh_trigger.set(refresh_trigger() + 1);
-                                                        },
-                                                    }
-                                                } else {
-                                                    ServerInfoPanel {
-                                                        key: "{conn_id}",
-                                                        connection_pool: pool.clone(),
-                                                        connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
-                                                        auto_refresh_interval: app_settings.read().auto_refresh_interval,
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        div {
-                                            height: "52px",
-                                            flex_shrink: "0",
-                                            padding: "0 16px",
-                                            display: "flex",
-                                            align_items: "center",
-                                            justify_content: "space_between",
-                                            gap: "12px",
-                                            background: "{colors.surface_low}",
-                                            border_top: "1px solid {colors.border}",
-
-                                            div {
-                                                color: "{colors.text_secondary}",
-                                                font_size: "12px",
-
-                                                if has_selected_key {
-                                                    "已选中 Key：{selected_key_value}"
-                                                } else {
-                                                    "选择一个 Key 查看详情，列表区域默认优先展示。"
-                                                }
-                                            }
-
-                                            div {
-                                                display: "flex",
-                                                align_items: "center",
-                                                gap: "8px",
-
-                                                if has_selected_key {
-                                                    button {
-                                                        padding: "6px 10px",
-                                                        background: "{colors.primary}",
-                                                        color: "white",
-                                                        border: "none",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
-                                                        onclick: move |_| show_editor_pane.set(true),
-
-                                                        "展开详情"
-                                                    }
-
-                                                    button {
-                                                        padding: "6px 10px",
-                                                        background: "transparent",
-                                                        color: "{colors.text_secondary}",
-                                                        border: "1px solid {colors.border}",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
-                                                        onclick: move |_| selected_key.set(String::new()),
-
-                                                        "清除选择"
-                                                    }
-                                                } else {
-                                                    button {
-                                                        padding: "6px 10px",
-                                                        background: "{colors.surface_high}",
-                                                        color: "{colors.text}",
-                                                        border: "1px solid {colors.border}",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
-                                                        onclick: move |_| {
-                                                            show_server_overview.set(true);
-                                                            show_editor_pane.set(false);
-                                                        },
-
-                                                        "服务器概览"
-                                                    }
-                                                }
-                                            }
                                         }
                                     }
                                 } else if current_tab() == Tab::Terminal {
