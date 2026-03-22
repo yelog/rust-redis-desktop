@@ -268,7 +268,8 @@ jobs:
             libssl-dev \
             pkg-config \
             file \
-            desktop-file-utils
+            desktop-file-utils \
+            libxdo-dev
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
