@@ -1,25 +1,47 @@
 use dioxus::prelude::*;
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum DividerDirection {
+    Vertical,
+    Horizontal,
+}
+
 #[component]
-pub fn ResizableDivider(width: Signal<f64>, min_width: f64, max_width: f64) -> Element {
+pub fn ResizableDivider(
+    size: Signal<f64>,
+    min_size: f64,
+    max_size: f64,
+    direction: Option<DividerDirection>,
+) -> Element {
+    let direction = direction.unwrap_or(DividerDirection::Vertical);
+    let is_horizontal = direction == DividerDirection::Horizontal;
     let mut is_dragging = use_signal(|| false);
-    let mut drag_start_x = use_signal(|| 0.0);
-    let mut drag_start_width = use_signal(|| 0.0);
+    let mut drag_start_pos = use_signal(|| 0.0);
+    let mut drag_start_size = use_signal(|| 0.0);
 
     rsx! {
         div {
-            width: "5px",
-            height: "100%",
-            background: if is_dragging() { "#4ec9b0" } else { "#3c3c3c" },
-            cursor: "col-resize",
+            width: if is_horizontal { "100%" } else { "6px" },
+            height: if is_horizontal { "6px" } else { "100%" },
+            background: if is_dragging() {
+                "var(--theme-accent, #00daf3)"
+            } else {
+                "var(--theme-outline-variant, #3c3c3c)"
+            },
+            cursor: if is_horizontal { "row-resize" } else { "col-resize" },
             flex_shrink: "0",
             transition: "background 0.2s",
+            opacity: if is_dragging() { "1" } else { "0.7" },
 
             onmousedown: move |e: Event<MouseData>| {
                 e.prevent_default();
                 is_dragging.set(true);
-                drag_start_x.set(e.data().client_coordinates().x);
-                drag_start_width.set(width());
+                drag_start_pos.set(if is_horizontal {
+                    e.data().client_coordinates().y
+                } else {
+                    e.data().client_coordinates().x
+                });
+                drag_start_size.set(size());
             },
         }
 
@@ -31,14 +53,18 @@ pub fn ResizableDivider(width: Signal<f64>, min_width: f64, max_width: f64) -> E
                 right: "0",
                 bottom: "0",
                 z_index: "9999",
-                cursor: "col-resize",
+                cursor: if is_horizontal { "row-resize" } else { "col-resize" },
 
                 onmousemove: move |e: Event<MouseData>| {
-                    let current_x = e.data().client_coordinates().x;
-                    let delta = current_x - drag_start_x();
-                    let new_width = drag_start_width() + delta;
-                    let clamped = new_width.clamp(min_width, max_width);
-                    width.set(clamped);
+                    let current_pos = if is_horizontal {
+                        e.data().client_coordinates().y
+                    } else {
+                        e.data().client_coordinates().x
+                    };
+                    let delta = current_pos - drag_start_pos();
+                    let new_size = drag_start_size() + delta;
+                    let clamped = new_size.clamp(min_size, max_size);
+                    size.set(clamped);
                 },
 
                 onmouseup: move |_| {

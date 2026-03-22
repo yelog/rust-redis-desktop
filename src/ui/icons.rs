@@ -497,3 +497,137 @@ pub fn IconKey(size: Option<i32>, color: Option<String>) -> Element {
         }
     }
 }
+
+#[component]
+pub fn IconBell(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            path { d: "M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" }
+            path { d: "M9 17a3 3 0 0 0 6 0" }
+        }
+    }
+}
+
+#[component]
+pub fn IconHelpCircle(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            circle { cx: "12", cy: "12", r: "10" }
+            path { d: "M9.09 9a3 3 0 1 1 5.82 1c0 2-3 2-3 4" }
+            line { x1: "12", y1: "17", x2: "12.01", y2: "17" }
+        }
+    }
+}
+
+#[component]
+pub fn IconTerminal(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            path { d: "M4 17l6-6-6-6" }
+            path { d: "M12 19h8" }
+        }
+    }
+}
+
+#[component]
+pub fn IconActivity(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            polyline { points: "22 12 18 12 15 21 9 3 6 12 2 12" }
+        }
+    }
+}
+
+#[component]
+pub fn IconUsers(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            path { d: "M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" }
+            circle { cx: "8.5", cy: "7", r: "4" }
+            path { d: "M20 8v6" }
+            path { d: "M23 11h-6" }
+        }
+    }
+}
+
+#[component]
+pub fn IconClock(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            circle { cx: "12", cy: "12", r: "10" }
+            polyline { points: "12 6 12 12 16 14" }
+        }
+    }
+}

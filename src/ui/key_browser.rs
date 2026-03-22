@@ -1,18 +1,33 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType, TreeBuilder, TreeNode};
-use crate::theme::{COLOR_ACCENT, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_CONTRAST};
+use crate::theme::{
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
+    COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_SURFACE_HIGH, COLOR_SURFACE_HIGHEST, COLOR_TEXT,
+    COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+};
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
-use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::icons::*;
-use crate::ui::lazy_tree_node::{ContextMenuState, LazyTreeNode, TreeState};
+use crate::ui::{KeyTable, KeyTableRow};
 use arboard::Clipboard;
 use dioxus::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use uuid::Uuid;
+
+const PAGE_SIZE: usize = 100;
+const SCAN_BATCH_SIZE: usize = 500;
+const TYPE_FILTER_OPTIONS: [(&str, &str); 7] = [
+    ("all", "全部"),
+    ("string", "String"),
+    ("hash", "Hash"),
+    ("list", "List"),
+    ("set", "Set"),
+    ("zset", "ZSet"),
+    ("stream", "Stream"),
+];
 
 fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     let mut keys = Vec::new();
@@ -25,28 +40,14 @@ fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     keys
 }
 
-fn collect_all_folder_ids(nodes: &[TreeNode]) -> Vec<String> {
-    let mut ids = Vec::new();
+fn collect_leaf_nodes(nodes: &[TreeNode], leaves: &mut Vec<TreeNode>) {
     for node in nodes {
-        if !node.is_leaf {
-            ids.push(node.node_id.clone());
-            ids.extend(collect_all_folder_ids(&node.children));
+        if node.is_leaf {
+            leaves.push(node.clone());
+        } else {
+            collect_leaf_nodes(&node.children, leaves);
         }
     }
-    ids
-}
-
-fn collect_leaf_keys_in_node(nodes: &[TreeNode], node_id: &str) -> Vec<String> {
-    for node in nodes {
-        if node.node_id == node_id {
-            return collect_all_keys(&node.children);
-        }
-        let keys = collect_leaf_keys_in_node(&node.children, node_id);
-        if !keys.is_empty() {
-            return keys;
-        }
-    }
-    Vec::new()
 }
 
 fn update_node_key_info(nodes: &mut [TreeNode], key_path: &str, key_info: KeyInfo) -> bool {
@@ -72,6 +73,46 @@ fn update_multiple_key_info(nodes: &mut [TreeNode], updates: &[(String, KeyInfo)
     changed
 }
 
+fn key_match_pattern(search_pattern: &str) -> String {
+    if search_pattern.trim().is_empty() {
+        "*".to_string()
+    } else {
+        format!("*{}*", search_pattern.trim())
+    }
+}
+
+fn type_filter_matches(key_type: Option<&KeyType>, filter: &str) -> bool {
+    match filter {
+        "string" => matches!(key_type, Some(KeyType::String)),
+        "hash" => matches!(key_type, Some(KeyType::Hash)),
+        "list" => matches!(key_type, Some(KeyType::List)),
+        "set" => matches!(key_type, Some(KeyType::Set)),
+        "zset" => matches!(key_type, Some(KeyType::ZSet)),
+        "stream" => matches!(key_type, Some(KeyType::Stream)),
+        _ => true,
+    }
+}
+
+fn pattern_label(node: &TreeNode) -> String {
+    if node.is_leaf {
+        node.path.clone()
+    } else {
+        format!("{}*", node.path)
+    }
+}
+
+fn type_filter_display(filter: &str) -> &str {
+    match filter {
+        "string" => "String",
+        "hash" => "Hash",
+        "list" => "List",
+        "set" => "Set",
+        "zset" => "ZSet",
+        "stream" => "Stream",
+        _ => "全部",
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct ScanProgress {
     pub scanned: usize,
@@ -81,7 +122,7 @@ pub struct ScanProgress {
 
 #[component]
 pub fn KeyBrowser(
-    width: f64,
+    height: f64,
     connection_id: Uuid,
     connection_pool: ConnectionPool,
     connection_version: u32,
@@ -94,19 +135,17 @@ pub fn KeyBrowser(
     let mut search_pattern = use_signal(String::new);
     let loading = use_signal(|| false);
     let keys_count = use_signal(|| 0usize);
-    let mut tree_state = use_signal(TreeState::default);
-    let mut context_menu = use_signal(|| None::<ContextMenuState>);
     let mut show_delete_dialog = use_signal(|| None::<Vec<DeleteTarget>>);
     let mut show_add_key_dialog = use_signal(|| false);
     let db_keys_count = use_signal(HashMap::<u8, u64>::new);
     let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
-    let mut scan_progress = use_signal(ScanProgress::default);
-    let mut cancel_scan = use_signal(|| Arc::new(AtomicBool::new(false)));
+    let scan_progress = use_signal(ScanProgress::default);
+    let cancel_scan = use_signal(|| Arc::new(AtomicBool::new(false)));
     let key_type_cache = use_signal(HashMap::<String, KeyType>::new);
-
-    let selection_mode = tree_state.read().selection_mode;
-    let selected_keys_count = tree_state.read().selected_keys.len();
-    let selected_keys: Vec<String> = tree_state.read().selected_keys.iter().cloned().collect();
+    let mut selected_keys = use_signal(HashSet::<String>::new);
+    let mut selection_mode = use_signal(|| false);
+    let mut current_page = use_signal(|| 0usize);
+    let mut type_filter = use_signal(|| "all".to_string());
 
     let load_keyspace = {
         let pool = connection_pool.clone();
@@ -142,36 +181,38 @@ pub fn KeyBrowser(
         let tree_nodes = tree_nodes.clone();
         let keys_count = keys_count.clone();
         let load_keyspace = load_keyspace.clone();
-        let tree_state = tree_state.clone();
         let scan_progress = scan_progress.clone();
         let mut cancel_scan = cancel_scan.clone();
+        let selected_keys = selected_keys.clone();
+        let selection_mode = selection_mode.clone();
+        let mut current_page = current_page.clone();
+        let mut key_type_cache = key_type_cache.clone();
         move || {
             let pool = pool.clone();
-            let pattern = if search_pattern.read().is_empty() {
-                "*".to_string()
-            } else {
-                format!("*{}*", search_pattern.read())
-            };
+            let match_pattern = key_match_pattern(&search_pattern.read());
             let mut loading = loading.clone();
             let mut tree_nodes = tree_nodes.clone();
             let mut keys_count = keys_count.clone();
             let load_keyspace = load_keyspace.clone();
-            let mut tree_state = tree_state.clone();
             let mut scan_progress = scan_progress.clone();
+            let mut selected_keys = selected_keys.clone();
+            let mut selection_mode = selection_mode.clone();
             let cancel_flag = Arc::new(AtomicBool::new(false));
             cancel_scan.set(cancel_flag.clone());
 
             spawn(async move {
                 loading.set(true);
                 tree_nodes.set(Vec::new());
-                tree_state.write().selected_keys.clear();
+                selected_keys.write().clear();
+                selection_mode.set(false);
+                current_page.set(0);
+                key_type_cache.set(HashMap::new());
                 scan_progress.write().is_scanning = true;
                 scan_progress.write().scanned = 0;
                 scan_progress.write().current_batch = 0;
 
                 let mut all_keys = Vec::new();
                 let mut cursor: u64 = 0;
-                let batch_size = 500usize;
 
                 loop {
                     if cancel_flag.load(Ordering::Relaxed) {
@@ -180,7 +221,7 @@ pub fn KeyBrowser(
                     }
 
                     match pool
-                        .scan_keys_with_cursor(&pattern, cursor, batch_size)
+                        .scan_keys_with_cursor(&match_pattern, cursor, SCAN_BATCH_SIZE)
                         .await
                     {
                         Ok((next_cursor, keys)) => {
@@ -189,7 +230,6 @@ pub fn KeyBrowser(
 
                             scan_progress.write().scanned = all_keys.len();
                             scan_progress.write().current_batch = batch_len;
-
                             cursor = next_cursor;
 
                             if cursor == 0 {
@@ -206,21 +246,7 @@ pub fn KeyBrowser(
                 keys_count.set(all_keys.len());
 
                 let builder = TreeBuilder::new(":");
-                let tree = builder.build(all_keys);
-                
-                let search_is_active = !search_pattern.read().is_empty();
-                if search_is_active {
-                    let folder_ids = collect_all_folder_ids(&tree);
-                    let mut state = tree_state.write();
-                    state.expanded_nodes.clear();
-                    for id in folder_ids {
-                        state.expanded_nodes.insert(id);
-                    }
-                } else {
-                    tree_state.write().expanded_nodes.clear();
-                }
-                
-                tree_nodes.set(tree);
+                tree_nodes.set(builder.build(all_keys));
 
                 loading.set(false);
                 scan_progress.write().is_scanning = false;
@@ -253,30 +279,212 @@ pub fn KeyBrowser(
         move || {
             let _ = refresh_trigger();
             let _ = connection_version;
+            let _ = connection_id;
             load_keys();
         }
     });
 
+    use_effect({
+        let pool = connection_pool.clone();
+        let tree_nodes = tree_nodes.clone();
+        let key_type_cache = key_type_cache.clone();
+        move || {
+            let page = current_page();
+            let filter = type_filter();
+            let mut leaf_nodes = Vec::new();
+            collect_leaf_nodes(&tree_nodes.read(), &mut leaf_nodes);
+
+            let filtered_leaves: Vec<TreeNode> = leaf_nodes
+                .into_iter()
+                .filter(|node| {
+                    type_filter_matches(node.key_info.as_ref().map(|info| &info.key_type), &filter)
+                })
+                .collect();
+
+            let start = page.saturating_mul(PAGE_SIZE);
+            let end = (start + PAGE_SIZE).min(filtered_leaves.len());
+            if start >= end {
+                return;
+            }
+
+            let cached_types = key_type_cache.read().clone();
+            let keys_to_fetch: Vec<String> = filtered_leaves[start..end]
+                .iter()
+                .filter(|node| node.key_info.is_none() && !cached_types.contains_key(&node.path))
+                .map(|node| node.path.clone())
+                .collect();
+
+            if keys_to_fetch.is_empty() {
+                return;
+            }
+
+            let pool = pool.clone();
+            let mut key_type_cache = key_type_cache.clone();
+            let mut tree_nodes = tree_nodes.clone();
+            spawn(async move {
+                let mut updates = Vec::new();
+                for key in keys_to_fetch {
+                    match pool.get_key_info(&key).await {
+                        Ok(info) => {
+                            key_type_cache
+                                .write()
+                                .insert(key.clone(), info.key_type.clone());
+                            updates.push((key, info));
+                        }
+                        Err(e) => tracing::error!("Failed to get key info: {}", e),
+                    }
+                }
+
+                if !updates.is_empty() {
+                    let mut nodes = tree_nodes.write();
+                    update_multiple_key_info(&mut nodes, &updates);
+                    drop(nodes);
+                    let snapshot = tree_nodes.read().clone();
+                    tree_nodes.set(snapshot);
+                }
+            });
+        }
+    });
+
+    let mut leaf_nodes = Vec::new();
+    collect_leaf_nodes(&tree_nodes.read(), &mut leaf_nodes);
+
+    let current_filter = type_filter();
+    let filtered_leaves: Vec<TreeNode> = leaf_nodes
+        .into_iter()
+        .filter(|node| {
+            type_filter_matches(
+                node.key_info.as_ref().map(|info| &info.key_type),
+                &current_filter,
+            )
+        })
+        .collect();
+
+    let total_filtered = filtered_leaves.len();
+    let total_pages = total_filtered.max(1).div_ceil(PAGE_SIZE);
+    let page = current_page().min(total_pages.saturating_sub(1));
+    let start_index = page.saturating_mul(PAGE_SIZE);
+    let end_index = (start_index + PAGE_SIZE).min(total_filtered);
+    let page_nodes = if start_index < end_index {
+        filtered_leaves[start_index..end_index].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    let selected_count = selected_keys.read().len();
+    let pattern_nodes = tree_nodes.read().clone();
+    let active_match_pattern = key_match_pattern(&search_pattern());
+
+    let rows: Vec<KeyTableRow> = page_nodes
+        .iter()
+        .map(|node| {
+            let key_info = node.key_info.as_ref();
+            KeyTableRow {
+                key: node.path.clone(),
+                key_type: key_info.map(|info| info.key_type.clone()),
+                ttl: key_info.and_then(|info| info.ttl),
+                has_details: key_info.is_some(),
+                is_selected: selected_keys.read().contains(&node.path),
+            }
+        })
+        .collect();
+
     rsx! {
         div {
-            width: "{width}px",
-            height: "100%",
-            background: COLOR_BG_SECONDARY,
-            border_right: "1px solid {COLOR_BORDER}",
+            width: "100%",
+            height: "{height}px",
+            min_height: "0",
+            background: COLOR_BG,
             display: "flex",
             flex_direction: "column",
             box_sizing: "border-box",
+            overflow: "hidden",
 
             div {
-                padding: "8px",
+                padding: "18px 20px 14px",
                 border_bottom: "1px solid {COLOR_BORDER}",
+                background: COLOR_BG_SECONDARY,
+                display: "flex",
+                justify_content: "space_between",
+                align_items: "flex_end",
+                gap: "16px",
+
+                div {
+                    display: "flex",
+                    flex_direction: "column",
+                    gap: "4px",
+
+                    h1 {
+                        margin: "0",
+                        color: COLOR_TEXT,
+                        font_size: "24px",
+                        font_weight: "800",
+
+                        "键浏览器"
+                    }
+
+                    div {
+                        color: COLOR_TEXT_SECONDARY,
+                        font_size: "12px",
+
+                        "DB {current_db()} • 共 {keys_count()} 个 Key"
+                    }
+                }
+
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
+                    flex_wrap: "wrap",
+
+                    button {
+                        padding: "8px 12px",
+                        background: COLOR_SURFACE_HIGHEST,
+                        color: COLOR_TEXT,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "8px",
+                        cursor: "pointer",
+                        display: "flex",
+                        align_items: "center",
+                        gap: "8px",
+                        onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
+
+                        IconRefresh { size: Some(14) }
+                        "刷新"
+                    }
+
+                    div {
+                        padding: "8px 12px",
+                        background: COLOR_BG_TERTIARY,
+                        color: COLOR_TEXT_SECONDARY,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "8px",
+                        display: "flex",
+                        align_items: "center",
+                        gap: "8px",
+                        font_size: "12px",
+
+                        IconList { size: Some(14) }
+                        "筛选 {type_filter_display(&type_filter())} • {total_filtered} 项"
+                    }
+                }
+            }
+
+            div {
+                padding: "14px 20px",
+                border_bottom: "1px solid {COLOR_BORDER}",
+                background: COLOR_BG_SECONDARY,
+                display: "flex",
+                align_items: "center",
+                gap: "10px",
+                flex_wrap: "wrap",
 
                 select {
-                    width: "100%",
-                    padding: "6px 10px",
+                    width: "140px",
+                    padding: "9px 12px",
                     background: COLOR_BG_TERTIARY,
                     border: "1px solid {COLOR_BORDER}",
-                    border_radius: "4px",
+                    border_radius: "8px",
                     color: COLOR_TEXT,
                     font_size: "13px",
                     value: "db{current_db}",
@@ -307,504 +515,585 @@ pub fn KeyBrowser(
                         }
                     }
                 }
-            }
 
-            div {
-                padding: "8px",
-                border_bottom: "1px solid {COLOR_BORDER}",
+                div {
+                    flex: "1",
+                    min_width: "220px",
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
+                    padding: "0 12px",
+                    height: "40px",
+                    background: COLOR_BG_LOWEST,
+                    border: "1px solid {COLOR_OUTLINE_VARIANT}",
+                    border_radius: "8px",
 
-                input {
-                    width: "100%",
-                    padding: "6px 10px",
-                    background: COLOR_BG_TERTIARY,
-                    border: "1px solid {COLOR_BORDER}",
-                    border_radius: "4px",
-                    color: COLOR_TEXT,
-                    font_size: "13px",
-                    placeholder: "Search keys...",
-                    value: "{search_pattern}",
-                    oninput: move |e| search_pattern.set(e.value()),
-                    onkeydown: move |e| {
-                        if e.data().key() == Key::Enter {
-                            refresh_trigger.set(refresh_trigger() + 1);
-                        }
-                    },
+                    IconSearch { size: Some(14) }
+
+                    input {
+                        flex: "1",
+                        background: "transparent",
+                        border: "none",
+                        color: COLOR_TEXT,
+                        font_size: "13px",
+                        placeholder: "搜索 key、命名空间或模式",
+                        value: "{search_pattern}",
+                        oninput: move |e| search_pattern.set(e.value()),
+                        onkeydown: move |e| {
+                            if e.data().key() == Key::Enter {
+                                refresh_trigger.set(refresh_trigger() + 1);
+                            }
+                        },
+                    }
                 }
-            }
-
-            div {
-                padding: "8px",
-                border_bottom: "1px solid {COLOR_BORDER}",
-                display: "flex",
-                gap: "8px",
-                align_items: "center",
-                flex_wrap: "wrap",
 
                 button {
-                    padding: "6px 12px",
+                    padding: "9px 14px",
                     background: COLOR_PRIMARY,
                     color: COLOR_TEXT_CONTRAST,
                     border: "none",
-                    border_radius: "4px",
+                    border_radius: "8px",
                     cursor: "pointer",
-                    font_size: "12px",
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
                     onclick: move |_| show_add_key_dialog.set(true),
 
-                    "➕ 新增"
+                    IconPlus { size: Some(14) }
+                    "新增"
                 }
 
                 if scan_progress.read().is_scanning {
                     button {
-                        flex: "1",
-                        padding: "6px",
+                        padding: "9px 14px",
                         background: "#c53030",
                         color: COLOR_TEXT_CONTRAST,
                         border: "none",
-                        border_radius: "4px",
+                        border_radius: "8px",
                         cursor: "pointer",
-                        font_size: "12px",
-                        onclick: {
-                            let cancel_scan = cancel_scan.clone();
-                            move |_| {
-                                cancel_scan.read().store(true, Ordering::Relaxed);
-                            }
-                        },
-
-                        div {
                         display: "flex",
                         align_items: "center",
-                        gap: "4px",
-                        
-                        IconX { size: Some(12) }
-                        " 取消扫描"
-                    }
+                        gap: "8px",
+                        onclick: {
+                            let cancel_scan = cancel_scan.clone();
+                            move |_| cancel_scan.read().store(true, Ordering::Relaxed)
+                        },
+
+                        IconX { size: Some(14) }
+                        "取消扫描"
                     }
                 } else {
                     button {
-                        flex: "1",
-                        padding: "6px",
-                        background: COLOR_BG_TERTIARY,
+                        padding: "9px 14px",
+                        background: COLOR_SURFACE_HIGHEST,
                         color: COLOR_TEXT,
-                        border: "none",
-                        border_radius: "4px",
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "8px",
                         cursor: "pointer",
-                        font_size: "12px",
-                        onclick: move |_| {
-                            refresh_trigger.set(refresh_trigger() + 1);
-                        },
-
-                        div {
                         display: "flex",
                         align_items: "center",
-                        gap: "4px",
-                        
-                        IconRefresh { size: Some(12) }
-                        " Refresh"
-                    }
-                    }
-                }
+                        gap: "8px",
+                        onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
 
-                if keys_count() > 0 {
-                    span {
-                        color: COLOR_TEXT_SECONDARY,
-                        font_size: "11px",
-
-                        "{keys_count} keys"
-                    }
-                }
-            }
-
-            if scan_progress.read().is_scanning {
-                div {
-                    padding: "8px",
-                    border_bottom: "1px solid {COLOR_BORDER}",
-                    background: COLOR_BG_TERTIARY,
-
-                    div {
-                        display: "flex",
-                        justify_content: "space_between",
-                        align_items: "center",
-                        margin_bottom: "4px",
-
-                        span {
-                            color: COLOR_TEXT_SECONDARY,
-                            font_size: "11px",
-
-                            "正在扫描..."
-                        }
-
-                        span {
-                            color: COLOR_ACCENT,
-                            font_size: "11px",
-
-                            "已找到 {scan_progress.read().scanned} 个 key"
-                        }
-                    }
-
-                    div {
-                        width: "100%",
-                        height: "4px",
-                        background: COLOR_BORDER,
-                        border_radius: "2px",
-                        overflow: "hidden",
-
-                        div {
-                            width: "100%",
-                            height: "100%",
-                            background: "linear-gradient(90deg, {COLOR_ACCENT}, {COLOR_PRIMARY})",
-                            animation: "pulse 1.5s ease-in-out infinite",
-                        }
-                    }
-                }
-
-                style { {r#"
-                    @keyframes pulse {
-                        0%, 100% { opacity: 0.4; transform: scaleX(0.3); }
-                        50% { opacity: 1; transform: scaleX(1); }
-                    }
-                "#} }
-            }
-
-            if selection_mode {
-                div {
-                    padding: "8px",
-                    border_bottom: "1px solid {COLOR_BORDER}",
-                    background: "rgba(48, 209, 88, 0.15)",
-                    display: "flex",
-                    gap: "8px",
-                    align_items: "center",
-                    flex_wrap: "wrap",
-
-                    span {
-                        color: COLOR_ACCENT,
-                        font_size: "12px",
-
-                        "已选 {selected_keys_count} 项"
-                    }
-
-                    button {
-                        padding: "4px 8px",
-                        background: "#38a169",
-                        color: COLOR_TEXT_CONTRAST,
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "11px",
-                        onclick: move |_| {
-                            let all_keys = collect_all_keys(&tree_nodes());
-                            tree_state.write().selected_keys = all_keys.into_iter().collect();
-                        },
-
-                        "全选"
-                    }
-
-                    button {
-                        padding: "4px 8px",
-                        background: COLOR_BG_TERTIARY,
-                        color: COLOR_TEXT,
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "11px",
-                        onclick: move |_| {
-                            tree_state.write().selected_keys.clear();
-                        },
-
-                        "清空"
-                    }
-
-                    button {
-                        padding: "4px 8px",
-                        background: "#c53030",
-                        color: COLOR_TEXT_CONTRAST,
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "11px",
-                        disabled: selected_keys_count == 0,
-                        onclick: {
-                            let selected_keys = selected_keys.clone();
-                            move |_| {
-                                let targets: Vec<DeleteTarget> = selected_keys.iter()
-                                    .map(|k| DeleteTarget { key: k.clone(), is_folder: false })
-                                    .collect();
-                                show_delete_dialog.set(Some(targets));
-                            }
-                        },
-
-                        div {
-                            display: "flex",
-                            align_items: "center",
-                            gap: "4px",
-                            
-                            IconTrash { size: Some(12) }
-                            " 删除"
-                        }
-                    }
-
-                    button {
-                        padding: "4px 8px",
-                        background: COLOR_PRIMARY,
-                        color: COLOR_TEXT_CONTRAST,
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "11px",
-                        disabled: selected_keys_count == 0,
-                        onclick: {
-                            let selected_keys = selected_keys.clone();
-                            move |_| {
-                                show_batch_ttl_dialog.set(Some(selected_keys.clone()));
-                            }
-                        },
-
-                        div {
-                            display: "flex",
-                            align_items: "center",
-                            gap: "4px",
-                            
-                            IconRefresh { size: Some(12) }
-                            " TTL"
-                        }
-                    }
-
-                    button {
-                        padding: "4px 8px",
-                        background: COLOR_BG_TERTIARY,
-                        color: COLOR_TEXT,
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "11px",
-                        onclick: move |_| {
-                            tree_state.write().selection_mode = false;
-                            tree_state.write().selected_keys.clear();
-                        },
-
-                        div {
-                            display: "flex",
-                            align_items: "center",
-                            gap: "4px",
-                            
-                            IconX { size: Some(12) }
-                            " 关闭"
-                        }
+                        IconRefresh { size: Some(14) }
+                        "运行扫描"
                     }
                 }
             }
 
             div {
-                padding: "4px 8px",
+                padding: "0 20px 14px",
+                background: COLOR_BG_SECONDARY,
                 border_bottom: "1px solid {COLOR_BORDER}",
-                display: "flex",
-                justify_content: "flex_end",
 
-                label {
+                div {
+                    padding: "12px 14px",
+                    background: COLOR_BG_LOWEST,
+                    border: "1px solid {COLOR_BORDER}",
+                    border_radius: "8px",
                     display: "flex",
                     align_items: "center",
-                    gap: "6px",
-                    color: COLOR_TEXT_SECONDARY,
-                    font_size: "11px",
-                    cursor: "pointer",
+                    justify_content: "space_between",
+                    gap: "16px",
 
-                    input {
-                        r#type: "checkbox",
-                        checked: selection_mode,
-                        onchange: move |e| {
-                            tree_state.write().selection_mode = e.checked();
-                            if !e.checked() {
-                                tree_state.write().selected_keys.clear();
-                            }
-                        },
+                    div {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "10px",
+
+                        IconTerminal { size: Some(14) }
+
+                        span {
+                            color: COLOR_ACCENT,
+                            font_size: "13px",
+                            font_family: "Consolas, 'Courier New', monospace",
+
+                            "SCAN 0 MATCH {active_match_pattern} COUNT {SCAN_BATCH_SIZE}"
+                        }
                     }
 
-                    "多选模式"
+                    if scan_progress.read().is_scanning {
+                        span {
+                            color: COLOR_TEXT_SECONDARY,
+                            font_size: "12px",
+
+                            "已扫描 {scan_progress.read().scanned} 个 key，当前批次 {scan_progress.read().current_batch}"
+                        }
+                    }
+                }
+
+                if !pattern_nodes.is_empty() {
+                    div {
+                        margin_top: "12px",
+                        display: "flex",
+                        align_items: "center",
+                        gap: "8px",
+                        flex_wrap: "wrap",
+
+                        span {
+                            color: COLOR_TEXT_SUBTLE,
+                            font_size: "11px",
+                            text_transform: "uppercase",
+                            letter_spacing: "0.12em",
+
+                            "Key 模式"
+                        }
+
+                        for node in pattern_nodes.iter().take(6) {
+                            {
+                                let label = pattern_label(node);
+                                let count = node.total_keys.max(1);
+                                let query_value = if node.is_leaf {
+                                    node.path.clone()
+                                } else {
+                                    node.path.clone()
+                                };
+                                rsx! {
+                                    button {
+                                        padding: "6px 10px",
+                                        background: COLOR_SURFACE_HIGH,
+                                        color: COLOR_TEXT_SECONDARY,
+                                        border: "1px solid {COLOR_BORDER}",
+                                        border_radius: "999px",
+                                        cursor: "pointer",
+                                        font_size: "12px",
+                                        display: "flex",
+                                        align_items: "center",
+                                        gap: "8px",
+                                        onclick: move |_| {
+                                            search_pattern.set(query_value.clone());
+                                            refresh_trigger.set(refresh_trigger() + 1);
+                                        },
+
+                                        span {
+                                            font_family: "Consolas, 'Courier New', monospace",
+
+                                            "{label}"
+                                        }
+
+                                        span {
+                                            color: COLOR_TEXT_SUBTLE,
+
+                                            "{count}"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                div {
+                    margin_top: "12px",
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
+                    flex_wrap: "wrap",
+
+                    span {
+                        color: COLOR_TEXT_SUBTLE,
+                        font_size: "11px",
+                        text_transform: "uppercase",
+                        letter_spacing: "0.12em",
+
+                        "类型筛选"
+                    }
+
+                    for (filter_key, label) in TYPE_FILTER_OPTIONS {
+                        button {
+                            key: "{filter_key}",
+                            padding: "6px 10px",
+                            background: if current_filter == filter_key {
+                                "rgba(0, 218, 243, 0.12)"
+                            } else {
+                                COLOR_SURFACE_HIGH
+                            },
+                            color: if current_filter == filter_key {
+                                COLOR_ACCENT
+                            } else {
+                                COLOR_TEXT_SECONDARY
+                            },
+                            border: if current_filter == filter_key {
+                                "1px solid rgba(0, 218, 243, 0.28)".to_string()
+                            } else {
+                                format!("1px solid {}", COLOR_BORDER)
+                            },
+                            border_radius: "999px",
+                            cursor: "pointer",
+                            font_size: "12px",
+                            onclick: move |_| {
+                                type_filter.set(filter_key.to_string());
+                                current_page.set(0);
+                            },
+
+                            "{label}"
+                        }
+                    }
+                }
+            }
+
+            if selection_mode() {
+                div {
+                    padding: "10px 20px",
+                    background: "rgba(48, 209, 88, 0.10)",
+                    border_bottom: "1px solid {COLOR_BORDER}",
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "space_between",
+                    gap: "12px",
+                    flex_wrap: "wrap",
+
+                    div {
+                        color: COLOR_ACCENT,
+                        font_size: "12px",
+
+                        "已选 {selected_count} 项"
+                    }
+
+                    div {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "8px",
+                        flex_wrap: "wrap",
+
+                        button {
+                            padding: "6px 10px",
+                            background: "#38a169",
+                            color: COLOR_TEXT_CONTRAST,
+                            border: "none",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            font_size: "12px",
+                            onclick: move |_| {
+                                let all_keys = collect_all_keys(&tree_nodes());
+                                selected_keys.write().extend(all_keys);
+                            },
+
+                            "全选"
+                        }
+
+                        button {
+                            padding: "6px 10px",
+                            background: COLOR_SURFACE_HIGHEST,
+                            color: COLOR_TEXT,
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            font_size: "12px",
+                            onclick: move |_| selected_keys.write().clear(),
+
+                            "清空"
+                        }
+
+                        button {
+                            padding: "6px 10px",
+                            background: COLOR_PRIMARY,
+                            color: COLOR_TEXT_CONTRAST,
+                            border: "none",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            font_size: "12px",
+                            disabled: selected_count == 0,
+                            onclick: {
+                                let keys: Vec<String> = selected_keys.read().iter().cloned().collect();
+                                move |_| show_batch_ttl_dialog.set(Some(keys.clone()))
+                            },
+
+                            "批量 TTL"
+                        }
+
+                        button {
+                            padding: "6px 10px",
+                            background: "rgba(255, 180, 171, 0.10)",
+                            color: "#ffb4ab",
+                            border: "1px solid rgba(255, 180, 171, 0.24)",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            font_size: "12px",
+                            disabled: selected_count == 0,
+                            onclick: {
+                                let keys: Vec<String> = selected_keys.read().iter().cloned().collect();
+                                move |_| {
+                                    let targets = keys
+                                        .iter()
+                                        .map(|key| DeleteTarget {
+                                            key: key.clone(),
+                                            is_folder: false,
+                                        })
+                                        .collect();
+                                    show_delete_dialog.set(Some(targets));
+                                }
+                            },
+
+                            "批量删除"
+                        }
+
+                        button {
+                            padding: "6px 10px",
+                            background: "transparent",
+                            color: COLOR_TEXT_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            font_size: "12px",
+                            onclick: move |_| {
+                                selection_mode.set(false);
+                                selected_keys.write().clear();
+                            },
+
+                            "关闭多选"
+                        }
+                    }
                 }
             }
 
             div {
                 flex: "1",
-                overflow_y: "auto",
-                padding: "4px 0",
+                min_height: "0",
+                padding: "14px 20px 12px",
+                background: COLOR_BG,
+                overflow: "hidden",
+                display: "flex",
+                flex_direction: "column",
+                gap: "12px",
 
-                if tree_nodes.read().is_empty() {
-                    if loading() {
-                        div {
-                            padding: "20px",
-                            text_align: "center",
-                            color: COLOR_TEXT_SECONDARY,
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "space_between",
+                    gap: "12px",
+                    flex_wrap: "wrap",
 
-                            "Loading keys..."
+                    label {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "8px",
+                        color: COLOR_TEXT_SECONDARY,
+                        font_size: "12px",
+                        cursor: "pointer",
+
+                        input {
+                            r#type: "checkbox",
+                            checked: selection_mode(),
+                            onchange: move |e| {
+                                selection_mode.set(e.checked());
+                                if !e.checked() {
+                                    selected_keys.write().clear();
+                                }
+                            },
                         }
-                    } else {
-                        div {
-                            padding: "20px",
-                            text_align: "center",
-                            color: COLOR_TEXT_SECONDARY,
 
-                            "No keys found"
+                        "多选模式"
+                    }
+
+                    if type_filter() != "all" {
+                        span {
+                            padding: "4px 8px",
+                            background: COLOR_SURFACE_HIGH,
+                            color: COLOR_TEXT_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "999px",
+                            font_size: "11px",
+
+                            "类型筛选：{type_filter_display(&type_filter())}"
+                        }
+                    }
+                }
+
+                if rows.is_empty() {
+                    div {
+                        flex: "1",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        flex_direction: "column",
+                        gap: "10px",
+                        background: COLOR_BG_SECONDARY,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "10px",
+                        color: COLOR_TEXT_SECONDARY,
+                        font_size: "13px",
+
+                        if loading() {
+                            "正在加载 key..."
+                        } else {
+                            div {
+                                display: "flex",
+                                flex_direction: "column",
+                                align_items: "center",
+                                gap: "10px",
+
+                                span { "没有找到匹配的 key" }
+
+                                if !search_pattern().trim().is_empty() || type_filter() != "all" {
+                                    button {
+                                        padding: "8px 12px",
+                                        background: COLOR_SURFACE_HIGHEST,
+                                        color: COLOR_TEXT,
+                                        border: "1px solid {COLOR_BORDER}",
+                                        border_radius: "8px",
+                                        cursor: "pointer",
+                                        onclick: move |_| {
+                                            search_pattern.set(String::new());
+                                            type_filter.set("all".to_string());
+                                            current_page.set(0);
+                                            refresh_trigger.set(refresh_trigger() + 1);
+                                        },
+
+                                        "清空搜索与筛选"
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
-                    for node in tree_nodes.read().iter() {
-                        LazyTreeNode {
-                            key: "{node.node_id}",
-                            node: node.clone(),
-                            depth: 0,
-                            selected_key: selected_key(),
-                            tree_state: tree_state,
-                            on_select: {
-                                let pool = connection_pool.clone();
-                                let key_type_cache = key_type_cache.clone();
-                                let tree_nodes = tree_nodes.clone();
-                                let on_key_select = on_key_select.clone();
-                                move |key: String| {
-                                    let key_clone = key.clone();
-                                    let needs_fetch = {
-                                        let cache = key_type_cache.read();
-                                        !cache.contains_key(&key_clone)
-                                    };
-
-                                    if needs_fetch {
-                                        let pool = pool.clone();
-                                        let mut key_type_cache = key_type_cache.clone();
-                                        let mut tree_nodes = tree_nodes.clone();
-                                        let key = key.clone();
-                                        spawn(async move {
-                                            match pool.get_key_info(&key).await {
-                                                Ok(info) => {
-                                                    key_type_cache.write().insert(key.clone(), info.key_type.clone());
-                                                    let updated = {
-                                                        let mut nodes = tree_nodes.write();
-                                                        update_node_key_info(&mut nodes, &key, info)
-                                                    };
-                                                    if updated {
-                                                        let nodes_clone = tree_nodes.read().clone();
-                                                        tree_nodes.set(nodes_clone);
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    tracing::error!("Failed to get key type: {}", e);
+                    KeyTable {
+                        rows: rows,
+                        selected_key: selected_key(),
+                        selection_mode: selection_mode(),
+                        on_select: {
+                    let pool = connection_pool.clone();
+                    let key_type_cache = key_type_cache.clone();
+                    let tree_nodes = tree_nodes.clone();
+                            let on_key_select = on_key_select.clone();
+                            move |key: String| {
+                                if !key_type_cache.read().contains_key(&key) {
+                                    let pool = pool.clone();
+                                    let mut key_type_cache = key_type_cache.clone();
+                                    let mut tree_nodes = tree_nodes.clone();
+                                    let fetch_key = key.clone();
+                                    spawn(async move {
+                                        match pool.get_key_info(&fetch_key).await {
+                                            Ok(info) => {
+                                                key_type_cache
+                                                    .write()
+                                                    .insert(fetch_key.clone(), info.key_type.clone());
+                                                let updated = {
+                                                    let mut nodes = tree_nodes.write();
+                                                    update_node_key_info(&mut nodes, &fetch_key, info)
+                                                };
+                                                if updated {
+                                                    let snapshot = tree_nodes.read().clone();
+                                                    tree_nodes.set(snapshot);
                                                 }
                                             }
-                                        });
-                                    }
-
-                                    on_key_select.call(key_clone);
-                                }
-                            },
-                            on_expand: {
-                                let pool = connection_pool.clone();
-                                let key_type_cache = key_type_cache.clone();
-                                let tree_nodes = tree_nodes.clone();
-                                move |node_id: String| {
-                                    let is_expanding = {
-                                        let state = tree_state.read();
-                                        !state.expanded_nodes.contains(&node_id)
-                                    };
-
-                                    {
-                                        let mut state = tree_state.write();
-                                        if state.expanded_nodes.contains(&node_id) {
-                                            state.expanded_nodes.remove(&node_id);
-                                        } else {
-                                            state.expanded_nodes.insert(node_id.clone());
+                                            Err(e) => tracing::error!("Failed to get key info: {}", e),
                                         }
-                                    }
-
-                                    if is_expanding {
-                                        let leaf_keys = {
-                                            let nodes = tree_nodes.read();
-                                            collect_leaf_keys_in_node(&nodes, &node_id)
-                                        };
-
-                                        let keys_to_fetch: Vec<String> = leaf_keys
-                                            .into_iter()
-                                            .filter(|k| !key_type_cache.read().contains_key(k))
-                                            .collect();
-
-                                        if !keys_to_fetch.is_empty() {
-                                            let pool = pool.clone();
-                                            let mut key_type_cache = key_type_cache.clone();
-                                            let mut tree_nodes = tree_nodes.clone();
-                                            spawn(async move {
-                                                let mut updates = Vec::new();
-                                                for key in keys_to_fetch {
-                                                    match pool.get_key_info(&key).await {
-                                                        Ok(info) => {
-                                                            key_type_cache.write().insert(key.clone(), info.key_type.clone());
-                                                            updates.push((key, info));
-                                                        }
-                                                        Err(e) => {
-                                                            tracing::error!("Failed to get key type: {}", e);
-                                                        }
-                                                    }
-                                                }
-
-                                                if !updates.is_empty() {
-                                                    let mut nodes = tree_nodes.write();
-                                                    update_multiple_key_info(&mut nodes, &updates);
-                                                    drop(nodes);
-                                                    let nodes_clone = tree_nodes.read().clone();
-                                                    tree_nodes.set(nodes_clone);
-                                                }
-                                            });
-                                        }
-                                    }
+                                    });
                                 }
-                            },
-                            context_menu: context_menu,
-                        }
+
+                                on_key_select.call(key);
+                            }
+                        },
+                        on_toggle_select: move |key: String| {
+                            let mut keys = selected_keys.write();
+                            if keys.contains(&key) {
+                                keys.remove(&key);
+                            } else {
+                                keys.insert(key);
+                            }
+                        },
+                        on_copy_key: move |key: String| {
+                            if let Ok(mut clipboard) = Clipboard::new() {
+                                let _ = clipboard.set_text(key);
+                            }
+                        },
+                        on_request_delete: move |key: String| {
+                            show_delete_dialog.set(Some(vec![DeleteTarget {
+                                key,
+                                is_folder: false,
+                            }]));
+                        },
                     }
                 }
             }
-        }
 
-        if let Some(menu_state) = context_menu() {
-            ContextMenu {
-                x: menu_state.x,
-                y: menu_state.y,
-                on_close: move |_| context_menu.set(None),
+            div {
+                padding: "0 20px 16px",
+                background: COLOR_BG,
+                display: "flex",
+                align_items: "center",
+                justify_content: "space_between",
+                gap: "12px",
+                flex_wrap: "wrap",
 
-                ContextMenuItem {
-                    icon: Some(rsx! { IconCopy { size: Some(14) } }),
-                    label: "复制Key".to_string(),
-                    danger: false,
-                    onclick: {
-                        let menu_state = menu_state.clone();
-                        move |_| {
-                            if let Ok(mut clipboard) = Clipboard::new() {
-                                let _ = clipboard.set_text(menu_state.node_path.clone());
+                div {
+                    color: COLOR_TEXT_SECONDARY,
+                    font_size: "12px",
+
+                    if total_filtered == 0 {
+                        "显示 0 / 0 个 Key"
+                    } else {
+                        "显示 {start_index + 1}-{end_index} / {total_filtered} 个 Key"
+                    }
+                }
+
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
+
+                    button {
+                        padding: "6px 10px",
+                        background: COLOR_SURFACE_HIGHEST,
+                        color: COLOR_TEXT_SECONDARY,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "6px",
+                        cursor: "pointer",
+                        disabled: page == 0,
+                        onclick: move |_| {
+                            if page > 0 {
+                                current_page.set(page - 1);
                             }
-                            context_menu.set(None);
-                        }
-                    },
-                }
+                        },
 
-                ContextMenuItem {
-                    icon: Some(rsx! { IconCheck { size: Some(14) } }),
-                    label: "多选模式".to_string(),
-                    danger: false,
-                    onclick: move |_| {
-                        tree_state.write().selection_mode = true;
-                        context_menu.set(None);
-                    },
-                }
+                        "上一页"
+                    }
 
-                ContextMenuItem {
-                    icon: Some(rsx! { IconTrash { size: Some(14) } }),
-                    label: "删除".to_string(),
-                    danger: true,
-                    onclick: {
-                        let menu_state = menu_state.clone();
-                        move |_| {
-                            context_menu.set(None);
-                            show_delete_dialog.set(Some(vec![DeleteTarget {
-                                key: menu_state.node_path.clone(),
-                                is_folder: !menu_state.is_leaf,
-                            }]));
-                        }
-                    },
+                    span {
+                        color: COLOR_ACCENT,
+                        font_size: "12px",
+                        font_family: "Consolas, 'Courier New', monospace",
+
+                        "第 {page + 1} / {total_pages} 页"
+                    }
+
+                    button {
+                        padding: "6px 10px",
+                        background: COLOR_SURFACE_HIGHEST,
+                        color: COLOR_TEXT_SECONDARY,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "6px",
+                        cursor: "pointer",
+                        disabled: page + 1 >= total_pages,
+                        onclick: move |_| {
+                            if page + 1 < total_pages {
+                                current_page.set(page + 1);
+                            }
+                        },
+
+                        "下一页"
+                    }
                 }
             }
         }
@@ -815,7 +1104,7 @@ pub fn KeyBrowser(
                 targets: targets.clone(),
                 on_confirm: move |_| {
                     show_delete_dialog.set(None);
-                    tree_state.write().selected_keys.clear();
+                    selected_keys.write().clear();
                     selected_key.set(String::new());
                     refresh_trigger.set(refresh_trigger() + 1);
                 },
@@ -845,7 +1134,7 @@ pub fn KeyBrowser(
                 keys: keys.clone(),
                 on_confirm: move |_| {
                     show_batch_ttl_dialog.set(None);
-                    tree_state.write().selected_keys.clear();
+                    selected_keys.write().clear();
                     refresh_trigger.set(refresh_trigger() + 1);
                 },
                 on_cancel: move |_| show_batch_ttl_dialog.set(None),
