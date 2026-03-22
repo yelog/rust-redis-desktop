@@ -1,4 +1,8 @@
 use crate::redis::TreeNode;
+use crate::theme::{
+    COLOR_ACCENT, COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_SUCCESS, COLOR_TEXT,
+    COLOR_TEXT_SECONDARY, COLOR_WARNING,
+};
 use crate::ui::icons::*;
 use dioxus::prelude::*;
 use std::collections::HashSet;
@@ -90,8 +94,10 @@ pub fn LazyTreeNode(
                 display: "flex",
                 align_items: "center",
                 gap: "6px",
-                background: if is_selected { "#094771" } else if is_checked || is_partial { "#1a4a1a" } else { "transparent" },
+                background: if is_selected { COLOR_BG_TERTIARY } else if is_checked || is_partial { "rgba(48, 209, 88, 0.08)" } else { "transparent" },
                 cursor: "pointer",
+                border_left: if is_selected { "2px solid {COLOR_ACCENT}" } else { "2px solid transparent" },
+                margin_left: if is_selected { "-2px" } else { "0" },
 
                 onclick: {
                     let node_id = node.node_id.clone();
@@ -141,9 +147,9 @@ pub fn LazyTreeNode(
                         width: "14px",
                         height: "14px",
                         border: "1px solid",
-                        border_color: if is_partial { "#f59e0b" } else if is_checked { "#68d391" } else { "#666" },
+                        border_color: if is_partial { COLOR_WARNING } else if is_checked { COLOR_SUCCESS } else { COLOR_OUTLINE },
                         border_radius: "3px",
-                        background: if is_partial { "rgba(245, 158, 11, 0.2)" } else if is_checked { "rgba(104, 211, 145, 0.2)" } else { "transparent" },
+                        background: if is_partial { "rgba(255, 159, 10, 0.15)" } else if is_checked { "rgba(48, 209, 88, 0.15)" } else { "transparent" },
                         display: "flex",
                         align_items: "center",
                         justify_content: "center",
@@ -169,7 +175,7 @@ pub fn LazyTreeNode(
 
                         if is_checked {
                             span {
-                                color: "#68d391",
+                                color: COLOR_SUCCESS,
                                 font_size: "11px",
                                 font_weight: "bold",
                                 line_height: "1",
@@ -178,7 +184,7 @@ pub fn LazyTreeNode(
                             }
                         } else if is_partial {
                             span {
-                                color: "#f59e0b",
+                                color: COLOR_WARNING,
                                 font_size: "10px",
                                 line_height: "1",
 
@@ -190,7 +196,7 @@ pub fn LazyTreeNode(
 
                 if !node.is_leaf && has_children {
                     span {
-                        color: "#888",
+                        color: COLOR_TEXT_SECONDARY,
                         font_size: "12px",
                         cursor: "pointer",
                         onclick: {
@@ -208,7 +214,7 @@ pub fn LazyTreeNode(
                 }
 
                 span {
-                    color: "#888",
+                    color: COLOR_TEXT_SECONDARY,
                     display: "flex",
                     align_items: "center",
 
@@ -228,7 +234,7 @@ pub fn LazyTreeNode(
                 }
 
                 span {
-                    color: if is_selected { "white" } else if is_checked || is_partial { "#68d391" } else if node.name.is_empty() { "#f59e0b" } else { "#cccccc" },
+                    color: if is_selected { COLOR_ACCENT } else if is_checked || is_partial { COLOR_SUCCESS } else if node.name.is_empty() { COLOR_WARNING } else { COLOR_TEXT },
                     font_size: "13px",
                     overflow: "hidden",
                     text_overflow: "ellipsis",
@@ -239,7 +245,7 @@ pub fn LazyTreeNode(
 
                 if !node.is_leaf && node.total_keys > 0 {
                     span {
-                        color: "#666",
+                        color: COLOR_OUTLINE,
                         font_size: "11px",
 
                         "({node.total_keys})"

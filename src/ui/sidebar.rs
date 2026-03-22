@@ -94,8 +94,9 @@ pub fn Sidebar(
                         rsx! {
                             div {
                                 key: "{id}",
-                                padding: "10px 12px",
-                                margin_bottom: "4px",
+                                padding: "10px 14px",
+                                margin_bottom: "2px",
+                                margin_left: if selected_connection == Some(id) { "4px" } else { "8px" },
                                 background: if selected_connection == Some(id) {
                                     colors.background_tertiary
                                 } else if hover_connection() == Some(id) {
@@ -103,15 +104,15 @@ pub fn Sidebar(
                                 } else {
                                     colors.background_secondary
                                 },
-                                border_radius: "6px",
+                                border_radius: "4px",
                                 color: "{colors.text}",
                                 position: "relative",
-                                border: if selected_connection == Some(id) {
-                                    "1px solid {colors.primary}"
+                                border_left: if selected_connection == Some(id) {
+                                    "2px solid {colors.accent}"
                                 } else {
-                                    "1px solid {colors.border}"
+                                    "2px solid transparent"
                                 },
-                                transition: "background 0.15s, border-color 0.15s",
+                                transition: "all 0.15s ease",
 
                                 onmouseenter: {
                                     let id = id;
@@ -145,15 +146,28 @@ pub fn Sidebar(
                                         width: "8px",
                                         height: "8px",
                                         border_radius: "50%",
-                                        background: "{dot_color}",
+                                        background: if state == ConnectionState::Connected {
+                                            colors.accent
+                                        } else {
+                                            dot_color
+                                        },
                                         flex_shrink: "0",
-                                        box_shadow: "0 0 4px {dot_color}",
+                                        box_shadow: if state == ConnectionState::Connected {
+                                            "0 0 8px rgba(0, 218, 243, 0.4)"
+                                        } else {
+                                            "0 0 4px {dot_color}"
+                                        },
                                         animation: if is_pulsing { "pulse 1.2s ease-in-out infinite" } else { "none" },
                                     }
 
                                     span {
                                         font_size: "13px",
                                         font_weight: if selected_connection == Some(id) { "500" } else { "400" },
+                                        color: if selected_connection == Some(id) {
+                                            colors.accent
+                                        } else {
+                                            colors.text
+                                        },
 
                                         "{name}"
                                     }

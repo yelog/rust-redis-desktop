@@ -2,7 +2,7 @@ use crate::connection::ConnectionPool;
 use crate::redis::ServerInfo;
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_INFO,
-    COLOR_PURPLE, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
     COLOR_WARNING,
 };
 use dioxus::prelude::*;
@@ -398,7 +398,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                             }
 
                             div {
-                                color: COLOR_PURPLE,
+                                color: COLOR_ACCENT,
                                 font_size: "24px",
                                 font_weight: "bold",
 

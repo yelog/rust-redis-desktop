@@ -1,6 +1,6 @@
 use crate::connection::ConnectionPool;
 use crate::theme::{
-    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PURPLE,
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
     COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SOFT, COLOR_TEXT_SUBTLE,
     COLOR_WARNING,
 };
@@ -376,7 +376,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
 
                                         td {
                                             padding: "8px",
-                                            color: COLOR_PURPLE,
+                                            color: COLOR_ACCENT,
                                             font_size: "11px",
                                             font_family: "Consolas, monospace",
 

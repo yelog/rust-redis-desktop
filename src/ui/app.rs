@@ -60,36 +60,38 @@ fn build_theme_palette(colors: &ThemeColors, is_dark: bool) -> serde_json::Value
         "surfaceBase": colors.background,
         "surfaceSecondary": colors.background_secondary,
         "surfaceTertiary": colors.background_tertiary,
+        "surfaceLowest": if is_dark { "#0e0e0e" } else { "#f0f0f0" },
         "border": colors.border,
-        "controlBg": if is_dark { "#3c3c3c" } else { "#ffffff" },
-        "controlBorder": if is_dark { "#555555" } else { "#c7c7c7" },
-        "buttonSecondary": if is_dark { "#5a5a5a" } else { "#d9d9d9" },
-        "buttonSecondaryBorder": if is_dark { "#444444" } else { "#c7c7c7" },
+        "controlBg": if is_dark { "#353535" } else { "#ffffff" },
+        "controlBorder": if is_dark { "#5a413c" } else { "#c7c7c7" },
+        "buttonSecondary": if is_dark { "#353535" } else { "#d9d9d9" },
+        "buttonSecondaryBorder": if is_dark { "#5a413c" } else { "#c7c7c7" },
         "textPrimary": colors.text,
         "textSecondary": colors.text_secondary,
-        "textSubtle": if is_dark { "#666666" } else { "#808080" },
-        "textSoft": if is_dark { "#d4d4d4" } else { "#444444" },
+        "textSubtle": if is_dark { "#a98a84" } else { "#808080" },
+        "textSoft": if is_dark { "#e5e2e1" } else { "#444444" },
         "textContrast": "#ffffff",
         "primary": colors.primary,
         "accent": colors.accent,
         "success": colors.success,
         "warning": colors.warning,
         "error": colors.error,
-        "info": if is_dark { "#64b5f6" } else { "#007aff" },
-        "purple": if is_dark { "#bb86fc" } else { "#8b2fc9" },
-        "infoBg": if is_dark { "#1a1a2e" } else { "#eef4ff" },
-        "infoBgAlt": if is_dark { "#1f2937" } else { "#edf7ff" },
+        "info": if is_dark { "#00daf3" } else { "#007aff" },
+        "outline": if is_dark { "#a98a84" } else { "#888888" },
+        "outlineVariant": if is_dark { "#5a413c" } else { "#d0d0d0" },
+        "infoBg": if is_dark { "#1c1b1b" } else { "#eef4ff" },
+        "infoBgAlt": if is_dark { "#2a2a2a" } else { "#edf7ff" },
         "successBg": if is_dark { "#1a3a1a" } else { "#edf9f0" },
         "successBgAlt": if is_dark { "#1e4620" } else { "#e3f5e6" },
         "errorBg": if is_dark { "#2d1f1f" } else { "#fff1f1" },
-        "selectionBg": if is_dark { "rgba(10, 132, 255, 0.25)" } else { "rgba(0, 122, 255, 0.12)" },
+        "selectionBg": if is_dark { "#2a2a2a" } else { "rgba(0, 122, 255, 0.12)" },
         "selectionBgAlt": if is_dark { "#1a4a1a" } else { "#e7f6ea" },
-        "syntaxKey": if is_dark { "#9cdcfe" } else { "#8b2fc9" },
-        "syntaxString": if is_dark { "#6a9955" } else { "#0a8f3c" },
-        "syntaxNumber": if is_dark { "#b5cea8" } else { "#0969da" },
-        "syntaxBoolean": if is_dark { "#569cd6" } else { "#cf222e" },
-        "syntaxNull": if is_dark { "#808080" } else { "#6e7781" },
-        "syntaxBracket": if is_dark { "#d4d4d4" } else { "#1e1e1e" },
+        "syntaxKey": if is_dark { "#e2bfb8" } else { "#8b2fc9" },
+        "syntaxString": if is_dark { "#00daf3" } else { "#0a8f3c" },
+        "syntaxNumber": if is_dark { "#ffb4a6" } else { "#0969da" },
+        "syntaxBoolean": if is_dark { "#a98a84" } else { "#cf222e" },
+        "syntaxNull": if is_dark { "#5a413c" } else { "#6e7781" },
+        "syntaxBracket": if is_dark { "#e5e2e1" } else { "#1e1e1e" },
         "syntaxKeyword": if is_dark { "#569cd6" } else { "#0000ff" },
         "syntaxType": if is_dark { "#dcdcaa" } else { "#795e26" },
     })
@@ -367,6 +369,7 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
     root.style.setProperty("--theme-bg", theme.surfaceBase);
     root.style.setProperty("--theme-bg-secondary", theme.surfaceSecondary);
     root.style.setProperty("--theme-bg-tertiary", theme.surfaceTertiary);
+    root.style.setProperty("--theme-bg-lowest", theme.surfaceLowest);
     root.style.setProperty("--theme-border", theme.border);
     root.style.setProperty("--theme-text", theme.textPrimary);
     root.style.setProperty("--theme-text-secondary", theme.textSecondary);
@@ -378,7 +381,8 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
     root.style.setProperty("--theme-warning", theme.warning);
     root.style.setProperty("--theme-error", theme.error);
     root.style.setProperty("--theme-info", theme.info);
-    root.style.setProperty("--theme-purple", theme.purple);
+    root.style.setProperty("--theme-outline", theme.outline);
+    root.style.setProperty("--theme-outline-variant", theme.outlineVariant);
     root.style.setProperty("--theme-syntax-key", theme.syntaxKey);
     root.style.setProperty("--theme-syntax-string", theme.syntaxString);
     root.style.setProperty("--theme-syntax-number", theme.syntaxNumber);

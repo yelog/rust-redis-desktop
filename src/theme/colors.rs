@@ -26,23 +26,23 @@ pub struct ThemeColors {
 impl ThemeColors {
     pub fn dark() -> Self {
         Self {
-            background: "#1a1a1a",
-            background_secondary: "#2a2a2a",
-            background_tertiary: "#363636",
-            border: "#404040",
-            text: "white",
-            text_secondary: "#888888",
-            primary: "#0a84ff",
-            accent: "#0a84ff",
+            background: "#131313",
+            background_secondary: "#1c1b1b",
+            background_tertiary: "#2a2a2a",
+            border: "#353535",
+            text: "#e5e2e1",
+            text_secondary: "#e2bfb8",
+            primary: "#ffb4a6",
+            accent: "#00daf3",
             success: "#30d158",
             warning: "#ff9f0a",
-            error: "#ff453a",
+            error: "#ffb4ab",
         }
     }
 
     pub fn light() -> Self {
         Self {
-            background: "#f0f0f0",
+            background: "#f5f5f5",
             background_secondary: "#ffffff",
             background_tertiary: "#e8e8e8",
             border: "#d0d0d0",
