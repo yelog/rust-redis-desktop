@@ -764,7 +764,7 @@ await new Promise(() => {});
                                 button {
                                     padding: "10px 20px",
                                     background: "{colors.primary}",
-                                    color: "white",
+                                    color: "{colors.primary_text}",
                                     border: "none",
                                     border_radius: "6px",
                                     cursor: "pointer",

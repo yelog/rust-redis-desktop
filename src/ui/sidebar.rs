@@ -67,7 +67,7 @@ pub fn Sidebar(
             button {
                 onclick: move |_| on_add_connection.call(()),
                 background: "{colors.primary}",
-                color: "white",
+                color: "{colors.primary_text}",
                 border: "none",
                 padding: "10px",
                 border_radius: "4px",

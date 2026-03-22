@@ -210,7 +210,7 @@ pub fn LeftRail(
                     width: "100%",
                     padding: "10px 12px",
                     background: "{colors.primary}",
-                    color: "#3f0300",
+                    color: "{colors.primary_text}",
                     border: "none",
                     border_radius: "8px",
                     cursor: "pointer",

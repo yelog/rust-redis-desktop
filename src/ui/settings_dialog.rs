@@ -177,7 +177,7 @@ pub fn SettingsDialog(
                     button {
                         padding: "8px 16px",
                         background: "{colors.primary}",
-                        color: "white",
+                        color: "{colors.primary_text}",
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
