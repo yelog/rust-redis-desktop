@@ -269,7 +269,8 @@ jobs:
             pkg-config \
             file \
             desktop-file-utils \
-            libxdo-dev
+            libxdo-dev \
+            libfuse2
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
