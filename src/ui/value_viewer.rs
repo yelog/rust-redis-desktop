@@ -7,7 +7,7 @@ use crate::theme::{
     COLOR_TEXT_SOFT, COLOR_TEXT_SUBTLE, COLOR_WARNING,
 };
 use crate::ui::editable_field::EditableField;
-use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
+use crate::ui::icons::{IconCopy, IconDownload, IconEdit, IconTrash};
 use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
@@ -421,6 +421,7 @@ pub fn ValueViewer(
     let mut ttl_processing = use_signal(|| false);
     let mut delete_key_confirm = use_signal(|| false);
     let mut delete_key_processing = use_signal(|| false);
+    let mut show_ttl_editor = use_signal(|| false);
 
     let pool = connection_pool.clone();
     let pool_for_edit = connection_pool.clone();
@@ -485,6 +486,7 @@ pub fn ValueViewer(
         ttl_processing.set(false);
         delete_key_confirm.set(false);
         delete_key_processing.set(false);
+        show_ttl_editor.set(false);
 
         let pool = pool.clone();
 
@@ -688,11 +690,67 @@ pub fn ValueViewer(
                                     "{info.key_type}"
                                 }
 
-                                span {
+                                button {
+                                    padding: "3px 8px",
+                                    background: "transparent",
                                     color: COLOR_TEXT_SECONDARY,
-                                    font_size: "12px",
+                                    border: "1px solid {COLOR_BORDER}",
+                                    border_radius: "4px",
+                                    cursor: "pointer",
+                                    font_size: "11px",
+                                    onclick: move |_| {
+                                        shell_status_message.set("TTL 编辑功能开发中...".to_string());
+                                    },
 
                                     "TTL {format_ttl_label(info.ttl)}"
+                                }
+
+                                button {
+                                    width: "24px",
+                                    height: "24px",
+                                    background: "transparent",
+                                    border: "1px solid {COLOR_BORDER}",
+                                    border_radius: "4px",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    color: COLOR_TEXT_SECONDARY,
+                                    title: "复制路径",
+                                    onclick: {
+                                        let key = display_key.clone();
+                                        move |_| match copy_value_to_clipboard(&key) {
+                                            Ok(_) => {
+                                                shell_status_message.set("Key 路径已复制".to_string());
+                                                shell_status_error.set(false);
+                                            }
+                                            Err(error) => {
+                                                shell_status_message.set(format!("复制失败：{error}"));
+                                                shell_status_error.set(true);
+                                            }
+                                        }
+                                    },
+
+                                    IconCopy { size: Some(12) }
+                                }
+
+                                button {
+                                    width: "24px",
+                                    height: "24px",
+                                    background: "transparent",
+                                    border: "1px solid rgba(255, 180, 171, 0.30)",
+                                    border_radius: "4px",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    color: COLOR_ERROR,
+                                    title: "删除",
+                                    onclick: move |_| {
+                                        shell_status_message.set("删除功能开发中...".to_string());
+                                    },
+
+                                    IconTrash { size: Some(12) }
                                 }
                             }
                         } else {
