@@ -359,9 +359,12 @@ jobs:
           cp target/release/rust-redis-desktop debian/usr/bin/
           chmod 755 debian/usr/bin/rust-redis-desktop
 
-          cat > debian/DEBIAN/control << 'EOF'
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+
+          cat > debian/DEBIAN/control << EOF
           Package: rust-redis-desktop
-          Version: ${{ github.ref_name }}
+          Version: ${VERSION}
           Section: database
           Priority: optional
           Architecture: amd64
