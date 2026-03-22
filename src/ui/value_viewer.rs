@@ -691,23 +691,8 @@ pub fn ValueViewer(
                                 }
 
                                 button {
-                                    padding: "3px 8px",
-                                    background: "transparent",
-                                    color: COLOR_TEXT_SECONDARY,
-                                    border: "1px solid {COLOR_BORDER}",
-                                    border_radius: "4px",
-                                    cursor: "pointer",
-                                    font_size: "11px",
-                                    onclick: move |_| {
-                                        shell_status_message.set("TTL 编辑功能开发中...".to_string());
-                                    },
-
-                                    "TTL {format_ttl_label(info.ttl)}"
-                                }
-
-                                button {
-                                    width: "24px",
-                                    height: "24px",
+                                    width: "22px",
+                                    height: "22px",
                                     background: "transparent",
                                     border: "1px solid {COLOR_BORDER}",
                                     border_radius: "4px",
@@ -734,23 +719,321 @@ pub fn ValueViewer(
                                     IconCopy { size: Some(12) }
                                 }
 
-                                button {
-                                    width: "24px",
-                                    height: "24px",
-                                    background: "transparent",
-                                    border: "1px solid rgba(255, 180, 171, 0.30)",
-                                    border_radius: "4px",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    align_items: "center",
-                                    justify_content: "center",
-                                    color: COLOR_ERROR,
-                                    title: "删除",
-                                    onclick: move |_| {
-                                        shell_status_message.set("删除功能开发中...".to_string());
-                                    },
+                                if delete_key_confirm() {
+                                    div {
+                                        display: "flex",
+                                        align_items: "center",
+                                        gap: "4px",
 
-                                    IconTrash { size: Some(12) }
+                                        button {
+                                            padding: "3px 8px",
+                                            background: COLOR_ERROR,
+                                            color: COLOR_TEXT_CONTRAST,
+                                            border: "none",
+                                            border_radius: "4px",
+                                            cursor: "pointer",
+                                            font_size: "11px",
+                                            disabled: delete_key_processing(),
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    spawn(async move {
+                                                        delete_key_processing.set(true);
+                                                        shell_status_message.set(String::new());
+                                                        shell_status_error.set(false);
+
+                                                        match pool.delete_key(&key).await {
+                                                            Ok(_) => {
+                                                                delete_key_confirm.set(false);
+                                                                shell_status_message.set("Key 已删除".to_string());
+                                                                selected_key.set(String::new());
+                                                                on_refresh.call(());
+                                                            }
+                                                            Err(error) => {
+                                                                shell_status_message.set(format!("删除失败：{error}"));
+                                                                shell_status_error.set(true);
+                                                            }
+                                                        }
+
+                                                        delete_key_processing.set(false);
+                                                    });
+                                                }
+                                            },
+
+                                            if delete_key_processing() { "..." } else { "确认" }
+                                        }
+
+                                        button {
+                                            padding: "3px 8px",
+                                            background: COLOR_BG_TERTIARY,
+                                            color: COLOR_TEXT,
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "4px",
+                                            cursor: "pointer",
+                                            font_size: "11px",
+                                            onclick: move |_| delete_key_confirm.set(false),
+
+                                            "取消"
+                                        }
+                                    }
+                                } else {
+                                    button {
+                                        width: "22px",
+                                        height: "22px",
+                                        background: "transparent",
+                                        border: "1px solid rgba(255, 180, 171, 0.30)",
+                                        border_radius: "4px",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        align_items: "center",
+                                        justify_content: "center",
+                                        color: COLOR_ERROR,
+                                        title: "删除",
+                                        onclick: move |_| delete_key_confirm.set(true),
+
+                                        IconTrash { size: Some(12) }
+                                    }
+                                }
+                            }
+
+                            div {
+                                display: "flex",
+                                align_items: "center",
+                                gap: "8px",
+                                margin_top: "6px",
+
+                                if show_ttl_editor() {
+                                    div {
+                                        display: "flex",
+                                        align_items: "center",
+                                        gap: "6px",
+
+                                        span {
+                                            color: COLOR_TEXT_SECONDARY,
+                                            font_size: "12px",
+
+                                            "TTL:"
+                                        }
+
+                                        input {
+                                            width: "80px",
+                                            padding: "4px 8px",
+                                            background: COLOR_BG_TERTIARY,
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "4px",
+                                            color: COLOR_TEXT,
+                                            font_size: "12px",
+                                            r#type: "number",
+                                            min: "1",
+                                            value: "{ttl_input}",
+                                            placeholder: "秒",
+                                            oninput: move |event| ttl_input.set(event.value()),
+                                        }
+
+                                        button {
+                                            padding: "4px 10px",
+                                            background: COLOR_PRIMARY,
+                                            color: COLOR_TEXT_CONTRAST,
+                                            border: "none",
+                                            border_radius: "4px",
+                                            cursor: "pointer",
+                                            font_size: "11px",
+                                            disabled: ttl_processing(),
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let ttl_text = ttl_input().trim().to_string();
+                                                    if ttl_text.is_empty() {
+                                                        shell_status_message.set("请输入 TTL".to_string());
+                                                        shell_status_error.set(true);
+                                                        return;
+                                                    }
+
+                                                    let ttl = match ttl_text.parse::<i64>() {
+                                                        Ok(ttl) if ttl > 0 => ttl,
+                                                        _ => {
+                                                            shell_status_message.set("TTL 必须大于 0".to_string());
+                                                            shell_status_error.set(true);
+                                                            return;
+                                                        }
+                                                    };
+
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    spawn(async move {
+                                                        ttl_processing.set(true);
+                                                        shell_status_message.set(String::new());
+                                                        shell_status_error.set(false);
+
+                                                        match pool.set_ttl(&key, ttl).await {
+                                                            Ok(_) => {
+                                                                shell_status_message.set("TTL 已更新".to_string());
+                                                                shell_status_error.set(false);
+                                                                show_ttl_editor.set(false);
+                                                                if let Err(error) = load_key_data(
+                                                                    pool.clone(),
+                                                                    key.clone(),
+                                                                    key_info,
+                                                                    string_value,
+                                                                    hash_value,
+                                                                    list_value,
+                                                                    set_value,
+                                                                    zset_value,
+                                                                    is_binary,
+                                                                    binary_format,
+                                                                    java_serialization_info,
+                                                                    loading,
+                                                                ).await {
+                                                                    tracing::error!("{error}");
+                                                                } else {
+                                                                    on_refresh.call(());
+                                                                }
+                                                            }
+                                                            Err(error) => {
+                                                                shell_status_message.set(format!("TTL 更新失败：{error}"));
+                                                                shell_status_error.set(true);
+                                                            }
+                                                        }
+
+                                                        ttl_processing.set(false);
+                                                    });
+                                                }
+                                            },
+
+                                            if ttl_processing() { "..." } else { "应用" }
+                                        }
+
+                                        button {
+                                            padding: "4px 10px",
+                                            background: COLOR_BG_TERTIARY,
+                                            color: COLOR_TEXT,
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "4px",
+                                            cursor: "pointer",
+                                            font_size: "11px",
+                                            onclick: move |_| show_ttl_editor.set(false),
+
+                                            "取消"
+                                        }
+
+                                        button {
+                                            padding: "4px 10px",
+                                            background: "transparent",
+                                            color: COLOR_TEXT_SECONDARY,
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "4px",
+                                            cursor: "pointer",
+                                            font_size: "11px",
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    spawn(async move {
+                                                        match pool.remove_ttl(&key).await {
+                                                            Ok(_) => {
+                                                                shell_status_message.set("已设为永久".to_string());
+                                                                shell_status_error.set(false);
+                                                                if let Err(error) = load_key_data(
+                                                                    pool.clone(),
+                                                                    key.clone(),
+                                                                    key_info,
+                                                                    string_value,
+                                                                    hash_value,
+                                                                    list_value,
+                                                                    set_value,
+                                                                    zset_value,
+                                                                    is_binary,
+                                                                    binary_format,
+                                                                    java_serialization_info,
+                                                                    loading,
+                                                                ).await {
+                                                                    tracing::error!("{error}");
+                                                                } else {
+                                                                    on_refresh.call(());
+                                                                }
+                                                            }
+                                                            Err(error) => {
+                                                                shell_status_message.set(format!("设置失败：{error}"));
+                                                                shell_status_error.set(true);
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                            },
+
+                                            "永久"
+                                        }
+                                    }
+                                } else {
+                                    {
+                                        let current_ttl = info.ttl;
+                                        rsx! {
+                                            button {
+                                                padding: "3px 10px",
+                                                background: "transparent",
+                                                color: COLOR_TEXT_SECONDARY,
+                                                border: "1px solid {COLOR_BORDER}",
+                                                border_radius: "4px",
+                                                cursor: "pointer",
+                                                font_size: "11px",
+                                                onclick: move |_| {
+                                                    show_ttl_editor.set(true);
+                                                    ttl_input.set(current_ttl.map(|t| t.to_string()).unwrap_or_default());
+                                                },
+
+                                                "TTL {format_ttl_label(info.ttl)}  ✎"
+                                            }
+                                        }
+                                    }
+                                }
+
+                                {
+                                    let export_payload = build_export_json(
+                                        &info,
+                                        &str_val,
+                                        &hash_val,
+                                        &list_val,
+                                        &set_val,
+                                        &zset_val,
+                                        is_binary(),
+                                        binary_format(),
+                                        memory_usage(),
+                                    );
+                                    rsx! {
+                                        button {
+                                            padding: "3px 10px",
+                                            background: "transparent",
+                                            color: COLOR_TEXT_SECONDARY,
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "4px",
+                                            cursor: "pointer",
+                                            font_size: "11px",
+                                            onclick: move |_| match export_payload.as_ref() {
+                                                Ok(payload) => match copy_value_to_clipboard(payload) {
+                                                    Ok(_) => {
+                                                        shell_status_message.set("已导出为 JSON".to_string());
+                                                        shell_status_error.set(false);
+                                                    }
+                                                    Err(error) => {
+                                                        shell_status_message.set(format!("导出失败：{error}"));
+                                                        shell_status_error.set(true);
+                                                    }
+                                                },
+                                                Err(error) => {
+                                                    shell_status_message.set(error.clone());
+                                                    shell_status_error.set(true);
+                                                }
+                                            },
+
+                                            "导出 JSON"
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -3245,402 +3528,6 @@ pub fn ValueViewer(
                                                     "暂不支持该类型的编辑"
                                                 }
                                             }
-                                        }
-                                    }
-                                }
-                            }
-
-                            div {
-                                width: "min(320px, 100%)",
-                                max_width: "100%",
-                                flex: "1 1 280px",
-                                display: "flex",
-                                flex_direction: "column",
-                                gap: "14px",
-                                overflow_y: "auto",
-
-                                div {
-                                    padding: "16px",
-                                    border: "1px solid {COLOR_BORDER}",
-                                    border_radius: "12px",
-                                    background: COLOR_BG_TERTIARY,
-                                    display: "flex",
-                                    flex_direction: "column",
-                                    gap: "14px",
-
-                                    div {
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        gap: "4px",
-
-                                        span {
-                                            color: COLOR_TEXT_SUBTLE,
-                                            font_size: "11px",
-                                            font_weight: "800",
-                                            text_transform: "uppercase",
-                                            letter_spacing: "0.16em",
-
-                                            "Key 设置"
-                                        }
-
-                                        span {
-                                            color: COLOR_TEXT_SECONDARY,
-                                            font_size: "12px",
-
-                                            "调整 TTL、复制路径或导出当前值。"
-                                        }
-                                    }
-
-                                    div {
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        gap: "8px",
-
-                                        label {
-                                            color: COLOR_TEXT_SECONDARY,
-                                            font_size: "12px",
-
-                                            "过期时间（秒）"
-                                        }
-
-                                        div {
-                                            display: "flex",
-                                            gap: "8px",
-
-                                            input {
-                                                flex: "1",
-                                                padding: "10px 12px",
-                                                background: COLOR_BG,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "8px",
-                                                color: COLOR_TEXT,
-                                                r#type: "number",
-                                                min: "1",
-                                                value: "{ttl_input}",
-                                                placeholder: if info.ttl.is_some() { "输入新的 TTL" } else { "留空表示永久 key" },
-                                                oninput: move |event| ttl_input.set(event.value()),
-                                            }
-
-                                            button {
-                                                padding: "0 14px",
-                                                background: COLOR_PRIMARY,
-                                                color: COLOR_TEXT_CONTRAST,
-                                                border: "none",
-                                                border_radius: "8px",
-                                                cursor: "pointer",
-                                                disabled: ttl_processing(),
-                                                onclick: {
-                                                    let pool = connection_pool.clone();
-                                                    let key = display_key.clone();
-                                                    move |_| {
-                                                        let ttl_text = ttl_input().trim().to_string();
-                                                        if ttl_text.is_empty() {
-                                                            shell_status_message.set("请输入有效的 TTL 秒数".to_string());
-                                                            shell_status_error.set(true);
-                                                            return;
-                                                        }
-
-                                                        let ttl = match ttl_text.parse::<i64>() {
-                                                            Ok(ttl) if ttl > 0 => ttl,
-                                                            _ => {
-                                                                shell_status_message.set("TTL 必须是大于 0 的整数".to_string());
-                                                                shell_status_error.set(true);
-                                                                return;
-                                                            }
-                                                        };
-
-                                                        let pool = pool.clone();
-                                                        let key = key.clone();
-                                                        spawn(async move {
-                                                            ttl_processing.set(true);
-                                                            shell_status_message.set(String::new());
-                                                            shell_status_error.set(false);
-
-                                                            match pool.set_ttl(&key, ttl).await {
-                                                                Ok(_) => {
-                                                                    shell_status_message.set("TTL 已更新".to_string());
-                                                                    if let Err(error) = load_key_data(
-                                                                        pool.clone(),
-                                                                        key.clone(),
-                                                                        key_info,
-                                                                        string_value,
-                                                                        hash_value,
-                                                                        list_value,
-                                                                        set_value,
-                                                                        zset_value,
-                                                                        is_binary,
-                                                                        binary_format,
-                                                                        java_serialization_info,
-                                                                        loading,
-                                                                    )
-                                                                    .await
-                                                                    {
-                                                                        tracing::error!("{error}");
-                                                                        shell_status_message.set(error);
-                                                                        shell_status_error.set(true);
-                                                                    } else {
-                                                                        on_refresh.call(());
-                                                                    }
-                                                                }
-                                                                Err(error) => {
-                                                                    shell_status_message
-                                                                        .set(format!("TTL 更新失败：{error}"));
-                                                                    shell_status_error.set(true);
-                                                                }
-                                                            }
-
-                                                            ttl_processing.set(false);
-                                                        });
-                                                    }
-                                                },
-
-                                                if ttl_processing() { "处理中..." } else { "应用" }
-                                            }
-                                        }
-
-                                        button {
-                                            padding: "10px 12px",
-                                            background: "transparent",
-                                            color: COLOR_TEXT_SECONDARY,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "8px",
-                                            cursor: "pointer",
-                                            disabled: ttl_processing(),
-                                            onclick: {
-                                                let pool = connection_pool.clone();
-                                                let key = display_key.clone();
-                                                move |_| {
-                                                    let pool = pool.clone();
-                                                    let key = key.clone();
-                                                    spawn(async move {
-                                                        ttl_processing.set(true);
-                                                        shell_status_message.set(String::new());
-                                                        shell_status_error.set(false);
-
-                                                        match pool.remove_ttl(&key).await {
-                                                            Ok(_) => {
-                                                                shell_status_message.set("当前 Key 已设为永久".to_string());
-                                                                if let Err(error) = load_key_data(
-                                                                    pool.clone(),
-                                                                    key.clone(),
-                                                                    key_info,
-                                                                    string_value,
-                                                                    hash_value,
-                                                                    list_value,
-                                                                    set_value,
-                                                                    zset_value,
-                                                                    is_binary,
-                                                                    binary_format,
-                                                                    java_serialization_info,
-                                                                    loading,
-                                                                )
-                                                                .await
-                                                                {
-                                                                    tracing::error!("{error}");
-                                                                    shell_status_message.set(error);
-                                                                    shell_status_error.set(true);
-                                                                } else {
-                                                                    on_refresh.call(());
-                                                                }
-                                                            }
-                                                            Err(error) => {
-                                                                shell_status_message
-                                                                    .set(format!("TTL 更新失败：{error}"));
-                                                                shell_status_error.set(true);
-                                                            }
-                                                        }
-
-                                                        ttl_processing.set(false);
-                                                    });
-                                                }
-                                            },
-
-                                            "设为永久"
-                                        }
-                                    }
-
-                                    div {
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        gap: "8px",
-                                        padding_top: "12px",
-                                        border_top: "1px solid {COLOR_BORDER}",
-
-                                        button {
-                                            padding: "10px 12px",
-                                            background: COLOR_BG,
-                                            color: COLOR_TEXT,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "8px",
-                                            cursor: "pointer",
-                                            text_align: "left",
-                                            onclick: {
-                                                let key = display_key.clone();
-                                                move |_| match copy_value_to_clipboard(&key) {
-                                                    Ok(_) => {
-                                                        shell_status_message.set("Key 路径已复制".to_string());
-                                                        shell_status_error.set(false);
-                                                    }
-                                                    Err(error) => {
-                                                        shell_status_message
-                                                            .set(format!("复制失败：{error}"));
-                                                        shell_status_error.set(true);
-                                                    }
-                                                }
-                                            },
-
-                                            "复制 Key 路径"
-                                        }
-
-                                        button {
-                                            padding: "10px 12px",
-                                            background: COLOR_BG,
-                                            color: COLOR_TEXT,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "8px",
-                                            cursor: "pointer",
-                                            text_align: "left",
-                                            onclick: move |_| match export_payload.as_ref() {
-                                                Ok(payload) => match copy_value_to_clipboard(payload) {
-                                                    Ok(_) => {
-                                                        shell_status_message.set("当前 Key 已复制为 JSON".to_string());
-                                                        shell_status_error.set(false);
-                                                    }
-                                                    Err(error) => {
-                                                        shell_status_message
-                                                            .set(format!("复制失败：{error}"));
-                                                        shell_status_error.set(true);
-                                                    }
-                                                },
-                                                Err(error) => {
-                                                    shell_status_message.set(error.clone());
-                                                    shell_status_error.set(true);
-                                                }
-                                            },
-
-                                            "导出为 JSON"
-                                        }
-                                    }
-                                }
-
-                                div {
-                                    padding: "16px",
-                                    border: "1px solid rgba(255, 180, 171, 0.24)",
-                                    border_radius: "12px",
-                                    background: "rgba(147, 0, 10, 0.08)",
-                                    display: "flex",
-                                    flex_direction: "column",
-                                    gap: "12px",
-
-                                    div {
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        gap: "4px",
-
-                                        span {
-                                            color: COLOR_PRIMARY,
-                                            font_size: "11px",
-                                            font_weight: "800",
-                                            text_transform: "uppercase",
-                                            letter_spacing: "0.16em",
-
-                                            "危险操作"
-                                        }
-
-                                        span {
-                                            color: COLOR_TEXT_SECONDARY,
-                                            font_size: "12px",
-
-                                            "删除后无法恢复，请谨慎操作。"
-                                        }
-                                    }
-
-                                    if delete_key_confirm() {
-                                        div {
-                                            display: "flex",
-                                            flex_direction: "column",
-                                            gap: "10px",
-
-                                            span {
-                                                color: COLOR_TEXT,
-                                                font_size: "12px",
-
-                                                "确认删除 {display_key}？"
-                                            }
-
-                                            div {
-                                                display: "flex",
-                                                gap: "8px",
-
-                                                button {
-                                                    flex: "1",
-                                                    padding: "10px 12px",
-                                                    background: "rgba(255, 180, 171, 0.10)",
-                                                    color: COLOR_ERROR,
-                                                    border: "1px solid rgba(255, 180, 171, 0.28)",
-                                                    border_radius: "8px",
-                                                    cursor: "pointer",
-                                                    disabled: delete_key_processing(),
-                                                    onclick: {
-                                                        let pool = connection_pool.clone();
-                                                        let key = display_key.clone();
-                                                        move |_| {
-                                                            let pool = pool.clone();
-                                                            let key = key.clone();
-                                                            spawn(async move {
-                                                                delete_key_processing.set(true);
-                                                                shell_status_message.set(String::new());
-                                                                shell_status_error.set(false);
-
-                                                                match pool.delete_key(&key).await {
-                                                                    Ok(_) => {
-                                                                        delete_key_confirm.set(false);
-                                                                        shell_status_message
-                                                                            .set("当前 Key 已删除".to_string());
-                                                                        selected_key.set(String::new());
-                                                                        on_refresh.call(());
-                                                                    }
-                                                                    Err(error) => {
-                                                                        shell_status_message
-                                                                            .set(format!("删除失败：{error}"));
-                                                                        shell_status_error.set(true);
-                                                                    }
-                                                                }
-
-                                                                delete_key_processing.set(false);
-                                                            });
-                                                        }
-                                                    },
-
-                                                    if delete_key_processing() { "删除中..." } else { "确认删除" }
-                                                }
-
-                                                button {
-                                                    flex: "1",
-                                                    padding: "10px 12px",
-                                                    background: "transparent",
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    border: "1px solid {COLOR_BORDER}",
-                                                    border_radius: "8px",
-                                                    cursor: "pointer",
-                                                    disabled: delete_key_processing(),
-                                                    onclick: move |_| delete_key_confirm.set(false),
-
-                                                    "取消"
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        button {
-                                            padding: "10px 12px",
-                                            background: "rgba(255, 180, 171, 0.08)",
-                                            color: COLOR_ERROR,
-                                            border: "1px solid rgba(255, 180, 171, 0.24)",
-                                            border_radius: "8px",
-                                            cursor: "pointer",
-                                            onclick: move |_| delete_key_confirm.set(true),
-
-                                            "删除当前 Key"
                                         }
                                     }
                                 }
