@@ -39,58 +39,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
 
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
-
       - name: Create .app bundle
         run: |
-          APP_NAME="Rust Redis Desktop"
-          APP_DIR="${APP_NAME}.app"
-          CONTENTS_DIR="${APP_DIR}/Contents"
-          MACOS_DIR="${CONTENTS_DIR}/MacOS"
-          RESOURCES_DIR="${CONTENTS_DIR}/Resources"
-
-          mkdir -p "${MACOS_DIR}"
-          mkdir -p "${RESOURCES_DIR}"
-
-          cp target/${{ matrix.target }}/release/rust-redis-desktop "${MACOS_DIR}/"
-
-          cat > "${CONTENTS_DIR}/Info.plist" << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleDevelopmentRegion</key>
-              <string>en</string>
-              <key>CFBundleExecutable</key>
-              <string>rust-redis-desktop</string>
-              <key>CFBundleIconFile</key>
-              <string>AppIcon</string>
-              <key>CFBundleIdentifier</key>
-              <string>dev.yelog.rust-redis-desktop</string>
-              <key>CFBundleInfoDictionaryVersion</key>
-              <string>6.0</string>
-              <key>CFBundleName</key>
-              <string>Rust Redis Desktop</string>
-              <key>CFBundleDisplayName</key>
-              <string>Rust Redis Desktop</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>${{ github.ref_name }}</string>
-              <key>CFBundleVersion</key>
-              <string>${{ github.run_number }}</string>
-              <key>LSMinimumSystemVersion</key>
-              <string>10.15</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-              <key>NSHumanReadableCopyright</key>
-              <string>Copyright © 2024 yelog. All rights reserved.</string>
-              <key>NSPrincipalClass</key>
-              <string>NSApplication</string>
-          </dict>
-          </plist>
-          EOF
+          chmod +x scripts/build-app.sh
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./scripts/build-app.sh "$VERSION" "${{ github.run_number }}" "${{ matrix.target }}"
 
       - name: Import Apple certificate
         env:
@@ -151,26 +104,10 @@ jobs:
 
       - name: Create DMG
         run: |
+          chmod +x scripts/create-dmg.sh
           brew install create-dmg
-
-          create-dmg \
-            --volname "Rust Redis Desktop" \
-            --volicon "Assets/AppIcon.icns" \
-            --window-pos 200 120 \
-            --window-size 600 400 \
-            --icon-size 100 \
-            --icon "Rust Redis Desktop.app" 150 190 \
-            --hide-extension "Rust Redis Desktop.app" \
-            --app-drop-link 450 190 \
-            "rust-redis-desktop-${{ matrix.arch }}.dmg" \
-            "Rust Redis Desktop.app" || true
-
-          if [ ! -f "rust-redis-desktop-${{ matrix.arch }}.dmg" ]; then
-            hdiutil create -volname "Rust Redis Desktop" \
-              -srcfolder "Rust Redis Desktop.app" \
-              -ov -format UDZO \
-              "rust-redis-desktop-${{ matrix.arch }}.dmg"
-          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./scripts/create-dmg.sh "$VERSION" "${{ matrix.arch }}"
 
       - name: Notarize DMG
         env:

@@ -17,14 +17,22 @@ fi
 rm -f "$DMG_NAME"
 
 if command -v create-dmg &> /dev/null; then
-    create-dmg \
+    CREATE_DMG_ARGS=(
         --volname "$APP_NAME" \
         --window-pos 200 120 \
         --window-size 600 400 \
         --icon-size 100 \
         --icon "$APP_DIR" 150 190 \
         --hide-extension "$APP_DIR" \
-        --app-drop-link 450 190 \
+        --app-drop-link 450 190
+    )
+
+    if [ -f "Assets/AppIcon.icns" ]; then
+        CREATE_DMG_ARGS+=(--volicon "Assets/AppIcon.icns")
+    fi
+
+    create-dmg \
+        "${CREATE_DMG_ARGS[@]}" \
         "$DMG_NAME" \
         "$APP_DIR" || true
 fi
