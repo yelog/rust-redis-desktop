@@ -131,40 +131,54 @@ pub fn AddKeyDialog(
                     display: "block",
                     color: "{colors.text_secondary}",
                     font_size: "12px",
-                    margin_bottom: "4px",
+                    margin_bottom: "8px",
 
                     "类型"
                 }
 
-                select {
-                    width: "100%",
-                    padding: "8px 12px",
-                    background: "{colors.background_tertiary}",
-                    border: "1px solid {colors.border}",
-                    border_radius: "4px",
-                    color: "{colors.text}",
-                    font_size: "13px",
-                    box_sizing: "border_box",
-                    value: "{key_type}",
-                    onchange: move |e| {
-                        let new_type = match e.value().as_str() {
-                            "String" => KeyType::String,
-                            "Hash" => KeyType::Hash,
-                            "List" => KeyType::List,
-                            "Set" => KeyType::Set,
-                            "ZSet" => KeyType::ZSet,
-                            "Stream" => KeyType::Stream,
-                            _ => KeyType::String,
-                        };
-                        key_type.set(new_type);
-                    },
+                div {
+                    display: "flex",
+                    flex_wrap: "wrap",
+                    gap: "8px",
 
                     for type_name in ["String", "Hash", "List", "Set", "ZSet", "Stream"] {
-                        option {
-                            value: type_name,
-                            selected: key_type() == KeyType::from(type_name.to_string()),
+                        {
+                            let current_type = key_type();
+                            let type_enum = KeyType::from(type_name.to_string());
+                            let is_selected = current_type == type_enum;
+                            let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
+                            let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                            let border = if is_selected { colors.primary.clone() } else { colors.border.clone() };
 
-                            "{type_name}"
+                            rsx! {
+                                button {
+                                    key: "{type_name}",
+                                    padding: "6px 14px",
+                                    background: "{bg}",
+                                    color: "{text_color}",
+                                    border: "1px solid {border}",
+                                    border_radius: "4px",
+                                    cursor: "pointer",
+                                    font_size: "12px",
+                                    onclick: {
+                                        let t = type_name.to_string();
+                                        move |_| {
+                                            let new_type = match t.as_str() {
+                                                "String" => KeyType::String,
+                                                "Hash" => KeyType::Hash,
+                                                "List" => KeyType::List,
+                                                "Set" => KeyType::Set,
+                                                "ZSet" => KeyType::ZSet,
+                                                "Stream" => KeyType::Stream,
+                                                _ => KeyType::String,
+                                            };
+                                            key_type.set(new_type);
+                                        }
+                                    },
+
+                                    "{type_name}"
+                                }
+                            }
                         }
                     }
                 }

@@ -1,5 +1,5 @@
 use crate::theme::ThemeColors;
-use crate::ui::animation_utils::prefers_reduced_motion;
+use crate::ui::animation_utils::{prefers_reduced_motion, TriggerPosition};
 use dioxus::prelude::*;
 use std::time::Duration;
 
@@ -20,21 +20,57 @@ pub fn AnimatedDialog(
     colors: ThemeColors,
     width: Option<String>,
     max_height: Option<String>,
+    trigger_selector: Option<String>,
     children: Element,
 ) -> Element {
     let width_val = width.unwrap_or_else(|| "450px".to_string());
     let max_height_val = max_height.unwrap_or_else(|| "90vh".to_string());
 
     let mut visibility = use_signal(VisibilityState::default);
+    let mut trigger_position = use_signal(|| None::<TriggerPosition>);
     let reduced_motion = prefers_reduced_motion();
     let backdrop_color = colors.overlay_backdrop;
 
     use_effect(move || {
         if is_open && *visibility.read() == VisibilityState::Hidden {
             visibility.set(VisibilityState::Visible);
+
+            if let Some(selector) = &trigger_selector {
+                let selector = selector.clone();
+                spawn(async move {
+                    let js = format!(
+                        r#"
+                        (function() {{
+                            const el = document.querySelector('{}');
+                            if (!el) {{ dioxus.send(''); return; }}
+                            const rect = el.getBoundingClientRect();
+                            dioxus.send(JSON.stringify({{
+                                x: (rect.left + rect.width / 2) / window.innerWidth,
+                                y: (rect.top + rect.height / 2) / window.innerHeight
+                            }}));
+                        }})()
+                        "#,
+                        selector
+                    );
+
+                    let mut eval = dioxus::document::eval(&js);
+                    if let Ok(result) = eval.recv::<String>().await {
+                        if !result.is_empty() {
+                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&result) {
+                                if let (Some(x), Some(y)) = (parsed["x"].as_f64(), parsed["y"].as_f64()) {
+                                    trigger_position.set(Some(TriggerPosition {
+                                        x: x as f32,
+                                        y: y as f32,
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         } else if !is_open && *visibility.read() == VisibilityState::Visible {
             visibility.set(VisibilityState::Exiting);
-            
+
             if !reduced_motion {
                 let mut vis = visibility.clone();
                 spawn(async move {
@@ -47,14 +83,52 @@ pub fn AnimatedDialog(
         }
     });
 
-    let state = *visibility.read();
+    let mut escape_received = use_signal(|| false);
+    let on_close_for_escape = on_close.clone();
     
+    use_future(move || {
+        let mut escape_received = escape_received.clone();
+        async move {
+            let mut eval = dioxus::document::eval(
+                r#"
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        dioxus.send('escape');
+                    }
+                });
+                await new Promise(() => {});
+                "#,
+            );
+            while let Ok(msg) = eval.recv::<String>().await {
+                if msg == "escape" {
+                    escape_received.set(true);
+                }
+            }
+        }
+    });
+
+    use_effect(move || {
+        if escape_received() && *visibility.read() == VisibilityState::Visible {
+            on_close_for_escape.call(());
+        }
+        if escape_received() {
+            escape_received.set(false);
+        }
+    });
+
+    let state = *visibility.read();
+
     if state == VisibilityState::Hidden {
         return rsx! {};
     }
 
     let is_exiting = state == VisibilityState::Exiting;
     let animation_name = if is_exiting { "modalFadeOut" } else { "modalFadeIn" };
+
+    let (origin_x, origin_y) = match *trigger_position.read() {
+        Some(p) => p.to_transform_origin(),
+        None => ("50%".to_string(), "50%".to_string()),
+    };
 
     rsx! {
         div {
@@ -79,6 +153,7 @@ pub fn AnimatedDialog(
                 box_shadow: "0 4px 24px rgba(0, 0, 0, 0.5)",
                 overflow_y: "auto",
                 animation: "{animation_name} 0.2s ease-out forwards",
+                transform_origin: "{origin_x} {origin_y}",
                 onclick: move |evt| evt.stop_propagation(),
 
                 style {
