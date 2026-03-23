@@ -3,7 +3,7 @@ use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, Con
 use crate::theme::{resolve_theme, theme_spec, ThemePreference, ThemeSpec, COLOR_BG, COLOR_BG_SECONDARY, COLOR_SURFACE_LOW, COLOR_BG_LOWEST, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_TEXT_CONTRAST, COLOR_BORDER, COLOR_ACCENT, COLOR_ERROR, COLOR_PRIMARY};
 use crate::ui::{
     ClientsPanel, ConnectionForm, FlushConfirmDialog, KeyBrowser, LeftRail, MonitorPanel,
-    ResizableDivider, SettingsDialog, SlowLogPanel, Terminal,
+    PubSubPanel, ResizableDivider, SettingsDialog, SlowLogPanel, Terminal,
 };
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
@@ -17,6 +17,7 @@ pub enum Tab {
     Monitor,
     SlowLog,
     Clients,
+    PubSub,
 }
 
 #[derive(Clone, PartialEq)]
@@ -1044,6 +1045,7 @@ await new Promise(() => {});
                                         (Tab::Monitor, "监控"),
                                         (Tab::SlowLog, "慢日志"),
                                         (Tab::Clients, "客户端"),
+                                        (Tab::PubSub, "Pub/Sub"),
                                     ] {
                                         button {
                                             padding: "8px 14px",
@@ -1115,8 +1117,13 @@ await new Promise(() => {});
                                             key: "{conn_id}",
                                             connection_pool: pool.clone(),
                                         }
-                                    } else {
+                                    } else if current_tab() == Tab::Clients {
                                         ClientsPanel {
+                                            key: "{conn_id}",
+                                            connection_pool: pool.clone(),
+                                        }
+                                    } else {
+                                        PubSubPanel {
                                             key: "{conn_id}",
                                             connection_pool: pool.clone(),
                                         }
