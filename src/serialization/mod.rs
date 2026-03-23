@@ -1,10 +1,40 @@
 pub mod java_converters;
+pub mod php;
 
 pub use jaded::{Content, Parser};
+use php::{is_php_serialization, parse_php_serialization, php_to_json};
 use serde_json::Value as JsonValue;
 use std::io::Cursor;
 
-/// Check if data is Java serialization format
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SerializationFormat {
+    Unknown,
+    Java,
+    Php,
+}
+
+pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
+    if is_java_serialization(data) {
+        return SerializationFormat::Java;
+    }
+    if is_php_serialization(data) {
+        return SerializationFormat::Php;
+    }
+    SerializationFormat::Unknown
+}
+
+pub fn parse_to_json(data: &[u8], format: SerializationFormat) -> Result<String, String> {
+    match format {
+        SerializationFormat::Java => parse_java_to_json(data),
+        SerializationFormat::Php => {
+            let php = parse_php_serialization(data)?;
+            let json = php_to_json(php);
+            serde_json::to_string_pretty(&json).map_err(|e| e.to_string())
+        }
+        _ => Err("未知格式，无法解析".to_string()),
+    }
+}
+
 pub fn is_java_serialization(data: &[u8]) -> bool {
     data.len() >= 4 && data[0] == 0xAC && data[1] == 0xED
 }

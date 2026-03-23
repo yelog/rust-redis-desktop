@@ -1,6 +1,8 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
-use crate::serialization::{is_java_serialization, parse_java_to_json};
+use crate::serialization::{
+    detect_serialization_format, is_java_serialization, parse_to_json, SerializationFormat,
+};
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
     COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_ROW_CREATE_BG, COLOR_ROW_EDIT_BG, COLOR_SUCCESS,
@@ -29,6 +31,7 @@ pub enum BinaryFormat {
     Hex,
     Base64,
     JavaSerialized,
+    Php,
 }
 
 #[derive(Clone, PartialEq)]
@@ -41,7 +44,8 @@ fn is_binary_data(data: &[u8]) -> bool {
         return false;
     }
 
-    if is_java_serialization(data) {
+    let format = detect_serialization_format(data);
+    if format != SerializationFormat::Unknown {
         return true;
     }
 
@@ -72,6 +76,17 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
                 )
             } else {
                 "非 Java 序列化数据".to_string()
+            }
+        }
+        BinaryFormat::Php => {
+            let detected = detect_serialization_format(data);
+            if detected == SerializationFormat::Php {
+                format!(
+                    "PHP 序列化数据 ({} 字节)\n\n请切换到 PHP 视图查看解析结果",
+                    data.len()
+                )
+            } else {
+                "非 PHP 序列化数据".to_string()
             }
         }
     }
@@ -144,7 +159,7 @@ async fn load_key_data(
     mut zset_value: Signal<Vec<(String, f64)>>,
     mut is_binary: Signal<bool>,
     mut binary_format: Signal<BinaryFormat>,
-    mut java_serialization_info: Signal<Option<Vec<u8>>>,
+    mut serialization_data: Signal<Option<(SerializationFormat, Vec<u8>)>>,
     mut loading: Signal<bool>,
 ) -> Result<(), String> {
     if key.is_empty() {
@@ -155,7 +170,7 @@ async fn load_key_data(
         set_value.set(Vec::new());
         zset_value.set(Vec::new());
         is_binary.set(false);
-        java_serialization_info.set(None);
+        serialization_data.set(None);
         loading.set(false);
         return Ok(());
     }
@@ -187,19 +202,24 @@ async fn load_key_data(
                 if is_binary_data(&bytes) {
                     is_binary.set(true);
 
-                    if is_java_serialization(&bytes) {
-                        tracing::info!("Java serialization detected");
-                        java_serialization_info.set(Some(bytes.clone()));
-                        binary_format.set(BinaryFormat::JavaSerialized);
+                    let detected_format = detect_serialization_format(&bytes);
+                    if detected_format != SerializationFormat::Unknown {
+                        tracing::info!("Detected serialization format: {:?}", detected_format);
+                        serialization_data.set(Some((detected_format, bytes.clone())));
+                        binary_format.set(match detected_format {
+                            SerializationFormat::Java => BinaryFormat::JavaSerialized,
+                            SerializationFormat::Php => BinaryFormat::Php,
+                            _ => BinaryFormat::Hex,
+                        });
                     } else {
-                        java_serialization_info.set(None);
+                        serialization_data.set(None);
                     }
 
                     let formatted = format_bytes(&bytes, binary_format());
                     string_value.set(formatted);
                 } else {
                     is_binary.set(false);
-                    java_serialization_info.set(None);
+                    serialization_data.set(None);
                     match String::from_utf8(bytes) {
                         Ok(s) => string_value.set(s),
                         Err(_) => {
@@ -229,7 +249,7 @@ async fn load_key_data(
                 set_value.set(Vec::new());
                 zset_value.set(Vec::new());
                 is_binary.set(false);
-                java_serialization_info.set(None);
+                serialization_data.set(None);
             }
             KeyType::List => {
                 let items = pool
@@ -243,7 +263,7 @@ async fn load_key_data(
                 set_value.set(Vec::new());
                 zset_value.set(Vec::new());
                 is_binary.set(false);
-                java_serialization_info.set(None);
+                serialization_data.set(None);
             }
             KeyType::Set => {
                 let members = pool
@@ -257,7 +277,7 @@ async fn load_key_data(
                 list_value.set(Vec::new());
                 zset_value.set(Vec::new());
                 is_binary.set(false);
-                java_serialization_info.set(None);
+                serialization_data.set(None);
             }
             KeyType::ZSet => {
                 let members = pool
@@ -271,7 +291,7 @@ async fn load_key_data(
                 list_value.set(Vec::new());
                 set_value.set(Vec::new());
                 is_binary.set(false);
-                java_serialization_info.set(None);
+                serialization_data.set(None);
             }
             _ => {
                 tracing::info!("Type: {:?}", info.key_type);
@@ -281,7 +301,7 @@ async fn load_key_data(
                 set_value.set(Vec::new());
                 zset_value.set(Vec::new());
                 is_binary.set(false);
-                java_serialization_info.set(None);
+                serialization_data.set(None);
             }
         }
 
@@ -297,7 +317,7 @@ async fn load_key_data(
         set_value.set(Vec::new());
         zset_value.set(Vec::new());
         is_binary.set(false);
-        java_serialization_info.set(None);
+        serialization_data.set(None);
     }
 
     loading.set(false);
@@ -320,7 +340,7 @@ pub fn ValueViewer(
     let mut saving = use_signal(|| false);
     let mut is_binary = use_signal(|| false);
     let mut binary_format = use_signal(BinaryFormat::default);
-    let mut java_serialization_info = use_signal(|| None::<Vec<u8>>);
+    let mut serialization_data = use_signal(|| None::<(SerializationFormat, Vec<u8>)>);
 
     let mut hash_search = use_signal(String::new);
     let mut hash_status_message = use_signal(String::new);
@@ -396,7 +416,7 @@ pub fn ValueViewer(
         deleting_hash_field.set(None);
         hash_action.set(None);
         is_binary.set(false);
-        java_serialization_info.set(None);
+        serialization_data.set(None);
         binary_format.set(BinaryFormat::default());
 
         list_status_message.set(String::new());
@@ -457,7 +477,7 @@ pub fn ValueViewer(
                 zset_value,
                 is_binary,
                 binary_format,
-                java_serialization_info,
+                serialization_data,
                 loading,
             )
             .await
@@ -865,7 +885,7 @@ pub fn ValueViewer(
                                                                     zset_value,
                                                                     is_binary,
                                                                     binary_format,
-                                                                    java_serialization_info,
+                                                                    serialization_data,
                                                                     loading,
                                                                 ).await {
                                                                     tracing::error!("{error}");
@@ -930,7 +950,7 @@ pub fn ValueViewer(
                                                                     zset_value,
                                                                     is_binary,
                                                                     binary_format,
-                                                                    java_serialization_info,
+                                                                    serialization_data,
                                                                     loading,
                                                                 ).await {
                                                                     tracing::error!("{error}");
@@ -1067,136 +1087,210 @@ overflow: "hidden",
                                     border_radius: "12px",
                                     background: COLOR_BG_SECONDARY,
 
-                                    match info.key_type {
-                             KeyType::String => {
-                                let is_json = !is_binary() && is_json_content(&str_val);
-                                let java_info_val = java_serialization_info();
-                                let is_java = java_info_val.is_some();
+match info.key_type {
+                                KeyType::String => {
+                                    let is_json = !is_binary() && is_json_content(&str_val);
+                                    let serialization_info = serialization_data();
+                                    let detected_format = serialization_info.as_ref().map(|(f, _)| *f);
+                                    let is_serialized = serialization_info.is_some();
 
-                                rsx! {
-                                    div {
-                                        if is_binary() {
-                                            div {
-                                                display: "flex",
-                                                gap: "8px",
-                                                align_items: "center",
-                                                margin_bottom: "12px",
-                                                flex_wrap: "wrap",
+                                    rsx! {
+                                        div {
+                                            if is_binary() {
+                                                div {
+                                                    display: "flex",
+                                                    gap: "8px",
+                                                    align_items: "center",
+                                                    margin_bottom: "12px",
+                                                    flex_wrap: "wrap",
 
-                                                if is_java {
-                                                    span {
-                                                        color: COLOR_SUCCESS,
-                                                        font_size: "12px",
+                                                    if is_serialized {
+                                                        span {
+                                                            color: COLOR_SUCCESS,
+                                                            font_size: "12px",
 
-                                                        "Java 序列化对象"
+                                                            match detected_format {
+                                                                Some(SerializationFormat::Java) => "Java 序列化对象",
+                                                                Some(SerializationFormat::Php) => "PHP 序列化数据",
+                                                                _ => "序列化数据",
+                                                            }
+                                                        }
+                                                    } else {
+                                                        span {
+                                                            color: COLOR_WARNING,
+                                                            font_size: "12px",
+
+                                                            "二进制数据"
+                                                        }
                                                     }
-                                                } else {
-                                                    span {
-                                                        color: COLOR_WARNING,
-                                                        font_size: "12px",
 
-                                                        "二进制数据"
-                                                    }
-                                                }
-
-                                                button {
-                                                    padding: "4px 8px",
-                                                    background: if binary_format() == BinaryFormat::Hex { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                    color: if binary_format() == BinaryFormat::Hex { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                    border: "none",
-                                                    border_radius: "4px",
-                                                    cursor: "pointer",
-                                                    font_size: "12px",
-                                                    onclick: move |_| binary_format.set(BinaryFormat::Hex),
-
-                                                    "Hex"
-                                                }
-
-                                                button {
-                                                    padding: "4px 8px",
-                                                    background: if binary_format() == BinaryFormat::Base64 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                    color: if binary_format() == BinaryFormat::Base64 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                    border: "none",
-                                                    border_radius: "4px",
-                                                    cursor: "pointer",
-                                                    font_size: "12px",
-                                                    onclick: move |_| binary_format.set(BinaryFormat::Base64),
-
-                                                    "Base64"
-                                                }
-
-                                                if is_java {
                                                     button {
                                                         padding: "4px 8px",
-                                                        background: if binary_format() == BinaryFormat::JavaSerialized { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                        color: if binary_format() == BinaryFormat::JavaSerialized { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                        background: if binary_format() == BinaryFormat::Hex { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                        color: if binary_format() == BinaryFormat::Hex { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
                                                         border: "none",
                                                         border_radius: "4px",
                                                         cursor: "pointer",
                                                         font_size: "12px",
-                                                        onclick: move |_| binary_format.set(BinaryFormat::JavaSerialized),
+                                                        onclick: move |_| binary_format.set(BinaryFormat::Hex),
 
-                                                        "Java解析"
+                                                        "Hex"
+                                                    }
+
+                                                    button {
+                                                        padding: "4px 8px",
+                                                        background: if binary_format() == BinaryFormat::Base64 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                        color: if binary_format() == BinaryFormat::Base64 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                        border: "none",
+                                                        border_radius: "4px",
+                                                        cursor: "pointer",
+                                                        font_size: "12px",
+                                                        onclick: move |_| binary_format.set(BinaryFormat::Base64),
+
+                                                        "Base64"
+                                                    }
+
+                                                    if detected_format == Some(SerializationFormat::Java) {
+                                                        button {
+                                                            padding: "4px 8px",
+                                                            background: if binary_format() == BinaryFormat::JavaSerialized { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if binary_format() == BinaryFormat::JavaSerialized { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                            border: "none",
+                                                            border_radius: "4px",
+                                                            cursor: "pointer",
+                                                            font_size: "12px",
+                                                            onclick: move |_| binary_format.set(BinaryFormat::JavaSerialized),
+
+                                                            "Java解析"
+                                                        }
+                                                    }
+
+                                                    if detected_format == Some(SerializationFormat::Php) {
+                                                        button {
+                                                            padding: "4px 8px",
+                                                            background: if binary_format() == BinaryFormat::Php { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if binary_format() == BinaryFormat::Php { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                            border: "none",
+                                                            border_radius: "4px",
+                                                            cursor: "pointer",
+                                                            font_size: "12px",
+                                                            onclick: move |_| binary_format.set(BinaryFormat::Php),
+
+                                                            "PHP解析"
+                                                        }
+                                                    }
+
+                                                    button {
+                                                        padding: "4px 8px",
+                                                        background: COLOR_BG_TERTIARY,
+                                                        color: COLOR_TEXT,
+                                                        border: "none",
+                                                        border_radius: "4px",
+                                                        cursor: "pointer",
+                                                        font_size: "12px",
+                                                        title: "复制",
+                                                        onclick: {
+                                                            let val = str_val.clone();
+                                                            let current_format = binary_format();
+                                                            let serial_info = serialization_info.clone();
+                                                            move |_| {
+                                                                let copy_text = match current_format {
+                                                                    BinaryFormat::JavaSerialized | BinaryFormat::Php => {
+                                                                        if let Some(ref data) = serial_info {
+                                                                            parse_to_json(&data.1, data.0).unwrap_or_else(|_| val.clone())
+                                                                        } else {
+                                                                            val.clone()
+                                                                        }
+                                                                    }
+                                                                    _ => val.clone(),
+                                                                };
+                                                                match copy_value_to_clipboard(&copy_text) {
+                                                                    Ok(_) => {
+                                                                        shell_status_message.set("复制成功".to_string());
+                                                                        shell_status_error.set(false);
+                                                                    }
+                                                                    Err(error) => {
+                                                                        shell_status_message.set(format!("复制失败：{error}"));
+                                                                        shell_status_error.set(true);
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+
+                                                        IconCopy { size: Some(12) }
                                                     }
                                                 }
+                                            }
 
-                                                button {
-                                                    padding: "4px 8px",
-                                                    background: COLOR_BG_TERTIARY,
-                                                    color: COLOR_TEXT,
-                                                    border: "none",
-                                                    border_radius: "4px",
-                                                    cursor: "pointer",
-                                                    font_size: "12px",
-                                                    title: "复制",
-                                                    onclick: {
-                                                        let val = str_val.clone();
-                                                        let current_format = binary_format();
-                                                        let java_data = java_info_val.clone();
-                                                        move |_| {
-                                                            let copy_text = if current_format == BinaryFormat::JavaSerialized {
-                                                                if let Some(ref data) = java_data {
-                                                                    parse_java_to_json(data).unwrap_or_else(|_| val.clone())
-                                                                } else {
-                                                                    val.clone()
+                                            if is_binary() {
+                                                match binary_format() {
+                                                    BinaryFormat::JavaSerialized => {
+                                                        if let Some((SerializationFormat::Java, ref data)) = serialization_info {
+                                                            rsx! {
+                                                                JavaSerializedViewer {
+                                                                    data: data.clone(),
                                                                 }
-                                                            } else {
-                                                                val.clone()
-                                                            };
-                                                            match copy_value_to_clipboard(&copy_text) {
-                                                                Ok(_) => {
-                                                                    shell_status_message.set("复制成功".to_string());
-                                                                    shell_status_error.set(false);
-                                                                }
-                                                                Err(error) => {
-                                                                    shell_status_message.set(format!("复制失败：{error}"));
-                                                                    shell_status_error.set(true);
+                                                            }
+                                                        } else {
+                                                            rsx! {
+                                                                div {
+                                                                    padding: "16px",
+                                                                    background: COLOR_BG_TERTIARY,
+                                                                    border_radius: "8px",
+                                                                    color: COLOR_TEXT_SECONDARY,
+
+                                                                    "解析失败"
                                                                 }
                                                             }
                                                         }
-                                                    },
+                                                    }
+                                                    BinaryFormat::Php => {
+                                                        if let Some((SerializationFormat::Php, ref data)) = serialization_info {
+                                                            match parse_to_json(data, SerializationFormat::Php) {
+                                                                Ok(json_str) => rsx! {
+                                                                    JsonViewer {
+                                                                        value: json_str,
+                                                                        editable: false,
+                                                                        on_change: move |_| {},
+                                                                    }
+                                                                },
+                                                                Err(e) => rsx! {
+                                                                    div {
+                                                                        padding: "16px",
+                                                                        background: COLOR_ERROR_BG,
+                                                                        border_radius: "8px",
+                                                                        color: COLOR_ERROR,
 
-                                                    IconCopy { size: Some(12) }
-                                                }
-                                            }
-                                        }
+                                                                        "PHP 解析错误: {e}"
+                                                                    }
+                                                                },
+                                                            }
+                                                        } else {
+                                                            rsx! {
+                                                                div {
+                                                                    padding: "16px",
+                                                                    background: COLOR_BG_TERTIARY,
+                                                                    border_radius: "8px",
+                                                                    color: COLOR_TEXT_SECONDARY,
 
-                                        if is_binary() && binary_format() == BinaryFormat::JavaSerialized {
-                                            if let Some(ref data) = java_info_val {
-                                                JavaSerializedViewer {
-                                                    data: data.clone(),
+                                                                    "解析失败"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    _ => {
+                                                        rsx! {
+                                                            EditableField {
+                                                                label: String::new(),
+                                                                value: str_val.clone(),
+                                                                multiline: true,
+                                                                editable: false,
+                                                                on_change: move |_| {},
+                                                            }
+                                                        }
+                                                    }
                                                 }
-                                            } else {
-                                                div {
-                                                    padding: "16px",
-                                                    background: COLOR_BG_TERTIARY,
-                                                    border_radius: "8px",
-                                                    color: COLOR_TEXT_SECONDARY,
-
-                                                    "解析失败"
-                                                }
-                                            }
-                                        } else if is_json {
+                                            } else if is_json {
                                             JsonViewer {
                                                 value: str_val.clone(),
                                                 editable: true,
@@ -1525,7 +1619,7 @@ overflow: "hidden",
                                                                                             zset_value,
                                                                                             is_binary,
                                                                                             binary_format,
-                                                                                            java_serialization_info,
+                                                                                            serialization_data,
                                                                                             loading,
                                                                                         )
                                                                                         .await
@@ -1697,7 +1791,7 @@ overflow: "hidden",
                                                                                                 zset_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
-                                                                                                java_serialization_info,
+                                                                                                serialization_data,
                                                                                                 loading,
                                                                                             )
                                                                                             .await
@@ -2011,7 +2105,7 @@ overflow: "hidden",
                                                                                             zset_value,
                                                                                             is_binary,
                                                                                             binary_format,
-                                                                                            java_serialization_info,
+                                                                                            serialization_data,
                                                                                             loading,
                                                                                         )
                                                                             .await
@@ -2115,7 +2209,7 @@ overflow: "hidden",
                                                                         zset_value,
                                                                         is_binary,
                                                                         binary_format,
-                                                                        java_serialization_info,
+                                                                        serialization_data,
                                                                         loading,
                                                                     ).await {
                                                                         tracing::error!("{error}");
@@ -2175,7 +2269,7 @@ overflow: "hidden",
                                                                         zset_value,
                                                                         is_binary,
                                                                         binary_format,
-                                                                        java_serialization_info,
+                                                                        serialization_data,
                                                                         loading,
                                                                     ).await {
                                                                         tracing::error!("{error}");
@@ -2375,7 +2469,7 @@ overflow: "hidden",
                                                                                                 zset_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
-                                                                                                java_serialization_info,
+                                                                                                serialization_data,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -2533,7 +2627,7 @@ overflow: "hidden",
                                                                                                 zset_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
-                                                                                                java_serialization_info,
+                                                                                                serialization_data,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -2643,7 +2737,7 @@ overflow: "hidden",
                                                                         zset_value,
                                                                         is_binary,
                                                                         binary_format,
-                                                                        java_serialization_info,
+                                                                        serialization_data,
                                                                         loading,
                                                                     ).await {
                                                                         tracing::error!("{error}");
@@ -2878,7 +2972,7 @@ overflow: "hidden",
                                                                                                 zset_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
-                                                                                                java_serialization_info,
+                                                                                                serialization_data,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -3040,7 +3134,7 @@ overflow: "hidden",
                                                                                                 zset_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
-                                                                                                java_serialization_info,
+                                                                                                serialization_data,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -3175,7 +3269,7 @@ overflow: "hidden",
                                                                         zset_value,
                                                                         is_binary,
                                                                         binary_format,
-                                                                        java_serialization_info,
+                                                                        serialization_data,
                                                                         loading,
                                                                     ).await {
                                                                         tracing::error!("{error}");
@@ -3407,7 +3501,7 @@ overflow: "hidden",
                                                                                                 zset_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
-                                                                                                java_serialization_info,
+                                                                                                serialization_data,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -3576,7 +3670,7 @@ overflow: "hidden",
                                                                                                 zset_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
-                                                                                                java_serialization_info,
+                                                                                                serialization_data,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
