@@ -34,6 +34,7 @@ pub enum BinaryFormat {
     Php,
     MsgPack,
     Pickle,
+    Kryo,
 }
 
 #[derive(Clone, PartialEq)]
@@ -111,6 +112,19 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
                 )
             } else {
                 "非 Pickle 数据".to_string()
+            }
+        }
+        BinaryFormat::Kryo => {
+            let detected = detect_serialization_format(data);
+            if matches!(detected, SerializationFormat::Kryo | SerializationFormat::Fst) {
+                let format_name = if detected == SerializationFormat::Fst { "FST" } else { "Kryo" };
+                format!(
+                    "{} 数据 ({} 字节)\n\n请切换到 Kryo 视图查看解析结果",
+                    format_name,
+                    data.len()
+                )
+            } else {
+                "非 Kryo/FST 数据".to_string()
             }
         }
     }
@@ -1138,6 +1152,8 @@ match info.key_type {
                                                                 Some(SerializationFormat::Php) => "PHP 序列化数据",
                                                                 Some(SerializationFormat::MsgPack) => "MessagePack 数据",
                                                                 Some(SerializationFormat::Pickle) => "Python Pickle 数据",
+                                                                Some(SerializationFormat::Kryo) => "Kryo 序列化数据",
+                                                                Some(SerializationFormat::Fst) => "FST 序列化数据",
                                                                 _ => "序列化数据",
                                                             }
                                                         }
@@ -1236,6 +1252,21 @@ match info.key_type {
                                                         }
                                                     }
 
+                                                    if matches!(detected_format, Some(SerializationFormat::Kryo) | Some(SerializationFormat::Fst)) {
+                                                        button {
+                                                            padding: "4px 8px",
+                                                            background: if binary_format() == BinaryFormat::Kryo { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if binary_format() == BinaryFormat::Kryo { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                            border: "none",
+                                                            border_radius: "4px",
+                                                            cursor: "pointer",
+                                                            font_size: "12px",
+                                                            onclick: move |_| binary_format.set(BinaryFormat::Kryo),
+
+                                                            "Kryo"
+                                                        }
+                                                    }
+
                                                     button {
                                                         padding: "4px 8px",
                                                         background: COLOR_BG_TERTIARY,
@@ -1254,7 +1285,8 @@ match info.key_type {
                                                                     BinaryFormat::JavaSerialized
                                                                     | BinaryFormat::Php
                                                                     | BinaryFormat::MsgPack
-                                                                    | BinaryFormat::Pickle => {
+                                                                    | BinaryFormat::Pickle
+                                                                    | BinaryFormat::Kryo => {
                                                                         if let Some(ref data) = serial_info {
                                                                             parse_to_json(&data.1, data.0).unwrap_or_else(|_| val.clone())
                                                                         } else {
@@ -1391,6 +1423,53 @@ match info.key_type {
                                                                         "Pickle 解析错误: {e}"
                                                                     }
                                                                 },
+                                                            }
+                                                        } else {
+                                                            rsx! {
+                                                                div {
+                                                                    padding: "16px",
+                                                                    background: COLOR_BG_TERTIARY,
+                                                                    border_radius: "8px",
+                                                                    color: COLOR_TEXT_SECONDARY,
+
+                                                                    "解析失败"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    BinaryFormat::Kryo => {
+                                                        if let Some((ref format, ref data)) = serialization_info {
+                                                            if matches!(format, SerializationFormat::Kryo | SerializationFormat::Fst) {
+                                                                match parse_to_json(data, *format) {
+                                                                    Ok(json_str) => rsx! {
+                                                                        JsonViewer {
+                                                                            value: json_str,
+                                                                            editable: false,
+                                                                            on_change: move |_| {},
+                                                                        }
+                                                                    },
+                                                                    Err(e) => rsx! {
+                                                                        div {
+                                                                            padding: "16px",
+                                                                            background: COLOR_ERROR_BG,
+                                                                            border_radius: "8px",
+                                                                            color: COLOR_ERROR,
+
+                                                                            "Kryo/FST 解析错误: {e}"
+                                                                        }
+                                                                    },
+                                                                }
+                                                            } else {
+                                                                rsx! {
+                                                                    div {
+                                                                        padding: "16px",
+                                                                        background: COLOR_BG_TERTIARY,
+                                                                        border_radius: "8px",
+                                                                        color: COLOR_TEXT_SECONDARY,
+
+                                                                        "非 Kryo/FST 数据"
+                                                                    }
+                                                                }
                                                             }
                                                         } else {
                                                             rsx! {

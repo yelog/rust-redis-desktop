@@ -1,9 +1,11 @@
 pub mod java_converters;
+pub mod kryo;
 pub mod msgpack;
 pub mod php;
 pub mod pickle;
 
 pub use jaded::{Content, Parser};
+use kryo::{detect_kryo_or_fst, is_fst_serialization, is_kryo_serialization, parse_kryo_to_json};
 use msgpack::{is_msgpack_serialization, parse_msgpack_to_json};
 use php::{is_php_serialization, parse_php_serialization, php_to_json};
 use pickle::{get_pickle_version, is_pickle_serialization, parse_pickle_to_json};
@@ -17,6 +19,8 @@ pub enum SerializationFormat {
     Php,
     MsgPack,
     Pickle,
+    Kryo,
+    Fst,
 }
 
 pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
@@ -32,6 +36,12 @@ pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
     if is_msgpack_serialization(data) {
         return SerializationFormat::MsgPack;
     }
+    if is_fst_serialization(data) {
+        return SerializationFormat::Fst;
+    }
+    if is_kryo_serialization(data) {
+        return SerializationFormat::Kryo;
+    }
     SerializationFormat::Unknown
 }
 
@@ -45,6 +55,7 @@ pub fn parse_to_json(data: &[u8], format: SerializationFormat) -> Result<String,
         }
         SerializationFormat::MsgPack => parse_msgpack_to_json(data),
         SerializationFormat::Pickle => parse_pickle_to_json(data),
+        SerializationFormat::Kryo | SerializationFormat::Fst => parse_kryo_to_json(data),
         _ => Err("未知格式，无法解析".to_string()),
     }
 }
@@ -52,6 +63,8 @@ pub fn parse_to_json(data: &[u8], format: SerializationFormat) -> Result<String,
 pub fn get_format_version(data: &[u8], format: SerializationFormat) -> Option<String> {
     match format {
         SerializationFormat::Pickle => get_pickle_version(data).map(|v| format!("v{}", v)),
+        SerializationFormat::Kryo => detect_kryo_or_fst(data).map(|s| s.to_string()),
+        SerializationFormat::Fst => Some("FST".to_string()),
         _ => None,
     }
 }
