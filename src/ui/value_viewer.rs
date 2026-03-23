@@ -33,6 +33,7 @@ pub enum BinaryFormat {
     JavaSerialized,
     Php,
     MsgPack,
+    Pickle,
 }
 
 #[derive(Clone, PartialEq)]
@@ -99,6 +100,17 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
                 )
             } else {
                 "非 MessagePack 数据".to_string()
+            }
+        }
+        BinaryFormat::Pickle => {
+            let detected = detect_serialization_format(data);
+            if detected == SerializationFormat::Pickle {
+                format!(
+                    "Python Pickle 数据 ({} 字节)\n\n请切换到 Pickle 视图查看解析结果",
+                    data.len()
+                )
+            } else {
+                "非 Pickle 数据".to_string()
             }
         }
     }
@@ -1125,6 +1137,7 @@ match info.key_type {
                                                                 Some(SerializationFormat::Java) => "Java 序列化对象",
                                                                 Some(SerializationFormat::Php) => "PHP 序列化数据",
                                                                 Some(SerializationFormat::MsgPack) => "MessagePack 数据",
+                                                                Some(SerializationFormat::Pickle) => "Python Pickle 数据",
                                                                 _ => "序列化数据",
                                                             }
                                                         }
@@ -1208,6 +1221,21 @@ match info.key_type {
                                                         }
                                                     }
 
+                                                    if detected_format == Some(SerializationFormat::Pickle) {
+                                                        button {
+                                                            padding: "4px 8px",
+                                                            background: if binary_format() == BinaryFormat::Pickle { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if binary_format() == BinaryFormat::Pickle { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                            border: "none",
+                                                            border_radius: "4px",
+                                                            cursor: "pointer",
+                                                            font_size: "12px",
+                                                            onclick: move |_| binary_format.set(BinaryFormat::Pickle),
+
+                                                            "Pickle"
+                                                        }
+                                                    }
+
                                                     button {
                                                         padding: "4px 8px",
                                                         background: COLOR_BG_TERTIARY,
@@ -1223,7 +1251,10 @@ match info.key_type {
                                                             let serial_info = serialization_info.clone();
                                                             move |_| {
                                                                 let copy_text = match current_format {
-                                                                    BinaryFormat::JavaSerialized | BinaryFormat::Php => {
+                                                                    BinaryFormat::JavaSerialized
+                                                                    | BinaryFormat::Php
+                                                                    | BinaryFormat::MsgPack
+                                                                    | BinaryFormat::Pickle => {
                                                                         if let Some(ref data) = serial_info {
                                                                             parse_to_json(&data.1, data.0).unwrap_or_else(|_| val.clone())
                                                                         } else {
@@ -1324,6 +1355,40 @@ match info.key_type {
                                                                         color: COLOR_ERROR,
 
                                                                         "MsgPack 解析错误: {e}"
+                                                                    }
+                                                                },
+                                                            }
+                                                        } else {
+                                                            rsx! {
+                                                                div {
+                                                                    padding: "16px",
+                                                                    background: COLOR_BG_TERTIARY,
+                                                                    border_radius: "8px",
+                                                                    color: COLOR_TEXT_SECONDARY,
+
+                                                                    "解析失败"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    BinaryFormat::Pickle => {
+                                                        if let Some((SerializationFormat::Pickle, ref data)) = serialization_info {
+                                                            match parse_to_json(data, SerializationFormat::Pickle) {
+                                                                Ok(json_str) => rsx! {
+                                                                    JsonViewer {
+                                                                        value: json_str,
+                                                                        editable: false,
+                                                                        on_change: move |_| {},
+                                                                    }
+                                                                },
+                                                                Err(e) => rsx! {
+                                                                    div {
+                                                                        padding: "16px",
+                                                                        background: COLOR_ERROR_BG,
+                                                                        border_radius: "8px",
+                                                                        color: COLOR_ERROR,
+
+                                                                        "Pickle 解析错误: {e}"
                                                                     }
                                                                 },
                                                             }

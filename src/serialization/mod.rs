@@ -1,10 +1,12 @@
 pub mod java_converters;
 pub mod msgpack;
 pub mod php;
+pub mod pickle;
 
 pub use jaded::{Content, Parser};
 use msgpack::{is_msgpack_serialization, parse_msgpack_to_json};
 use php::{is_php_serialization, parse_php_serialization, php_to_json};
+use pickle::{get_pickle_version, is_pickle_serialization, parse_pickle_to_json};
 use serde_json::Value as JsonValue;
 use std::io::Cursor;
 
@@ -14,11 +16,15 @@ pub enum SerializationFormat {
     Java,
     Php,
     MsgPack,
+    Pickle,
 }
 
 pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
     if is_java_serialization(data) {
         return SerializationFormat::Java;
+    }
+    if is_pickle_serialization(data) {
+        return SerializationFormat::Pickle;
     }
     if is_php_serialization(data) {
         return SerializationFormat::Php;
@@ -38,7 +44,15 @@ pub fn parse_to_json(data: &[u8], format: SerializationFormat) -> Result<String,
             serde_json::to_string_pretty(&json).map_err(|e| e.to_string())
         }
         SerializationFormat::MsgPack => parse_msgpack_to_json(data),
+        SerializationFormat::Pickle => parse_pickle_to_json(data),
         _ => Err("未知格式，无法解析".to_string()),
+    }
+}
+
+pub fn get_format_version(data: &[u8], format: SerializationFormat) -> Option<String> {
+    match format {
+        SerializationFormat::Pickle => get_pickle_version(data).map(|v| format!("v{}", v)),
+        _ => None,
     }
 }
 
