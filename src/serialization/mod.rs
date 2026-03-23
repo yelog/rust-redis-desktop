@@ -1,7 +1,9 @@
 pub mod java_converters;
+pub mod msgpack;
 pub mod php;
 
 pub use jaded::{Content, Parser};
+use msgpack::{is_msgpack_serialization, parse_msgpack_to_json};
 use php::{is_php_serialization, parse_php_serialization, php_to_json};
 use serde_json::Value as JsonValue;
 use std::io::Cursor;
@@ -11,6 +13,7 @@ pub enum SerializationFormat {
     Unknown,
     Java,
     Php,
+    MsgPack,
 }
 
 pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
@@ -19,6 +22,9 @@ pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
     }
     if is_php_serialization(data) {
         return SerializationFormat::Php;
+    }
+    if is_msgpack_serialization(data) {
+        return SerializationFormat::MsgPack;
     }
     SerializationFormat::Unknown
 }
@@ -31,6 +37,7 @@ pub fn parse_to_json(data: &[u8], format: SerializationFormat) -> Result<String,
             let json = php_to_json(php);
             serde_json::to_string_pretty(&json).map_err(|e| e.to_string())
         }
+        SerializationFormat::MsgPack => parse_msgpack_to_json(data),
         _ => Err("未知格式，无法解析".to_string()),
     }
 }
