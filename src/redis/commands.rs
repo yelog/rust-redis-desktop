@@ -158,6 +158,32 @@ impl ConnectionPool {
         }
     }
 
+    pub async fn get_key_types(&self, keys: &[String]) -> Result<HashMap<String, KeyType>> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            self.ensure_selected_database(conn).await?;
+            let mut result = HashMap::new();
+
+            for key in keys {
+                let type_str: String = redis::cmd("TYPE")
+                    .arg(key)
+                    .query_async(conn)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                result.insert(key.clone(), KeyType::from(type_str));
+            }
+
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
     pub async fn get_key_info(&self, key: &str) -> Result<KeyInfo> {
         let key_type = self.get_key_type(key).await?;
 

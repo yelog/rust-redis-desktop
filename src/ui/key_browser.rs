@@ -30,6 +30,37 @@ fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     keys
 }
 
+fn collect_leaf_keys_by_node_id(nodes: &[TreeNode], node_id: &str) -> Vec<String> {
+    fn find_node<'a>(nodes: &'a [TreeNode], node_id: &str) -> Option<&'a TreeNode> {
+        for node in nodes {
+            if node.node_id == node_id {
+                return Some(node);
+            }
+            if let found @ Some(_) = find_node(&node.children, node_id) {
+                return found;
+            }
+        }
+        None
+    }
+
+    fn collect_leaves(node: &TreeNode) -> Vec<String> {
+        let mut keys = Vec::new();
+        if node.is_leaf {
+            keys.push(node.path.clone());
+        }
+        for child in &node.children {
+            keys.extend(collect_leaves(child));
+        }
+        keys
+    }
+
+    if let Some(node) = find_node(nodes, node_id) {
+        collect_leaves(node)
+    } else {
+        Vec::new()
+    }
+}
+
 fn key_match_pattern(search_pattern: &str) -> String {
     if search_pattern.trim().is_empty() {
         "*".to_string()
@@ -196,14 +227,46 @@ pub fn KeyBrowser(
         }
     };
 
-    let mut toggle_node = {
+    let toggle_node = {
         let mut tree_state = tree_state.clone();
+        let tree_nodes = tree_nodes.clone();
+        let key_type_cache = key_type_cache.clone();
+        let pool = connection_pool.clone();
         move |node_id: String| {
             let mut state = tree_state.write();
-            if state.expanded_nodes.contains(&node_id) {
-                state.expanded_nodes.remove(&node_id);
+            let is_expanding = !state.expanded_nodes.contains(&node_id);
+            if is_expanding {
+                state.expanded_nodes.insert(node_id.clone());
             } else {
-                state.expanded_nodes.insert(node_id);
+                state.expanded_nodes.remove(&node_id);
+            }
+            drop(state);
+
+            if is_expanding {
+                let leaf_keys = collect_leaf_keys_by_node_id(&tree_nodes(), &node_id);
+                let uncached_keys: Vec<String> = leaf_keys
+                    .into_iter()
+                    .filter(|k| !key_type_cache.read().contains_key(k))
+                    .collect();
+
+                if !uncached_keys.is_empty() {
+                    let pool = pool.clone();
+                    let mut key_type_cache = key_type_cache.clone();
+                    let mut tree_nodes = tree_nodes.clone();
+                    spawn(async move {
+                        match pool.get_key_types(&uncached_keys).await {
+                            Ok(types) => {
+                                let mut cache = key_type_cache.write();
+                                let mut nodes = tree_nodes.write();
+                                for (key, key_type) in types {
+                                    cache.insert(key.clone(), key_type.clone());
+                                    update_node_key_type(&mut nodes, &key, key_type);
+                                }
+                            }
+                            Err(e) => tracing::error!("Failed to batch load key types: {}", e),
+                        }
+                    });
+                }
             }
         }
     };
@@ -786,6 +849,28 @@ fn update_node_key_info(nodes: &mut [TreeNode], key_path: &str, key_info: KeyInf
             return true;
         }
         if update_node_key_info(&mut node.children, key_path, key_info.clone()) {
+            return true;
+        }
+    }
+    false
+}
+
+fn update_node_key_type(nodes: &mut [TreeNode], key_path: &str, key_type: KeyType) -> bool {
+    for node in nodes.iter_mut() {
+        if node.is_leaf && node.path == key_path {
+            if let Some(ref mut info) = node.key_info {
+                info.key_type = key_type;
+            } else {
+                node.key_info = Some(KeyInfo {
+                    name: key_path.to_string(),
+                    key_type,
+                    ttl: None,
+                    size: None,
+                });
+            }
+            return true;
+        }
+        if update_node_key_type(&mut node.children, key_path, key_type.clone()) {
             return true;
         }
     }
