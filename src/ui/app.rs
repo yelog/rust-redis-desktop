@@ -3,7 +3,7 @@ use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, Con
 use crate::theme::{resolve_theme, theme_spec, ThemePreference, ThemeSpec};
 use crate::ui::{
     ClientsPanel, ConnectionForm, FlushConfirmDialog, KeyBrowser, LeftRail, MonitorPanel,
-    SettingsDialog, SlowLogPanel, Terminal,
+    ResizableDivider, SettingsDialog, SlowLogPanel, Terminal,
 };
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
@@ -548,7 +548,7 @@ pub fn App() -> Element {
     let mut current_db = use_signal(|| 0u8);
     let mut theme_preference = use_signal(ThemePreference::default);
     let mut system_theme_dark = use_signal(system_theme_is_dark);
-    let left_rail_width = 280.0;
+    let mut left_rail_width = use_signal(|| 280.0);
 
     let active_theme_preference = theme_preference();
     let active_system_theme_dark = system_theme_dark();
@@ -827,6 +827,12 @@ await new Promise(() => {});
                             show_flush_dialog.set(Some(id));
                         },
                         on_open_settings: move |_| show_settings.set(true),
+                    }
+
+                    ResizableDivider {
+                        size: left_rail_width,
+                        min_size: 180.0,
+                        max_size: 400.0,
                     }
 
     if let Some(conn_id) = selected_connection() {

@@ -9,7 +9,7 @@ use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::icons::*;
-use crate::ui::{LazyTreeNode, TreeState, ValueViewer};
+use crate::ui::{LazyTreeNode, ResizableDivider, TreeState, ValueViewer};
 use arboard::Clipboard;
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -108,6 +108,7 @@ pub fn KeyBrowser(
     let key_type_cache = use_signal(HashMap::<String, KeyType>::new);
     let mut tree_state = use_signal(TreeState::default);
     let mut context_menu = use_signal(|| None::<(String, bool, (i32, i32))>);
+    let mut key_list_width = use_signal(|| 320.0);
 
     let load_keyspace = {
         let pool = connection_pool.clone();
@@ -351,8 +352,8 @@ pub fn KeyBrowser(
             overflow: "hidden",
 
             div {
-                width: "320px",
-                min_width: "280px",
+                width: "{key_list_width()}px",
+                min_width: "200px",
                 height: "100%",
                 background: COLOR_BG_SECONDARY,
                 border_right: "1px solid {COLOR_BORDER}",
@@ -691,6 +692,12 @@ pub fn KeyBrowser(
 
                     "共 {keys_count()} 个 Key"
                 }
+            }
+
+            ResizableDivider {
+                size: key_list_width,
+                min_size: 200.0,
+                max_size: 500.0,
             }
 
             div {

@@ -16,7 +16,7 @@ fn state_label(state: ConnectionState) -> &'static str {
 
 #[component]
 pub fn LeftRail(
-    width: f64,
+    width: Signal<f64>,
     connections: Vec<(Uuid, String)>,
     connection_states: HashMap<Uuid, ConnectionState>,
     selected_connection: Option<Uuid>,
@@ -50,7 +50,7 @@ pub fn LeftRail(
 
     rsx! {
         div {
-            width: "{width}px",
+            width: "{width()}px",
             height: "100%",
             background: "{colors.surface_lowest}",
             border_right: "1px solid {colors.border}",
