@@ -1,5 +1,10 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{find_command, find_commands, RedisCommand};
+use crate::theme::{
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_CONTROL_BG,
+    COLOR_CONTROL_BORDER, COLOR_PRIMARY, COLOR_SELECTION_BG, COLOR_TEXT, COLOR_TEXT_CONTRAST,
+    COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_WARNING,
+};
 use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq)]
@@ -15,8 +20,8 @@ fn CommandSuggestion(cmd: &'static RedisCommand, on_select: EventHandler<String>
         div {
             padding: "6px 10px",
             cursor: "pointer",
-            background: "#2d2d2d",
-            border_bottom: "1px solid #3c3c3c",
+            background: COLOR_BG_TERTIARY,
+            border_bottom: "1px solid {COLOR_BORDER}",
             onmouseenter: |e| {
                 let _ = e;
             },
@@ -31,7 +36,7 @@ fn CommandSuggestion(cmd: &'static RedisCommand, on_select: EventHandler<String>
                 align_items: "center",
 
                 span {
-                    color: "#4ec9b0",
+                    color: COLOR_ACCENT,
                     font_family: "Consolas, monospace",
                     font_size: "13px",
                     font_weight: "bold",
@@ -40,7 +45,7 @@ fn CommandSuggestion(cmd: &'static RedisCommand, on_select: EventHandler<String>
                 }
 
                 span {
-                    color: "#666",
+                    color: COLOR_TEXT_SUBTLE,
                     font_size: "10px",
 
                     "{cmd.group}"
@@ -48,7 +53,7 @@ fn CommandSuggestion(cmd: &'static RedisCommand, on_select: EventHandler<String>
             }
 
             div {
-                color: "#888",
+                color: COLOR_TEXT_SECONDARY,
                 font_size: "11px",
                 margin_top: "2px",
 
@@ -63,7 +68,7 @@ fn CommandHelp(cmd: &'static RedisCommand) -> Element {
     rsx! {
         div {
             padding: "12px",
-            background: "#2d2d2d",
+            background: COLOR_BG_TERTIARY,
             border_radius: "6px",
             margin_bottom: "12px",
 
@@ -74,7 +79,7 @@ fn CommandHelp(cmd: &'static RedisCommand) -> Element {
                 margin_bottom: "8px",
 
                 span {
-                    color: "#4ec9b0",
+                    color: COLOR_ACCENT,
                     font_family: "Consolas, monospace",
                     font_size: "16px",
                     font_weight: "bold",
@@ -83,7 +88,7 @@ fn CommandHelp(cmd: &'static RedisCommand) -> Element {
                 }
 
                 span {
-                    color: "#666",
+                    color: COLOR_TEXT_SUBTLE,
                     font_size: "12px",
 
                     "{cmd.group}"
@@ -91,7 +96,7 @@ fn CommandHelp(cmd: &'static RedisCommand) -> Element {
             }
 
             div {
-                color: "#888",
+                color: COLOR_TEXT_SECONDARY,
                 font_size: "12px",
                 margin_bottom: "8px",
 
@@ -99,12 +104,12 @@ fn CommandHelp(cmd: &'static RedisCommand) -> Element {
             }
 
             div {
-                background: "#1e1e1e",
+                background: COLOR_BG,
                 padding: "8px",
                 border_radius: "4px",
 
                 code {
-                    color: "#f59e0b",
+                    color: COLOR_WARNING,
                     font_family: "Consolas, monospace",
                     font_size: "12px",
                     white_space: "pre-wrap",
@@ -184,15 +189,15 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
             height: "100%",
             display: "flex",
             flex_direction: "column",
-            background: "#1e1e1e",
+            background: COLOR_BG,
 
             div {
                 padding: "8px 12px",
-                border_bottom: "1px solid #3c3c3c",
-                background: "#252526",
+                border_bottom: "1px solid {COLOR_BORDER}",
+                background: COLOR_BG_SECONDARY,
 
                 span {
-                    color: "#888",
+                    color: COLOR_TEXT_SECONDARY,
                     font_size: "12px",
 
                     "输入命令后按 TAB 查看补全建议，输入 HELP <command> 查看命令帮助"
@@ -222,14 +227,14 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                             margin_bottom: "4px",
 
                             span {
-                                color: "#888",
+                                color: COLOR_TEXT_SUBTLE,
                                 font_size: "11px",
 
                                 "{entry.timestamp}"
                             }
 
                             span {
-                                color: "#4ec9b0",
+                                color: COLOR_ACCENT,
                                 font_family: "Consolas, monospace",
                                 font_size: "13px",
 
@@ -238,12 +243,12 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                         }
 
                         pre {
-                            color: "#d4d4d4",
+                            color: COLOR_TEXT,
                             font_family: "Consolas, monospace",
                             font_size: "12px",
                             margin: "0",
                             padding: "8px",
-                            background: "#2d2d2d",
+                            background: COLOR_BG_TERTIARY,
                             border_radius: "4px",
                             overflow_x: "auto",
 
@@ -255,17 +260,17 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
 
             if show_suggestions() && !current_suggestions.is_empty() {
                 div {
-                    border_top: "1px solid #3c3c3c",
+                    border_top: "1px solid {COLOR_BORDER}",
                     max_height: "200px",
                     overflow_y: "auto",
-                    background: "#1e1e1e",
+                    background: COLOR_BG,
 
                     for (idx, cmd) in current_suggestions.iter().enumerate() {
                         div {
                             key: "{cmd.name}",
                             padding: "6px 12px",
                             cursor: "pointer",
-                            background: if idx == selected_suggestion_index() { "#3c3c3c" } else { "transparent" },
+                            background: if idx == selected_suggestion_index() { COLOR_SELECTION_BG } else { "transparent" },
                             onclick: {
                                 let cmd_name = cmd.name;
                                 move |_| {
@@ -279,7 +284,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                                 justify_content: "space_between",
 
                                 span {
-                                    color: "#4ec9b0",
+                                    color: COLOR_ACCENT,
                                     font_family: "Consolas, monospace",
                                     font_size: "12px",
 
@@ -287,7 +292,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                                 }
 
                                 span {
-                                    color: "#666",
+                                    color: COLOR_TEXT_SUBTLE,
                                     font_size: "10px",
 
                                     "{cmd.description}"
@@ -300,14 +305,14 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
 
             div {
                 padding: "12px",
-                border_top: "1px solid #3c3c3c",
+                border_top: "1px solid {COLOR_BORDER}",
 
                 div {
                     display: "flex",
                     gap: "8px",
 
                     span {
-                        color: "#4ec9b0",
+                        color: COLOR_ACCENT,
                         font_family: "Consolas, monospace",
                         line_height: "32px",
 
@@ -317,10 +322,10 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                     input {
                         flex: "1",
                         padding: "6px",
-                        background: "#3c3c3c",
-                        border: "1px solid #555",
+                        background: COLOR_CONTROL_BG,
+                        border: "1px solid {COLOR_CONTROL_BORDER}",
                         border_radius: "4px",
-                        color: "white",
+                        color: COLOR_TEXT,
                         font_family: "Consolas, monospace",
                         font_size: "13px",
                         value: "{input}",
@@ -368,8 +373,8 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
 
                     button {
                         padding: "6px 16px",
-                        background: "#0e639c",
-                        color: "white",
+                        background: COLOR_PRIMARY,
+                        color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",

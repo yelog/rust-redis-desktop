@@ -1,12 +1,12 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
-use crate::theme::{ThemeColors, ThemeMode};
+use crate::theme::{resolve_theme, theme_spec, ThemePreference, ThemeSpec};
 use crate::ui::{
     ClientsPanel, ConnectionForm, FlushConfirmDialog, KeyBrowser, LeftRail, MonitorPanel,
     SettingsDialog, SlowLogPanel, Terminal,
 };
 use dioxus::prelude::*;
-use serde_json::json;
+use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -40,82 +40,108 @@ fn system_theme_is_dark() -> bool {
     }
 }
 
-fn resolve_theme_colors(mode: ThemeMode, system_is_dark: bool) -> ThemeColors {
-    match mode {
-        ThemeMode::Dark => ThemeColors::dark(),
-        ThemeMode::Light => ThemeColors::light(),
-        ThemeMode::System => {
-            if system_is_dark {
-                ThemeColors::dark()
-            } else {
-                ThemeColors::light()
-            }
-        }
+fn build_theme_palette(theme: ThemeSpec) -> Value {
+    let colors = theme.colors;
+    let derived = theme.derived;
+    let syntax = theme.syntax;
+    let mut palette = Map::new();
+
+    fn insert_str(palette: &mut Map<String, Value>, key: &str, value: &str) {
+        palette.insert(key.to_string(), Value::String(value.to_string()));
     }
+
+    insert_str(&mut palette, "id", theme.id.as_str());
+    insert_str(&mut palette, "label", theme.label);
+    palette.insert("isDark".to_string(), Value::Bool(theme.is_dark()));
+    insert_str(&mut palette, "surfaceBase", colors.background);
+    insert_str(
+        &mut palette,
+        "surfaceSecondary",
+        colors.background_secondary,
+    );
+    insert_str(&mut palette, "surfaceTertiary", colors.background_tertiary);
+    insert_str(&mut palette, "surfaceLowest", colors.surface_lowest);
+    insert_str(&mut palette, "surfaceLow", colors.surface_low);
+    insert_str(&mut palette, "surfaceHigh", colors.surface_high);
+    insert_str(&mut palette, "surfaceHighest", colors.surface_highest);
+    insert_str(&mut palette, "border", colors.border);
+    insert_str(&mut palette, "outlineVariant", colors.outline_variant);
+    insert_str(&mut palette, "overlayBackdrop", derived.overlay_backdrop);
+    insert_str(&mut palette, "controlBg", derived.control_bg);
+    insert_str(&mut palette, "controlBorder", derived.control_border);
+    insert_str(&mut palette, "buttonSecondary", derived.button_secondary);
+    insert_str(
+        &mut palette,
+        "buttonSecondaryBorder",
+        derived.button_secondary_border,
+    );
+    insert_str(&mut palette, "textPrimary", colors.text);
+    insert_str(&mut palette, "textSecondary", colors.text_secondary);
+    insert_str(&mut palette, "textSubtle", colors.text_subtle);
+    insert_str(&mut palette, "textSoft", derived.text_soft);
+    insert_str(&mut palette, "textContrast", derived.text_contrast);
+    insert_str(&mut palette, "primary", colors.primary);
+    insert_str(&mut palette, "accent", colors.accent);
+    insert_str(&mut palette, "success", colors.success);
+    insert_str(&mut palette, "warning", colors.warning);
+    insert_str(&mut palette, "error", colors.error);
+    insert_str(&mut palette, "info", derived.info);
+    insert_str(&mut palette, "outline", derived.outline);
+    insert_str(&mut palette, "secondaryAction", derived.secondary_action);
+    insert_str(&mut palette, "infoBg", derived.info_bg);
+    insert_str(&mut palette, "infoBgAlt", derived.info_bg_alt);
+    insert_str(&mut palette, "successBg", derived.success_bg);
+    insert_str(&mut palette, "successBgAlt", derived.success_bg_alt);
+    insert_str(&mut palette, "warningBg", derived.warning_bg);
+    insert_str(&mut palette, "errorBg", derived.error_bg);
+    insert_str(&mut palette, "selectionBg", derived.selection_bg);
+    insert_str(&mut palette, "selectionBgAlt", derived.selection_bg_alt);
+    insert_str(&mut palette, "rowCreateBg", derived.row_create_bg);
+    insert_str(&mut palette, "rowEditBg", derived.row_edit_bg);
+    insert_str(&mut palette, "toneStringBg", derived.tone_string_bg);
+    insert_str(&mut palette, "toneStringBorder", derived.tone_string_border);
+    insert_str(&mut palette, "toneHashBg", derived.tone_hash_bg);
+    insert_str(&mut palette, "toneHashBorder", derived.tone_hash_border);
+    insert_str(&mut palette, "toneListBg", derived.tone_list_bg);
+    insert_str(&mut palette, "toneListBorder", derived.tone_list_border);
+    insert_str(&mut palette, "toneSetBg", derived.tone_set_bg);
+    insert_str(&mut palette, "toneSetBorder", derived.tone_set_border);
+    insert_str(&mut palette, "toneZsetBg", derived.tone_zset_bg);
+    insert_str(&mut palette, "toneZsetBorder", derived.tone_zset_border);
+    insert_str(&mut palette, "toneStreamBg", derived.tone_stream_bg);
+    insert_str(&mut palette, "toneStreamBorder", derived.tone_stream_border);
+    insert_str(&mut palette, "syntaxKey", syntax.key);
+    insert_str(&mut palette, "syntaxString", syntax.string);
+    insert_str(&mut palette, "syntaxNumber", syntax.number);
+    insert_str(&mut palette, "syntaxBoolean", syntax.boolean);
+    insert_str(&mut palette, "syntaxNull", syntax.null);
+    insert_str(&mut palette, "syntaxBracket", syntax.bracket);
+    insert_str(&mut palette, "syntaxKeyword", syntax.keyword);
+    insert_str(&mut palette, "syntaxType", syntax.type_name);
+    insert_str(&mut palette, "syntaxFunction", syntax.function);
+    insert_str(&mut palette, "syntaxComment", syntax.comment);
+    insert_str(&mut palette, "syntaxOperator", syntax.operator);
+    insert_str(&mut palette, "syntaxConstant", syntax.constant);
+
+    Value::Object(palette)
 }
 
-fn build_theme_palette(colors: &ThemeColors, is_dark: bool) -> serde_json::Value {
-    json!({
-        "isDark": is_dark,
-        "surfaceBase": colors.background,
-        "surfaceSecondary": colors.background_secondary,
-        "surfaceTertiary": colors.background_tertiary,
-        "surfaceLowest": colors.surface_lowest,
-        "surfaceLow": colors.surface_low,
-        "surfaceHigh": colors.surface_high,
-        "surfaceHighest": colors.surface_highest,
-        "border": colors.border,
-        "outlineVariant": colors.outline_variant,
-        "controlBg": if is_dark { "#353535" } else { "#fffaf8" },
-        "controlBorder": colors.outline_variant,
-        "buttonSecondary": colors.surface_highest,
-        "buttonSecondaryBorder": colors.outline_variant,
-        "textPrimary": colors.text,
-        "textSecondary": colors.text_secondary,
-        "textSubtle": colors.text_subtle,
-        "textSoft": if is_dark { "#e5e2e1" } else { "#6f5953" },
-        "textContrast": "#ffffff",
-        "primary": colors.primary,
-        "accent": colors.accent,
-        "success": colors.success,
-        "warning": colors.warning,
-        "error": colors.error,
-        "info": if is_dark { "#00daf3" } else { colors.accent },
-        "outline": colors.text_subtle,
-        "infoBg": if is_dark { "#1c1b1b" } else { "#e4f4f6" },
-        "infoBgAlt": if is_dark { "#2a2a2a" } else { "#d8ecef" },
-        "successBg": if is_dark { "#1a3a1a" } else { "#edf7f0" },
-        "successBgAlt": if is_dark { "#1e4620" } else { "#e3f1e7" },
-        "errorBg": if is_dark { "#2d1f1f" } else { "#fff1ef" },
-        "selectionBg": if is_dark { "#2a2a2a" } else { "rgba(0, 127, 142, 0.12)" },
-        "selectionBgAlt": if is_dark { "#1a4a1a" } else { "rgba(177, 44, 25, 0.08)" },
-        "syntaxKey": if is_dark { "#e2bfb8" } else { "#9f2d1f" },
-        "syntaxString": if is_dark { "#00daf3" } else { "#006d79" },
-        "syntaxNumber": if is_dark { "#ffb4a6" } else { "#b15d00" },
-        "syntaxBoolean": if is_dark { "#a98a84" } else { "#b42318" },
-        "syntaxNull": if is_dark { "#5a413c" } else { "#8c6f68" },
-        "syntaxBracket": if is_dark { "#e5e2e1" } else { "#241917" },
-        "syntaxKeyword": if is_dark { "#569cd6" } else { "#005f73" },
-        "syntaxType": if is_dark { "#dcdcaa" } else { "#7a5c1f" },
-    })
-}
-
-fn build_theme_bridge_script(mode: ThemeMode) -> String {
-    let selected_mode = match mode {
-        ThemeMode::Dark => "dark",
-        ThemeMode::Light => "light",
-        ThemeMode::System => "system",
-    };
-    let dark_theme = build_theme_palette(&ThemeColors::dark(), true);
-    let light_theme = build_theme_palette(&ThemeColors::light(), false);
+fn build_theme_bridge_script(preference: ThemePreference) -> String {
+    let selected_preference = serde_json::to_string(&preference).unwrap();
+    let classic_dark = build_theme_palette(theme_spec(crate::theme::ThemeId::ClassicDark));
+    let classic_light = build_theme_palette(theme_spec(crate::theme::ThemeId::ClassicLight));
+    let tokyo_night = build_theme_palette(theme_spec(crate::theme::ThemeId::TokyoNight));
 
     format!(
         r##"
 (() => {{
   const bridge = (window.__rrdThemeBridge = window.__rrdThemeBridge || {{}});
-  bridge.selectedMode = {selected_mode};
-  bridge.dark = {dark_theme};
-  bridge.light = {light_theme};
+  bridge.selectedPreference = {selected_preference};
+  bridge.themes = {{
+    classic_dark: {classic_dark},
+    classic_light: {classic_light},
+    tokyo_night: {tokyo_night},
+  }};
 
   const normalize = (value) => (value || "")
     .toString()
@@ -179,12 +205,25 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
     [["#555", "#555555", "#c7c7c7"], "controlBorder"],
     [["#333", "#5a5a5a", "#d9d9d9"], "buttonSecondary"],
     [["#444"], "buttonSecondaryBorder"],
+    [["rgba(0, 0, 0, 0.7)"], "overlayBackdrop"],
     [["#1a1a2e"], "infoBg"],
-    [["#1f2937", "#202a33"], "infoBgAlt"],
-    [["#1a3a1a"], "successBg"],
-    [["#1a4a1a", "#1e4620"], "successBgAlt"],
-    [["#2d1f1f"], "errorBg"],
-    [["#094771"], "selectionBg"],
+    [["#1f2937", "#202a33", "rgba(0, 122, 204, 0.12)", "rgba(49, 130, 206, 0.18)"], "infoBgAlt"],
+    [["#1a3a1a", "rgba(16, 124, 16, 0.12)", "rgba(48, 209, 88, 0.08)", "rgba(48, 209, 88, 0.10)", "rgba(78, 201, 176, 0.1)"], "successBg"],
+    [["#1a4a1a", "#1e4620", "rgba(47, 133, 90, 0.16)", "rgba(48, 209, 88, 0.15)", "rgba(48, 209, 88, 0.20)"], "successBgAlt"],
+    [["rgba(255, 159, 10, 0.15)", "rgba(245, 158, 11, 0.1)"], "warningBg"],
+    [["#2d1f1f", "rgba(209, 52, 56, 0.12)", "rgba(248, 113, 113, 0.1)", "rgba(197, 48, 48, 0.18)"], "errorBg"],
+    [["#094771", "rgba(0, 218, 243, 0.06)", "rgba(0, 127, 142, 0.12)"], "selectionBg"],
+    [["rgba(177, 44, 25, 0.08)"], "selectionBgAlt"],
+    [["rgba(15, 108, 189, 0.08)"], "rowCreateBg"],
+    [["rgba(15, 108, 189, 0.12)"], "rowEditBg"],
+    [["rgba(255, 180, 166, 0.10)", "rgba(255, 180, 166, 0.12)"], "toneStringBg"],
+    [["rgba(255, 180, 166, 0.20)", "rgba(255, 180, 166, 0.24)"], "toneStringBorder"],
+    [["rgba(0, 218, 243, 0.10)"], "toneHashBg"],
+    [["rgba(0, 218, 243, 0.22)"], "toneHashBorder"],
+    [["rgba(229, 226, 225, 0.08)", "rgba(169, 138, 132, 0.10)"], "toneListBg"],
+    [["rgba(229, 226, 225, 0.18)", "rgba(169, 138, 132, 0.18)"], "toneListBorder"],
+    [["rgba(48, 209, 88, 0.10)"], "toneStreamBg"],
+    [["rgba(48, 209, 88, 0.20)"], "toneStreamBorder"],
   ];
 
   const themedAccentAliases = [
@@ -194,12 +233,14 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
     [["#f59e0b"], "warning"],
     [["#c53030", "#f87171", "#ef4444", "#f44336"], "error"],
     [["#63b3ed"], "info"],
-    [["#805ad5", "#a78bfa"], "purple"],
+    [["#805ad5", "#a78bfa"], "secondaryAction"],
     [["#9cdcfe"], "syntaxKey"],
     [["#ce9178"], "syntaxString"],
     [["#b5cea8"], "syntaxNumber"],
-    [["#569cd6"], "syntaxKeyword"],
+    [["#569cd6"], "syntaxBoolean"],
     [["#dcdcaa"], "syntaxType"],
+    [["#6b7280"], "syntaxComment"],
+    [["#808080"], "syntaxNull"],
   ];
 
   const legacyTextPrimary = new Set([
@@ -220,11 +261,13 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
   const legacyTextSecondary = new Set(["#888", "#666", "#808080"].map(normalize));
 
   const resolveTheme = () => {{
-    if (bridge.selectedMode === "system") {{
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? bridge.dark : bridge.light;
+    if (bridge.selectedPreference === "system") {{
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? bridge.themes.classic_dark
+        : bridge.themes.classic_light;
     }}
 
-    return bridge.selectedMode === "dark" ? bridge.dark : bridge.light;
+    return bridge.themes[bridge.selectedPreference] || bridge.themes.classic_dark;
   }};
 
   const buildMaps = (theme) => {{
@@ -244,18 +287,24 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
   const isContrastBackground = (value) => {{
     const normalized = normalize(value);
     return [
-      bridge.dark.primary,
-      bridge.light.primary,
-      bridge.dark.success,
-      bridge.light.success,
-      bridge.dark.error,
-      bridge.light.error,
-      bridge.dark.warning,
-      bridge.light.warning,
-      bridge.dark.buttonSecondary,
-      bridge.light.buttonSecondary,
-      bridge.dark.purple,
-      bridge.light.purple,
+      bridge.themes.classic_dark.primary,
+      bridge.themes.classic_light.primary,
+      bridge.themes.classic_dark.success,
+      bridge.themes.classic_light.success,
+      bridge.themes.classic_dark.error,
+      bridge.themes.classic_light.error,
+      bridge.themes.classic_dark.warning,
+      bridge.themes.classic_light.warning,
+      bridge.themes.classic_dark.buttonSecondary,
+      bridge.themes.classic_light.buttonSecondary,
+      bridge.themes.classic_dark.secondaryAction,
+      bridge.themes.classic_light.secondaryAction,
+      bridge.themes.tokyo_night.primary,
+      bridge.themes.tokyo_night.success,
+      bridge.themes.tokyo_night.error,
+      bridge.themes.tokyo_night.warning,
+      bridge.themes.tokyo_night.buttonSecondary,
+      bridge.themes.tokyo_night.secondaryAction,
     ]
       .map(normalize)
       .includes(normalized);
@@ -366,13 +415,18 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
       bridge.observer.disconnect();
     }}
 
-    root.dataset.themeMode = bridge.selectedMode;
+    root.dataset.themeMode = bridge.selectedPreference;
     root.dataset.themeResolved = theme.isDark ? "dark" : "light";
     root.style.colorScheme = theme.isDark ? "dark" : "light";
     root.style.setProperty("--theme-bg", theme.surfaceBase);
     root.style.setProperty("--theme-bg-secondary", theme.surfaceSecondary);
     root.style.setProperty("--theme-bg-tertiary", theme.surfaceTertiary);
     root.style.setProperty("--theme-bg-lowest", theme.surfaceLowest);
+    root.style.setProperty("--theme-overlay-backdrop", theme.overlayBackdrop);
+    root.style.setProperty("--theme-control-bg", theme.controlBg);
+    root.style.setProperty("--theme-control-border", theme.controlBorder);
+    root.style.setProperty("--theme-button-secondary", theme.buttonSecondary);
+    root.style.setProperty("--theme-button-secondary-border", theme.buttonSecondaryBorder);
     root.style.setProperty("--theme-surface-low", theme.surfaceLow);
     root.style.setProperty("--theme-surface-high", theme.surfaceHigh);
     root.style.setProperty("--theme-surface-highest", theme.surfaceHighest);
@@ -381,20 +435,49 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
     root.style.setProperty("--theme-text-secondary", theme.textSecondary);
     root.style.setProperty("--theme-text-subtle", theme.textSubtle);
     root.style.setProperty("--theme-text-soft", theme.textSoft);
+    root.style.setProperty("--theme-text-contrast", theme.textContrast);
     root.style.setProperty("--theme-primary", theme.primary);
     root.style.setProperty("--theme-accent", theme.accent);
     root.style.setProperty("--theme-success", theme.success);
     root.style.setProperty("--theme-warning", theme.warning);
     root.style.setProperty("--theme-error", theme.error);
     root.style.setProperty("--theme-info", theme.info);
+    root.style.setProperty("--theme-info-bg", theme.infoBg);
+    root.style.setProperty("--theme-info-bg-alt", theme.infoBgAlt);
+    root.style.setProperty("--theme-success-bg", theme.successBg);
+    root.style.setProperty("--theme-success-bg-alt", theme.successBgAlt);
+    root.style.setProperty("--theme-warning-bg", theme.warningBg);
+    root.style.setProperty("--theme-error-bg", theme.errorBg);
+    root.style.setProperty("--theme-selection-bg", theme.selectionBg);
+    root.style.setProperty("--theme-selection-bg-alt", theme.selectionBgAlt);
+    root.style.setProperty("--theme-row-create-bg", theme.rowCreateBg);
+    root.style.setProperty("--theme-row-edit-bg", theme.rowEditBg);
     root.style.setProperty("--theme-outline", theme.outline);
     root.style.setProperty("--theme-outline-variant", theme.outlineVariant);
+    root.style.setProperty("--theme-tone-string-bg", theme.toneStringBg);
+    root.style.setProperty("--theme-tone-string-border", theme.toneStringBorder);
+    root.style.setProperty("--theme-tone-hash-bg", theme.toneHashBg);
+    root.style.setProperty("--theme-tone-hash-border", theme.toneHashBorder);
+    root.style.setProperty("--theme-tone-list-bg", theme.toneListBg);
+    root.style.setProperty("--theme-tone-list-border", theme.toneListBorder);
+    root.style.setProperty("--theme-tone-set-bg", theme.toneSetBg);
+    root.style.setProperty("--theme-tone-set-border", theme.toneSetBorder);
+    root.style.setProperty("--theme-tone-zset-bg", theme.toneZsetBg);
+    root.style.setProperty("--theme-tone-zset-border", theme.toneZsetBorder);
+    root.style.setProperty("--theme-tone-stream-bg", theme.toneStreamBg);
+    root.style.setProperty("--theme-tone-stream-border", theme.toneStreamBorder);
     root.style.setProperty("--theme-syntax-key", theme.syntaxKey);
     root.style.setProperty("--theme-syntax-string", theme.syntaxString);
     root.style.setProperty("--theme-syntax-number", theme.syntaxNumber);
     root.style.setProperty("--theme-syntax-boolean", theme.syntaxBoolean);
     root.style.setProperty("--theme-syntax-null", theme.syntaxNull);
     root.style.setProperty("--theme-syntax-bracket", theme.syntaxBracket);
+    root.style.setProperty("--theme-syntax-keyword", theme.syntaxKeyword);
+    root.style.setProperty("--theme-syntax-type", theme.syntaxType);
+    root.style.setProperty("--theme-syntax-function", theme.syntaxFunction);
+    root.style.setProperty("--theme-syntax-comment", theme.syntaxComment);
+    root.style.setProperty("--theme-syntax-operator", theme.syntaxOperator);
+    root.style.setProperty("--theme-syntax-constant", theme.syntaxConstant);
     body.style.margin = "0";
     body.style.padding = "0";
     body.style.backgroundColor = theme.surfaceBase;
@@ -438,9 +521,10 @@ fn build_theme_bridge_script(mode: ThemeMode) -> String {
   bridge.schedule();
 }})();
 "##,
-        selected_mode = serde_json::to_string(selected_mode).unwrap(),
-        dark_theme = dark_theme,
-        light_theme = light_theme,
+        selected_preference = selected_preference,
+        classic_dark = classic_dark,
+        classic_light = classic_light,
+        tokyo_night = tokyo_night,
     )
 }
 
@@ -462,24 +546,16 @@ pub fn App() -> Element {
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
     let mut current_db = use_signal(|| 0u8);
-    let mut theme_mode = use_signal(ThemeMode::default);
+    let mut theme_preference = use_signal(ThemePreference::default);
     let mut system_theme_dark = use_signal(system_theme_is_dark);
     let left_rail_width = 280.0;
 
-    let active_theme_mode = *theme_mode.read();
+    let active_theme_preference = theme_preference();
     let active_system_theme_dark = system_theme_dark();
-    let colors = resolve_theme_colors(active_theme_mode, active_system_theme_dark);
-    let resolved_theme_key = match active_theme_mode {
-        ThemeMode::Dark => "dark",
-        ThemeMode::Light => "light",
-        ThemeMode::System => {
-            if active_system_theme_dark {
-                "dark"
-            } else {
-                "light"
-            }
-        }
-    };
+    let active_theme = resolve_theme(active_theme_preference, active_system_theme_dark);
+    let colors = active_theme.colors;
+    let resolved_theme_id = active_theme.id;
+    let resolved_theme_key = resolved_theme_id.as_str();
 
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
@@ -488,14 +564,13 @@ pub fn App() -> Element {
             }
             if let Ok(settings) = storage.load_settings() {
                 app_settings.set(settings.clone());
-                theme_mode.set(settings.theme_mode);
+                theme_preference.set(settings.theme_preference);
             }
         }
     });
 
     use_effect(move || {
-        let current_theme_mode = theme_mode();
-        let script = build_theme_bridge_script(current_theme_mode);
+        let script = build_theme_bridge_script(theme_preference());
         let _ = document::eval(&script);
     });
 
@@ -565,10 +640,10 @@ await new Promise(() => {});
 
     let save_settings = {
         let config_storage = config_storage.clone();
-        let mut theme_mode = theme_mode.clone();
+        let mut theme_preference = theme_preference.clone();
         move |settings: AppSettings| {
             app_settings.set(settings.clone());
-            theme_mode.set(settings.theme_mode);
+            theme_preference.set(settings.theme_preference);
             if let Some(storage) = config_storage.read().as_ref() {
                 let _ = storage.save_settings(&settings);
             }
@@ -603,7 +678,7 @@ await new Promise(() => {});
                         on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
                         on_select_connection: move |id: Uuid| {
                             let previous_conn = selected_connection();
-                            
+
                             selected_key.set(String::new());
                             current_tab.set(Tab::Data);
 
@@ -612,7 +687,7 @@ await new Promise(() => {});
                                     .write()
                                     .insert(id, ConnectionState::Connecting);
                             }
-                            
+
                             selected_connection.set(Some(id));
 
                             if let Some(pool) = connection_pools.read().get(&id).cloned() {
@@ -1133,13 +1208,14 @@ await new Promise(() => {});
             }
 
             if show_settings() {
-                SettingsDialog {
-                    settings: app_settings.read().clone(),
-                    colors: colors.clone(),
-                    on_save: {
-                        let mut save_settings = save_settings.clone();
-                        move |settings: AppSettings| {
-                            save_settings(settings);
+                    SettingsDialog {
+                        settings: app_settings.read().clone(),
+                        colors,
+                        resolved_theme_id,
+                        on_save: {
+                            let mut save_settings = save_settings.clone();
+                            move |settings: AppSettings| {
+                                save_settings(settings);
                         }
                     },
                     on_close: move |_| show_settings.set(false),

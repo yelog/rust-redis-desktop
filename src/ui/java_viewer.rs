@@ -3,9 +3,12 @@ use crate::serialization::java_converters::{
 };
 use crate::serialization::{extract_inner_value, simplify_class_name, Content, Parser};
 use crate::theme::{
-    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT,
-    COLOR_TEXT_SECONDARY,
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
+    COLOR_ERROR_BG, COLOR_OUTLINE_VARIANT, COLOR_SUCCESS, COLOR_SUCCESS_BG_ALT, COLOR_TEXT,
+    COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_WARNING, SYNTAX_BOOLEAN, SYNTAX_COMMENT,
+    SYNTAX_FUNCTION, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING, SYNTAX_TYPE,
 };
+use crate::ui::json_viewer::JsonViewer;
 use arboard::Clipboard;
 use dioxus::prelude::*;
 use serde_json::Value as JsonValue;
@@ -58,7 +61,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                         height: "20",
                         view_box: "0 0 24 24",
                         fill: "none",
-                        stroke: "#22c55e",
+                        stroke: COLOR_SUCCESS,
                         stroke_width: "2",
 
                         rect {
@@ -135,9 +138,9 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                 button {
                     font_size: "11px",
                     padding: "4px 8px",
-                    background: if *show_raw_json.read() { "rgba(16, 124, 16, 0.16)" } else { COLOR_BG_TERTIARY },
+                    background: if *show_raw_json.read() { COLOR_SUCCESS_BG_ALT } else { COLOR_BG_TERTIARY },
                     border: "1px solid {COLOR_BORDER}",
-                    color: if *show_raw_json.read() { "var(--theme-success, #107c10)" } else { COLOR_TEXT },
+                    color: if *show_raw_json.read() { COLOR_SUCCESS } else { COLOR_TEXT },
                     border_radius: "4px",
                     cursor: "pointer",
 
@@ -159,20 +162,10 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                                         if *show_raw_json.read() {
                                             let json_str = serde_json::to_string_pretty(&json).unwrap_or_else(|_| "序列化失败".to_string());
                                             rsx! {
-                                                pre {
-                                                    color: COLOR_TEXT,
-                                                    font_size: "11px",
-                                                    font_family: "Consolas, monospace",
-                                                    white_space: "pre_wrap",
-                                                    word_break: "break_all",
-                                                    margin: "0",
-                                                    padding: "8px",
-                                                    background: COLOR_BG,
-                                                    border_radius: "4px",
-                                                    max_height: "500px",
-                                                    overflow_y: "auto",
-
-                                                    "{json_str}"
+                                                JsonViewer {
+                                                    value: json_str,
+                                                    on_change: move |_| {},
+                                                    editable: false,
                                                 }
                                             }
                                         } else {
@@ -204,9 +197,9 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                     },
                     Some(Err(e)) => rsx! {
                         div {
-                            color: "var(--theme-error, #d13438)",
+                            color: COLOR_ERROR,
                             padding: "12px",
-                            background: "rgba(209, 52, 56, 0.12)",
+                            background: COLOR_ERROR_BG,
                             border_radius: "4px",
 
                             "解析错误: {e}"
@@ -329,7 +322,7 @@ fn JsonObjectNode(
 
                 if has_content {
                     span {
-                        color: "#888",
+                        color: COLOR_TEXT_SUBTLE,
                         font_size: "12px",
                         width: "12px",
 
@@ -342,7 +335,7 @@ fn JsonObjectNode(
                 }
 
                 span {
-                    color: if is_std_lib { "#dcdcaa" } else { "#4ec9b0" },
+                    color: if is_std_lib { SYNTAX_TYPE } else { SYNTAX_FUNCTION },
                     font_size: "13px",
                     font_weight: "600",
 
@@ -351,7 +344,7 @@ fn JsonObjectNode(
 
                 if has_full_name && !is_std_lib {
                     span {
-                        color: "#6b7280",
+                        color: SYNTAX_COMMENT,
                         font_size: "10px",
 
                         "({class_name})"
@@ -369,7 +362,7 @@ fn JsonObjectNode(
 
                     rsx! {
                         span {
-                            color: "#888",
+                            color: COLOR_TEXT_SUBTLE,
                             font_size: "11px",
 
                             "{count_str}"
@@ -410,7 +403,7 @@ fn JsonObjectNode(
                                                     padding: "1px 0",
 
                                                     span {
-                                                        color: if highlight { "#f59e0b" } else { "#9cdcfe" },
+                                                        color: if highlight { COLOR_WARNING } else { SYNTAX_KEY },
                                                         font_size: "12px",
                                                         min_width: "80px",
 
@@ -438,12 +431,12 @@ fn JsonObjectNode(
                 if has_annotations {
                     div {
                         margin_left: "18px",
-                        border_left: "1px dashed #444",
+                        border_left: "1px dashed {COLOR_OUTLINE_VARIANT}",
                         padding_left: "8px",
                         margin_top: "4px",
 
                         div {
-                            color: "#f59e0b",
+                            color: COLOR_WARNING,
                             font_size: "10px",
                             margin_bottom: "4px",
 
@@ -459,7 +452,7 @@ fn JsonObjectNode(
                                     padding: "1px 0",
 
                                     span {
-                                        color: "#666",
+                                        color: COLOR_TEXT_SUBTLE,
                                         font_size: "11px",
                                         min_width: "30px",
 
@@ -507,7 +500,7 @@ fn JsonArrayNode(
                 onclick: move |_| expanded.toggle(),
 
                 span {
-                    color: "#888",
+                    color: COLOR_TEXT_SUBTLE,
                     font_size: "12px",
                     width: "12px",
 
@@ -515,7 +508,7 @@ fn JsonArrayNode(
                 }
 
                 span {
-                    color: "#dcdcaa",
+                    color: SYNTAX_TYPE,
                     font_size: "12px",
 
                     "[{len}]"
@@ -536,7 +529,7 @@ fn JsonArrayNode(
                             padding: "1px 0",
 
                             span {
-                                color: "#888",
+                                color: COLOR_TEXT_SUBTLE,
                                 font_size: "11px",
                                 min_width: "30px",
 
@@ -561,18 +554,18 @@ fn JsonArrayNode(
 fn JsonPrimitiveNode(value: JsonValue, depth: usize) -> Element {
     let indent = depth * 16;
     let (text, color) = match &value {
-        JsonValue::Null => ("null".to_string(), "#808080"),
-        JsonValue::Bool(v) => (v.to_string(), "#569cd6"),
-        JsonValue::Number(v) => (v.to_string(), "#b5cea8"),
+        JsonValue::Null => ("null".to_string(), SYNTAX_NULL),
+        JsonValue::Bool(v) => (v.to_string(), SYNTAX_BOOLEAN),
+        JsonValue::Number(v) => (v.to_string(), SYNTAX_NUMBER),
         JsonValue::String(s) => {
             let display = if s.len() > 100 {
                 format!("\"{}...\"", &s[..97])
             } else {
                 format!("\"{}\"", s)
             };
-            (display, "#ce9178")
+            (display, SYNTAX_STRING)
         }
-        _ => (value.to_string(), "#dcdcaa"),
+        _ => (value.to_string(), SYNTAX_TYPE),
     };
 
     let copy_text = match &value {
@@ -611,9 +604,9 @@ fn CopyButton(text: String) -> Element {
         button {
             font_size: "9px",
             padding: "1px 4px",
-            background: if *copied.read() { "#1e4620" } else { "transparent" },
+            background: if *copied.read() { COLOR_SUCCESS_BG_ALT } else { "transparent" },
             border: "1px solid {COLOR_BORDER}",
-            color: if *copied.read() { "#22c55e" } else { "#666" },
+            color: if *copied.read() { COLOR_SUCCESS } else { COLOR_TEXT_SUBTLE },
             border_radius: "2px",
             cursor: "pointer",
 

@@ -1,7 +1,11 @@
 use crate::redis::KeyType;
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
-    COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    COLOR_PRIMARY, COLOR_SELECTION_BG, COLOR_SUCCESS, COLOR_SUCCESS_BG, COLOR_TEXT,
+    COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_TONE_HASH_BG, COLOR_TONE_HASH_BORDER,
+    COLOR_TONE_LIST_BG, COLOR_TONE_LIST_BORDER, COLOR_TONE_SET_BG, COLOR_TONE_SET_BORDER,
+    COLOR_TONE_STREAM_BG, COLOR_TONE_STREAM_BORDER, COLOR_TONE_STRING_BG, COLOR_TONE_STRING_BORDER,
+    COLOR_TONE_ZSET_BG, COLOR_TONE_ZSET_BORDER,
 };
 use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
 use dioxus::prelude::*;
@@ -31,39 +35,27 @@ fn key_type_label(key_type: Option<&KeyType>) -> &'static str {
 fn key_type_tone(key_type: Option<&KeyType>) -> (&'static str, &'static str, &'static str) {
     match key_type {
         Some(KeyType::String) => (
-            "rgba(255, 180, 166, 0.12)",
+            COLOR_TONE_STRING_BG,
             COLOR_PRIMARY,
-            "rgba(255, 180, 166, 0.24)",
+            COLOR_TONE_STRING_BORDER,
         ),
-        Some(KeyType::Hash) => (
-            "rgba(0, 218, 243, 0.10)",
-            COLOR_ACCENT,
-            "rgba(0, 218, 243, 0.22)",
-        ),
+        Some(KeyType::Hash) => (COLOR_TONE_HASH_BG, COLOR_ACCENT, COLOR_TONE_HASH_BORDER),
         Some(KeyType::List) => (
-            "rgba(229, 226, 225, 0.08)",
+            COLOR_TONE_LIST_BG,
             COLOR_TEXT_SECONDARY,
-            "rgba(229, 226, 225, 0.18)",
+            COLOR_TONE_LIST_BORDER,
         ),
-        Some(KeyType::Set) => (
-            "rgba(255, 180, 166, 0.10)",
-            COLOR_PRIMARY,
-            "rgba(255, 180, 166, 0.20)",
-        ),
-        Some(KeyType::ZSet) => (
-            "rgba(0, 218, 243, 0.10)",
-            COLOR_ACCENT,
-            "rgba(0, 218, 243, 0.22)",
-        ),
+        Some(KeyType::Set) => (COLOR_TONE_SET_BG, COLOR_PRIMARY, COLOR_TONE_SET_BORDER),
+        Some(KeyType::ZSet) => (COLOR_TONE_ZSET_BG, COLOR_ACCENT, COLOR_TONE_ZSET_BORDER),
         Some(KeyType::Stream) => (
-            "rgba(48, 209, 88, 0.10)",
-            "#30d158",
-            "rgba(48, 209, 88, 0.20)",
+            COLOR_TONE_STREAM_BG,
+            COLOR_SUCCESS,
+            COLOR_TONE_STREAM_BORDER,
         ),
         Some(KeyType::None) | None => (
-            "rgba(169, 138, 132, 0.10)",
+            COLOR_TONE_LIST_BG,
             COLOR_TEXT_SUBTLE,
-            "rgba(169, 138, 132, 0.18)",
+            COLOR_TONE_LIST_BORDER,
         ),
     }
 }
@@ -187,9 +179,9 @@ pub fn KeyTable(
                                 tr {
                                     key: "{row.key}",
                                     background: if is_active {
-                                        "rgba(0, 218, 243, 0.06)"
+                                        COLOR_SELECTION_BG
                                     } else if row.is_selected {
-                                        "rgba(48, 209, 88, 0.08)"
+                                        COLOR_SUCCESS_BG
                                     } else {
                                         COLOR_BG
                                     },

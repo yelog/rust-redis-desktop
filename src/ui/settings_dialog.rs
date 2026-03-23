@@ -1,16 +1,29 @@
 use crate::config::AppSettings;
-use crate::theme::{ThemeColors, ThemeMode};
+use crate::theme::{ThemeColors, ThemeId, ThemePreference};
 use dioxus::prelude::*;
 
 #[component]
 pub fn SettingsDialog(
     settings: AppSettings,
     colors: ThemeColors,
+    resolved_theme_id: ThemeId,
     on_save: EventHandler<AppSettings>,
     on_close: EventHandler<()>,
 ) -> Element {
     let mut auto_refresh_interval = use_signal(|| settings.auto_refresh_interval);
-    let mut theme_mode = use_signal(|| settings.theme_mode);
+    let mut use_system_theme = use_signal(|| settings.theme_preference.is_system());
+    let mut manual_theme = use_signal(|| {
+        settings
+            .theme_preference
+            .manual_theme()
+            .unwrap_or(resolved_theme_id)
+    });
+
+    let current_theme_label = if use_system_theme() {
+        format!("跟随系统，当前解析为 {}", resolved_theme_id.label())
+    } else {
+        format!("手动选择：{}", manual_theme().label())
+    };
 
     rsx! {
         div {
@@ -19,7 +32,7 @@ pub fn SettingsDialog(
             left: "0",
             right: "0",
             bottom: "0",
-            background: "rgba(0, 0, 0, 0.7)",
+            background: "var(--theme-overlay-backdrop, rgba(0, 0, 0, 0.7))",
             display: "flex",
             align_items: "center",
             justify_content: "center",
@@ -70,28 +83,18 @@ pub fn SettingsDialog(
                             color: "{colors.text}",
                             font_size: "13px",
                             onchange: move |e| {
-                                let mode = match e.value().as_str() {
-                                    "light" => ThemeMode::Light,
-                                    "dark" => ThemeMode::Dark,
-                                    _ => ThemeMode::System,
-                                };
-                                theme_mode.set(mode);
+                                use_system_theme.set(e.value() == "system");
                             },
 
                             option {
                                 value: "system",
-                                selected: theme_mode() == ThemeMode::System,
+                                selected: use_system_theme(),
                                 "跟随系统"
                             }
                             option {
-                                value: "light",
-                                selected: theme_mode() == ThemeMode::Light,
-                                "亮色"
-                            }
-                            option {
-                                value: "dark",
-                                selected: theme_mode() == ThemeMode::Dark,
-                                "暗色"
+                                value: "manual",
+                                selected: !use_system_theme(),
+                                "手动选择"
                             }
                         }
 
@@ -99,10 +102,43 @@ pub fn SettingsDialog(
                             color: "{colors.accent}",
                             font_size: "12px",
 
-                            match theme_mode() {
-                                ThemeMode::Light => "🌞 亮色模式",
-                                ThemeMode::Dark => "🌙 暗色模式",
-                                ThemeMode::System => "💻 跟随系统",
+                            "{current_theme_label}"
+                        }
+                    }
+
+                    if !use_system_theme() {
+                        div {
+                            margin_top: "12px",
+
+                            div {
+                                color: "{colors.text_secondary}",
+                                font_size: "13px",
+                                margin_bottom: "8px",
+
+                                "手动主题"
+                            }
+
+                            select {
+                                width: "100%",
+                                padding: "8px 12px",
+                                background: "{colors.background_tertiary}",
+                                border: "1px solid {colors.border}",
+                                border_radius: "4px",
+                                color: "{colors.text}",
+                                font_size: "13px",
+                                onchange: move |e| {
+                                    if let Some(theme_id) = ThemeId::from_str(&e.value()) {
+                                        manual_theme.set(theme_id);
+                                    }
+                                },
+
+                                for theme_id in ThemeId::MANUAL_OPTIONS {
+                                    option {
+                                        value: "{theme_id.as_str()}",
+                                        selected: manual_theme() == theme_id,
+                                        "{theme_id.label()}"
+                                    }
+                                }
                             }
                         }
                     }
@@ -185,7 +221,11 @@ pub fn SettingsDialog(
                         onclick: move |_| {
                             on_save.call(AppSettings {
                                 auto_refresh_interval: auto_refresh_interval(),
-                                theme_mode: theme_mode(),
+                                theme_preference: if use_system_theme() {
+                                    ThemePreference::System
+                                } else {
+                                    ThemePreference::Manual(manual_theme())
+                                },
                             });
                             on_close.call(());
                         },

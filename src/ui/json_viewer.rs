@@ -1,6 +1,7 @@
 use crate::theme::{
-    COLOR_ACCENT, COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT, COLOR_TEXT_CONTRAST,
-    SYNTAX_BOOLEAN, SYNTAX_BRACKET, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING,
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_BUTTON_SECONDARY, COLOR_ERROR,
+    COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST, SYNTAX_BOOLEAN,
+    SYNTAX_BRACKET, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING,
 };
 use dioxus::prelude::*;
 use serde_json::Value;
@@ -236,7 +237,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
                 button {
                     padding: "4px 8px",
-                    background: COLOR_BG_TERTIARY,
+                    background: COLOR_BUTTON_SECONDARY,
                     color: COLOR_TEXT,
                     border: "none",
                     border_radius: "4px",
@@ -250,7 +251,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                 if editable && !is_editing() {
                     button {
                         padding: "4px 8px",
-                        background: "#3182ce",
+                        background: COLOR_PRIMARY,
                         color: COLOR_TEXT_CONTRAST,
                         border: "none",
                         border_radius: "4px",
@@ -269,11 +270,11 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
             if let Some(error) = parse_error() {
                 div {
-                    color: "#f87171",
+                    color: COLOR_ERROR,
                     font_size: "12px",
                     margin_bottom: "8px",
                     padding: "8px",
-                    background: "rgba(209, 52, 56, 0.12)",
+                    background: COLOR_ERROR_BG,
                     border_radius: "4px",
 
                     "{error}"
@@ -307,7 +308,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
                         button {
                             padding: "6px 12px",
-                            background: "#38a169",
+                            background: COLOR_SUCCESS,
                             color: COLOR_TEXT_CONTRAST,
                             border: "none",
                             border_radius: "4px",

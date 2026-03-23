@@ -3,8 +3,9 @@ use crate::redis::{KeyInfo, KeyType};
 use crate::serialization::{is_java_serialization, parse_java_to_json};
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
-    COLOR_PRIMARY, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
-    COLOR_TEXT_SOFT, COLOR_TEXT_SUBTLE, COLOR_WARNING,
+    COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_ROW_CREATE_BG, COLOR_ROW_EDIT_BG, COLOR_SUCCESS,
+    COLOR_SUCCESS_BG, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SOFT,
+    COLOR_TEXT_SUBTLE, COLOR_WARNING,
 };
 use crate::ui::editable_field::EditableField;
 use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
@@ -17,10 +18,10 @@ use serde_json;
 use std::collections::HashMap;
 
 const LARGE_KEY_THRESHOLD: usize = 1000;
-const STATUS_SUCCESS_BG: &str = "rgba(16, 124, 16, 0.12)";
-const STATUS_ERROR_BG: &str = "rgba(209, 52, 56, 0.12)";
-const ROW_CREATE_BG: &str = "rgba(15, 108, 189, 0.08)";
-const ROW_EDIT_BG: &str = "rgba(15, 108, 189, 0.12)";
+const STATUS_SUCCESS_BG: &str = COLOR_SUCCESS_BG;
+const STATUS_ERROR_BG: &str = COLOR_ERROR_BG;
+const ROW_CREATE_BG: &str = COLOR_ROW_CREATE_BG;
+const ROW_EDIT_BG: &str = COLOR_ROW_EDIT_BG;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum BinaryFormat {
