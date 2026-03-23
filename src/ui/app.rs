@@ -499,6 +499,47 @@ pub fn App() -> Element {
         let _ = document::eval(&script);
     });
 
+    use_future(move || {
+        let mut show_settings = show_settings.clone();
+        async move {
+            let mut eval = document::eval(
+                r#"
+document.addEventListener('keydown', (e) => {
+    if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        dioxus.send('toggle_settings');
+    }
+    if (e.key === 'Escape') {
+        dioxus.send('escape_pressed');
+    }
+});
+await new Promise(() => {});
+"#,
+            );
+
+            while let Ok(msg) = eval.recv::<String>().await {
+                if msg == "toggle_settings" {
+                    show_settings.toggle();
+                } else if msg == "escape_pressed" {
+                    if show_settings() {
+                        show_settings.set(false);
+                    }
+                }
+            }
+        }
+    });
+
+    #[cfg(target_os = "macos")]
+    {
+        use dioxus::desktop::use_muda_event_handler;
+        let mut show_settings_for_menu = show_settings.clone();
+        use_muda_event_handler(move |event| {
+            if event.id == "preferences" {
+                show_settings_for_menu.toggle();
+            }
+        });
+    }
+
     use_future(move || async move {
         let mut eval = document::eval(
             r#"
@@ -546,13 +587,6 @@ await new Promise(() => {});
                 background: "{colors.background}",
                 color: "{colors.text}",
                 overflow: "hidden",
-                onkeydown: move |e| {
-                    let key = e.data().key();
-                    let modifiers = e.data().modifiers();
-                    if key == Key::Character(",".to_string()) && modifiers.contains(Modifiers::SUPER) {
-                        show_settings.set(true);
-                    }
-                },
 
                 div {
                     flex: "1",
