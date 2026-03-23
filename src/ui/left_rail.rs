@@ -1,6 +1,7 @@
 use crate::connection::ConnectionState;
 use crate::theme::ThemeColors;
 use crate::ui::icons::{IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconX};
+use crate::ui::status_indicator::StatusIndicatorWithLabel;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -41,13 +42,6 @@ pub fn LeftRail(
         .and_then(|id| connection_states.get(&id).copied())
         .unwrap_or(ConnectionState::Disconnected);
 
-    let status_color = match selected_state {
-        ConnectionState::Connected => colors.accent,
-        ConnectionState::Connecting => colors.warning,
-        ConnectionState::Disconnected => colors.text_subtle,
-        ConnectionState::Error => colors.error,
-    };
-
     rsx! {
         div {
             width: "{width()}px",
@@ -79,13 +73,11 @@ pub fn LeftRail(
                         align_items: "center",
                         gap: "10px",
 
-                        div {
-                            width: "10px",
-                            height: "10px",
-                            border_radius: "50%",
-                            background: "{status_color}",
-                            box_shadow: "0 0 10px {status_color}",
-                            flex_shrink: "0",
+                        StatusIndicatorWithLabel {
+                            state: selected_state,
+                            colors,
+                            show_label: Some(false),
+                            size: Some(10.0),
                         }
 
                         div {

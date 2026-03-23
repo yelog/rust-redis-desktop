@@ -655,6 +655,15 @@ await new Promise(() => {});
         .unwrap_or(ConnectionState::Disconnected);
 
     rsx! {
+            style { {r#"
+                * {
+                    transition: background-color 300ms ease-in-out,
+                                border-color 300ms ease-in-out,
+                                color 300ms ease-in-out,
+                                box-shadow 300ms ease-in-out;
+                }
+            "#} }
+
             div {
                 display: "flex",
                 flex_direction: "column",
@@ -1003,6 +1012,7 @@ await new Promise(() => {});
                                             cursor: "pointer",
                                             font_size: "13px",
                                             font_weight: if current_tab() == tab { "700" } else { "500" },
+                                            transition: "all 150ms ease-out",
                                             onclick: move |_| current_tab.set(tab),
 
                                             "{label}"
@@ -1031,6 +1041,7 @@ await new Promise(() => {});
                                             selected_key: selected_key,
                                             current_db: current_db,
                                             refresh_trigger: refresh_trigger,
+                                            colors,
                                             on_key_select: move |key: String| {
                                                 selected_key.set(key);
                                                 current_tab.set(Tab::Data);
@@ -1164,6 +1175,7 @@ await new Promise(() => {});
                         FormMode::Edit(config) => Some(config),
                         FormMode::New => None,
                     },
+                    colors,
                     on_save: move |config: ConnectionConfig| {
                         let id = config.id;
                         let name = config.name.clone();

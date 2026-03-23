@@ -3,7 +3,7 @@ use crate::redis::{KeyInfo, KeyType, TreeBuilder, TreeNode};
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
     COLOR_ERROR, COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_SURFACE_HIGHEST, COLOR_TEXT,
-    COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, ThemeColors,
 };
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
@@ -93,6 +93,7 @@ pub fn KeyBrowser(
     selected_key: Signal<String>,
     current_db: Signal<u8>,
     refresh_trigger: Signal<u32>,
+    colors: ThemeColors,
     on_key_select: EventHandler<String>,
 ) -> Element {
     let tree_nodes = use_signal(Vec::<TreeNode>::new);
@@ -827,6 +828,7 @@ pub fn KeyBrowser(
             DeleteConfirmDialog {
                 connection_pool: connection_pool.clone(),
                 targets: targets.clone(),
+                colors,
                 on_confirm: move |_| {
                     show_delete_dialog.set(None);
                     tree_state.write().selected_keys.clear();
@@ -840,6 +842,7 @@ pub fn KeyBrowser(
         if show_add_key_dialog() {
             AddKeyDialog {
                 connection_pool: connection_pool.clone(),
+                colors,
                 on_save: {
                     let mut refresh_trigger = refresh_trigger.clone();
                     let mut selected_key = selected_key.clone();
@@ -857,6 +860,7 @@ pub fn KeyBrowser(
             BatchTtlDialog {
                 connection_pool: connection_pool.clone(),
                 keys: keys.clone(),
+                colors,
                 on_confirm: move |_| {
                     show_batch_ttl_dialog.set(None);
                     tree_state.write().selected_keys.clear();

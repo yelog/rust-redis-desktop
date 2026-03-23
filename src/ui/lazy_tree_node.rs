@@ -90,6 +90,7 @@ pub fn LazyTreeNode(
                 cursor: "pointer",
                 border_left: if is_selected { "2px solid {COLOR_ACCENT}" } else { "2px solid transparent" },
                 margin_left: if is_selected { "-2px" } else { "0" },
+                transition: "background 150ms ease-out, border_color 150ms ease-out",
 
                 onclick: {
                     let node_id = node.node_id.clone();
@@ -186,6 +187,9 @@ pub fn LazyTreeNode(
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "12px",
                         cursor: "pointer",
+                        display: "inline_block",
+                        transition: "transform 200ms ease-out",
+                        transform: if is_expanded { "rotate(90deg)" } else { "rotate(0deg)" },
                         onclick: {
                             let node_id = node.node_id.clone();
                             move |e| {
@@ -194,7 +198,7 @@ pub fn LazyTreeNode(
                             }
                         },
 
-                        if is_expanded { "▼" } else { "▶" }
+                        "▶"
                     }
                 } else {
                     span { width: "12px" }

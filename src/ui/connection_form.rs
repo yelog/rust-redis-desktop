@@ -1,9 +1,12 @@
 use crate::connection::{ConnectionConfig, ConnectionMode, SSHConfig};
+use crate::theme::ThemeColors;
+use crate::ui::animated_dialog::AnimatedDialog;
 use dioxus::prelude::*;
 
 #[component]
 pub fn ConnectionForm(
     editing_config: Option<ConnectionConfig>,
+    colors: ThemeColors,
     on_save: EventHandler<ConnectionConfig>,
     on_cancel: EventHandler<()>,
 ) -> Element {
@@ -47,216 +50,229 @@ pub fn ConnectionForm(
 
     let is_editing = editing_config.is_some();
     let title = if is_editing {
-        "Edit Connection"
+        "编辑连接"
     } else {
-        "New Connection"
+        "新建连接"
     };
 
     rsx! {
-        div {
-            position: "fixed",
-            top: "0",
-            left: "0",
-            right: "0",
-            bottom: "0",
-            background: "rgba(0, 0, 0, 0.7)",
-            display: "flex",
-            align_items: "center",
-            justify_content: "center",
-            z_index: "1000",
+        AnimatedDialog {
+            is_open: true,
+            on_close: on_cancel.clone(),
+            colors,
+            width: "450px".to_string(),
+
+            h2 {
+                color: "{colors.text}",
+                margin_bottom: "20px",
+                font_size: "20px",
+
+                "{title}"
+            }
 
             div {
-                width: "450px",
-                max_height: "90vh",
-                overflow_y: "auto",
-                padding: "24px",
-                background: "#1e1e1e",
-                border_radius: "8px",
-                box_shadow: "0 4px 24px rgba(0, 0, 0, 0.5)",
+                margin_bottom: "16px",
 
-                onclick: move |evt| {
-                    evt.stop_propagation();
-                },
+                label {
+                    display: "block",
+                    color: "{colors.text_secondary}",
+                    font_size: "13px",
+                    margin_bottom: "8px",
 
-                h2 {
-                    color: "white",
-                    margin_bottom: "20px",
-
-                    "{title}"
+                    "名称"
                 }
 
+                input {
+                    width: "100%",
+                    padding: "8px 12px",
+                    background: "{colors.background_tertiary}",
+                    border: "1px solid {colors.border}",
+                    border_radius: "4px",
+                    color: "{colors.text}",
+                    font_size: "13px",
+                    box_sizing: "border_box",
+                    value: "{name}",
+                    oninput: move |e| name.set(e.value()),
+                }
+            }
+
+            div {
+                display: "flex",
+                gap: "8px",
+                margin_bottom: "16px",
+
                 div {
-                    margin_bottom: "16px",
+                    flex: "2",
 
                     label {
                         display: "block",
-                        color: "#888",
+                        color: "{colors.text_secondary}",
+                        font_size: "13px",
                         margin_bottom: "8px",
 
-                        "Name"
+                        "Host"
                     }
 
                     input {
                         width: "100%",
-                        padding: "8px",
-                        background: "#3c3c3c",
-                        border: "1px solid #555",
+                        padding: "8px 12px",
+                        background: "{colors.background_tertiary}",
+                        border: "1px solid {colors.border}",
                         border_radius: "4px",
-                        color: "white",
-                        value: "{name}",
-                        oninput: move |e| name.set(e.value()),
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        box_sizing: "border_box",
+                        value: "{host}",
+                        oninput: move |e| host.set(e.value()),
                     }
                 }
 
                 div {
-                    display: "flex",
-                    gap: "8px",
-                    margin_bottom: "16px",
-
-                    div {
-                        flex: "2",
-
-                        label {
-                            display: "block",
-                            color: "#888",
-                            margin_bottom: "8px",
-
-                            "Host"
-                        }
-
-                        input {
-                            width: "100%",
-                            padding: "8px",
-                            background: "#3c3c3c",
-                            border: "1px solid #555",
-                            border_radius: "4px",
-                            color: "white",
-                            value: "{host}",
-                            oninput: move |e| host.set(e.value()),
-                        }
-                    }
-
-                    div {
-                        flex: "1",
-
-                        label {
-                            display: "block",
-                            color: "#888",
-                            margin_bottom: "8px",
-
-                            "Port"
-                        }
-
-                        input {
-                            width: "100%",
-                            padding: "8px",
-                            background: "#3c3c3c",
-                            border: "1px solid #555",
-                            border_radius: "4px",
-                            color: "white",
-                            r#type: "number",
-                            value: "{port}",
-                            oninput: move |e| {
-                                if let Ok(p) = e.value().parse() {
-                                    port.set(p);
-                                }
-                            },
-                        }
-                    }
-                }
-
-                div {
-                    margin_bottom: "16px",
+                    flex: "1",
 
                     label {
                         display: "block",
-                        color: "#888",
+                        color: "{colors.text_secondary}",
+                        font_size: "13px",
                         margin_bottom: "8px",
 
-                        "Password"
+                        "Port"
                     }
 
                     input {
                         width: "100%",
-                        padding: "8px",
-                        background: "#3c3c3c",
-                        border: "1px solid #555",
+                        padding: "8px 12px",
+                        background: "{colors.background_tertiary}",
+                        border: "1px solid {colors.border}",
                         border_radius: "4px",
-                        color: "white",
-                        r#type: "password",
-                        value: "{password}",
-                        oninput: move |e| password.set(e.value()),
-                    }
-                }
-
-                div {
-                    margin_bottom: "16px",
-
-                    label {
-                        display: "block",
-                        color: "#888",
-                        margin_bottom: "8px",
-
-                        "Connection Mode"
-                    }
-
-                    select {
-                        width: "100%",
-                        padding: "8px",
-                        background: "#3c3c3c",
-                        border: "1px solid #555",
-                        border_radius: "4px",
-                        color: "white",
-                        value: "{mode_display(mode())}",
-                        onchange: move |e| {
-                            let new_mode = match e.value().as_str() {
-                                "Direct" => ConnectionMode::Direct,
-                                "Cluster" => ConnectionMode::Cluster,
-                                "Sentinel" => ConnectionMode::Sentinel,
-                                _ => ConnectionMode::Direct,
-                            };
-                            mode.set(new_mode);
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        box_sizing: "border_box",
+                        r#type: "number",
+                        value: "{port}",
+                        oninput: move |e| {
+                            if let Ok(p) = e.value().parse() {
+                                port.set(p);
+                            }
                         },
-
-                        option { value: "Direct", "Direct" }
-                        option { value: "Cluster", "Cluster" }
-                        option { value: "Sentinel", "Sentinel" }
                     }
                 }
+            }
 
-                div {
-                    margin_bottom: "16px",
+            div {
+                margin_bottom: "16px",
 
-                    label {
-                        display: "flex",
-                        align_items: "center",
-                        gap: "8px",
-                        color: "white",
-                        cursor: "pointer",
+                label {
+                    display: "block",
+                    color: "{colors.text_secondary}",
+                    font_size: "13px",
+                    margin_bottom: "8px",
 
-                        input {
-                            r#type: "checkbox",
-                            checked: enable_ssh(),
-                            onchange: move |e| enable_ssh.set(e.checked()),
-                        }
-
-                        "Enable SSH Tunnel"
-                    }
+                    "密码"
                 }
 
-                div {
+                input {
+                    width: "100%",
+                    padding: "8px 12px",
+                    background: "{colors.background_tertiary}",
+                    border: "1px solid {colors.border}",
+                    border_radius: "4px",
+                    color: "{colors.text}",
+                    font_size: "13px",
+                    box_sizing: "border_box",
+                    r#type: "password",
+                    value: "{password}",
+                    oninput: move |e| password.set(e.value()),
+                }
+            }
+
+            div {
+                margin_bottom: "16px",
+
+                label {
+                    display: "block",
+                    color: "{colors.text_secondary}",
+                    font_size: "13px",
+                    margin_bottom: "8px",
+
+                    "连接模式"
+                }
+
+                select {
+                    width: "100%",
+                    padding: "8px 12px",
+                    background: "{colors.background_tertiary}",
+                    border: "1px solid {colors.border}",
+                    border_radius: "4px",
+                    color: "{colors.text}",
+                    font_size: "13px",
+                    box_sizing: "border_box",
+                    value: "{mode_display(mode())}",
+                    onchange: move |e| {
+                        let new_mode = match e.value().as_str() {
+                            "Direct" => ConnectionMode::Direct,
+                            "Cluster" => ConnectionMode::Cluster,
+                            "Sentinel" => ConnectionMode::Sentinel,
+                            _ => ConnectionMode::Direct,
+                        };
+                        mode.set(new_mode);
+                    },
+
+                    option { value: "Direct", "Direct" }
+                    option { value: "Cluster", "Cluster" }
+                    option { value: "Sentinel", "Sentinel" }
+                }
+            }
+
+            div {
+                margin_bottom: "16px",
+
+                label {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
+                    color: "{colors.text}",
+                    font_size: "13px",
+                    cursor: "pointer",
+
+                    input {
+                        r#type: "checkbox",
+                        checked: enable_ssh(),
+                        onchange: move |e| enable_ssh.set(e.checked()),
+                    }
+
+                    "启用 SSH 隧道"
+                }
+            }
+
+            div {
                     display: "flex",
                     gap: "8px",
                     margin_top: "20px",
 
                     button {
                         flex: "1",
-                        padding: "10px",
-                        background: "#0e639c",
-                        color: "white",
+                        padding: "8px",
+                        background: "{colors.background_tertiary}",
+                        color: "{colors.text}",
                         border: "none",
                         border_radius: "4px",
                         cursor: "pointer",
+                        font_size: "13px",
+                        onclick: move |_| on_cancel.call(()),
+
+                        "取消"
+                    }
+
+                    button {
+                        flex: "1",
+                        padding: "8px",
+                        background: "{colors.primary}",
+                        color: "{colors.primary_text}",
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "13px",
                         onclick: move |_| {
                             let id = editing_config.as_ref().map(|c| c.id).unwrap_or_else(|| uuid::Uuid::new_v4());
 
@@ -274,23 +290,9 @@ pub fn ConnectionForm(
                             on_save.call(config);
                         },
 
-                        if is_editing { "💾 Update" } else { "💾 Save" }
-                    }
-
-                    button {
-                        flex: "1",
-                        padding: "10px",
-                        background: "#5a5a5a",
-                        color: "white",
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        onclick: move |_| on_cancel.call(()),
-
-                        "✖ Cancel"
+                        if is_editing { "更新" } else { "保存" }
                     }
                 }
-            }
         }
     }
 }
