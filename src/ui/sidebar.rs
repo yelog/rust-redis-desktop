@@ -85,10 +85,10 @@ pub fn Sidebar(
                     {
                         let state = connection_states.get(&id).copied().unwrap_or(ConnectionState::Disconnected);
                         let (dot_color, is_pulsing) = match state {
-                            ConnectionState::Connected => (colors.success, false),
-                            ConnectionState::Disconnected => (colors.text_secondary, false),
-                            ConnectionState::Connecting => (colors.warning, true),
-                            ConnectionState::Error => (colors.error, false),
+                            ConnectionState::Connected => (colors.state_connected, false),
+                            ConnectionState::Disconnected => (colors.state_disconnected, false),
+                            ConnectionState::Connecting => (colors.state_connecting, true),
+                            ConnectionState::Error => (colors.state_error, false),
                         };
 
                         rsx! {
@@ -146,17 +146,9 @@ pub fn Sidebar(
                                         width: "8px",
                                         height: "8px",
                                         border_radius: "50%",
-                                        background: if state == ConnectionState::Connected {
-                                            colors.accent
-                                        } else {
-                                            dot_color
-                                        },
+                                        background: "{dot_color}",
                                         flex_shrink: "0",
-                                        box_shadow: if state == ConnectionState::Connected {
-                                            "0 0 8px rgba(0, 218, 243, 0.4)"
-                                        } else {
-                                            "0 0 4px {dot_color}"
-                                        },
+                                        box_shadow: "0 0 4px {dot_color}",
                                         animation: if is_pulsing { "pulse 1.2s ease-in-out infinite" } else { "none" },
                                     }
 

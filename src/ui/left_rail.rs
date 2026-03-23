@@ -250,10 +250,10 @@ pub fn LeftRail(
                             .unwrap_or(ConnectionState::Disconnected);
                         let is_selected = selected_connection == Some(id);
                         let dot_color = match state {
-                            ConnectionState::Connected => colors.accent,
-                            ConnectionState::Connecting => colors.warning,
-                            ConnectionState::Disconnected => colors.text_subtle,
-                            ConnectionState::Error => colors.error,
+                            ConnectionState::Connected => colors.state_connected,
+                            ConnectionState::Connecting => colors.state_connecting,
+                            ConnectionState::Disconnected => colors.state_disconnected,
+                            ConnectionState::Error => colors.state_error,
                         };
 
                         rsx! {
