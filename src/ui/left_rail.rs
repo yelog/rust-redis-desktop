@@ -1,5 +1,10 @@
 use crate::connection::ConnectionState;
-use crate::theme::ThemeColors;
+use crate::theme::{
+    ThemeColors, COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BORDER,
+    COLOR_ERROR, COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_SURFACE_HIGH,
+    COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    COLOR_WARNING,
+};
 use crate::ui::icons::{IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconX};
 use crate::ui::status_indicator::StatusIndicatorWithLabel;
 use dioxus::prelude::*;
@@ -46,8 +51,8 @@ pub fn LeftRail(
         div {
             width: "{width()}px",
             height: "100%",
-            background: "{colors.surface_lowest}",
-            border_right: "1px solid {colors.border}",
+            background: COLOR_BG_LOWEST,
+            border_right: "1px solid {COLOR_BORDER}",
             display: "flex",
             flex_direction: "column",
             overflow: "hidden",
@@ -57,12 +62,12 @@ pub fn LeftRail(
                 display: "flex",
                 flex_direction: "column",
                 gap: "12px",
-                border_bottom: "1px solid {colors.border}",
+                border_bottom: "1px solid {COLOR_BORDER}",
 
                 div {
                     padding: "14px",
-                    background: "{colors.background}",
-                    border: "1px solid {colors.border}",
+                    background: COLOR_BG,
+                    border: "1px solid {COLOR_BORDER}",
                     border_radius: "8px",
                     display: "flex",
                     flex_direction: "column",
@@ -86,7 +91,7 @@ pub fn LeftRail(
                             gap: "3px",
 
                             span {
-                                color: "{colors.text}",
+                                color: COLOR_TEXT,
                                 font_size: "14px",
                                 font_weight: "700",
 
@@ -98,7 +103,7 @@ pub fn LeftRail(
                             }
 
                             span {
-                                color: "{colors.text_subtle}",
+                                color: COLOR_TEXT_SUBTLE,
                                 font_size: "11px",
                                 text_transform: "uppercase",
                                 letter_spacing: "0.12em",
@@ -116,9 +121,9 @@ pub fn LeftRail(
 
                             button {
                                 padding: "7px 10px",
-                                background: "{colors.surface_high}",
-                                color: "{colors.text}",
-                                border: "1px solid {colors.border}",
+                                background: COLOR_SURFACE_HIGH,
+                                color: COLOR_TEXT,
+                                border: "1px solid {COLOR_BORDER}",
                                 border_radius: "6px",
                                 cursor: "pointer",
                                 font_size: "12px",
@@ -133,9 +138,9 @@ pub fn LeftRail(
 
                             button {
                                 padding: "7px 10px",
-                                background: "{colors.surface_high}",
-                                color: "{colors.text}",
-                                border: "1px solid {colors.border}",
+                                background: COLOR_SURFACE_HIGH,
+                                color: COLOR_TEXT,
+                                border: "1px solid {COLOR_BORDER}",
                                 border_radius: "6px",
                                 cursor: "pointer",
                                 font_size: "12px",
@@ -150,9 +155,9 @@ pub fn LeftRail(
 
                             button {
                                 padding: "7px 10px",
-                                background: "{colors.surface_high}",
-                                color: "{colors.text}",
-                                border: "1px solid {colors.border}",
+                                background: COLOR_SURFACE_HIGH,
+                                color: COLOR_TEXT,
+                                border: "1px solid {COLOR_BORDER}",
                                 border_radius: "6px",
                                 cursor: "pointer",
                                 font_size: "12px",
@@ -168,8 +173,8 @@ pub fn LeftRail(
                             button {
                                 padding: "7px 10px",
                                 background: "rgba(255, 180, 171, 0.08)",
-                                color: "{colors.error}",
-                                border: "1px solid {colors.error}",
+                                color: COLOR_ERROR,
+                                border: "1px solid {COLOR_ERROR}",
                                 border_radius: "6px",
                                 cursor: "pointer",
                                 font_size: "12px",
@@ -186,8 +191,8 @@ pub fn LeftRail(
                         button {
                             padding: "7px 10px",
                             background: "transparent",
-                            color: "{colors.text_secondary}",
-                            border: "1px dashed {colors.outline_variant}",
+                            color: COLOR_TEXT_SECONDARY,
+                            border: "1px dashed {COLOR_OUTLINE_VARIANT}",
                             border_radius: "6px",
                             cursor: "pointer",
                             font_size: "12px",
@@ -201,8 +206,8 @@ pub fn LeftRail(
                 button {
                     width: "100%",
                     padding: "10px 12px",
-                    background: "{colors.primary}",
-                    color: "{colors.primary_text}",
+                    background: COLOR_PRIMARY,
+                    color: COLOR_TEXT_CONTRAST,
                     border: "none",
                     border_radius: "8px",
                     cursor: "pointer",
@@ -221,7 +226,7 @@ pub fn LeftRail(
 
             div {
                 padding: "12px 16px 8px",
-                color: "{colors.text_subtle}",
+                color: COLOR_TEXT_SUBTLE,
                 font_size: "11px",
                 text_transform: "uppercase",
                 letter_spacing: "0.16em",
@@ -254,10 +259,10 @@ pub fn LeftRail(
                         rsx! {
                             button {
                                 padding: "12px",
-                                background: if is_selected { colors.background } else { colors.surface_low },
-                                color: if is_selected { colors.text } else { colors.text_secondary },
+                                background: if is_selected { COLOR_BG } else { COLOR_SURFACE_LOW },
+                                color: if is_selected { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
                                 border: if is_selected {
-                                    format!("1px solid {}", colors.border)
+                                    format!("1px solid {}", COLOR_BORDER)
                                 } else {
                                     "1px solid transparent".to_string()
                                 },
@@ -292,7 +297,7 @@ pub fn LeftRail(
                                 }
 
                                 span {
-                                    color: "{colors.text_subtle}",
+                                    color: COLOR_TEXT_SUBTLE,
                                     font_size: "11px",
 
                                     "{state_label(state)}"
@@ -305,9 +310,9 @@ pub fn LeftRail(
                 if selected_connection.is_none() && !has_connections {
                     div {
                         padding: "12px",
-                        color: "{colors.text_subtle}",
+                        color: COLOR_TEXT_SUBTLE,
                         font_size: "12px",
-                        background: "{colors.surface_low}",
+                        background: COLOR_SURFACE_LOW,
                         border_radius: "8px",
 
                         "还没有连接，先创建一个 Redis 连接。"
@@ -317,16 +322,16 @@ pub fn LeftRail(
 
             div {
                 padding: "12px",
-                border_top: "1px solid {colors.border}",
+                border_top: "1px solid {COLOR_BORDER}",
                 display: "flex",
                 flex_direction: "column",
                 gap: "8px",
 
                 button {
                     padding: "10px 12px",
-                    background: "{colors.surface_low}",
-                    color: "{colors.text_secondary}",
-                    border: "1px solid {colors.border}",
+                    background: COLOR_SURFACE_LOW,
+                    color: COLOR_TEXT_SECONDARY,
+                    border: "1px solid {COLOR_BORDER}",
                     border_radius: "8px",
                     cursor: "pointer",
                     display: "flex",

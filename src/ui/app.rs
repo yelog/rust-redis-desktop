@@ -1,6 +1,6 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
-use crate::theme::{resolve_theme, theme_spec, ThemePreference, ThemeSpec};
+use crate::theme::{resolve_theme, theme_spec, ThemePreference, ThemeSpec, COLOR_BG, COLOR_BG_SECONDARY, COLOR_SURFACE_LOW, COLOR_BG_LOWEST, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_TEXT_CONTRAST, COLOR_BORDER, COLOR_ACCENT, COLOR_ERROR, COLOR_PRIMARY};
 use crate::ui::{
     ClientsPanel, ConnectionForm, FlushConfirmDialog, KeyBrowser, LeftRail, MonitorPanel,
     ResizableDivider, SettingsDialog, SlowLogPanel, Terminal,
@@ -131,6 +131,11 @@ fn build_theme_bridge_script(preference: ThemePreference) -> String {
     let classic_dark = build_theme_palette(theme_spec(crate::theme::ThemeId::ClassicDark));
     let classic_light = build_theme_palette(theme_spec(crate::theme::ThemeId::ClassicLight));
     let tokyo_night = build_theme_palette(theme_spec(crate::theme::ThemeId::TokyoNight));
+    let tokyo_night_light = build_theme_palette(theme_spec(crate::theme::ThemeId::TokyoNightLight));
+    let atom_one_light = build_theme_palette(theme_spec(crate::theme::ThemeId::AtomOneLight));
+    let github_light = build_theme_palette(theme_spec(crate::theme::ThemeId::GitHubLight));
+    let one_dark_pro = build_theme_palette(theme_spec(crate::theme::ThemeId::OneDarkPro));
+    let dracula = build_theme_palette(theme_spec(crate::theme::ThemeId::Dracula));
 
     format!(
         r##"
@@ -141,6 +146,11 @@ fn build_theme_bridge_script(preference: ThemePreference) -> String {
     classic_dark: {classic_dark},
     classic_light: {classic_light},
     tokyo_night: {tokyo_night},
+    tokyo_night_light: {tokyo_night_light},
+    atom_one_light: {atom_one_light},
+    github_light: {github_light},
+    one_dark_pro: {one_dark_pro},
+    dracula: {dracula},
   }};
 
   const normalize = (value) => (value || "")
@@ -305,6 +315,36 @@ fn build_theme_bridge_script(preference: ThemePreference) -> String {
       bridge.themes.tokyo_night.warning,
       bridge.themes.tokyo_night.buttonSecondary,
       bridge.themes.tokyo_night.secondaryAction,
+      bridge.themes.tokyo_night_light.primary,
+      bridge.themes.tokyo_night_light.success,
+      bridge.themes.tokyo_night_light.error,
+      bridge.themes.tokyo_night_light.warning,
+      bridge.themes.tokyo_night_light.buttonSecondary,
+      bridge.themes.tokyo_night_light.secondaryAction,
+      bridge.themes.atom_one_light.primary,
+      bridge.themes.atom_one_light.success,
+      bridge.themes.atom_one_light.error,
+      bridge.themes.atom_one_light.warning,
+      bridge.themes.atom_one_light.buttonSecondary,
+      bridge.themes.atom_one_light.secondaryAction,
+      bridge.themes.github_light.primary,
+      bridge.themes.github_light.success,
+      bridge.themes.github_light.error,
+      bridge.themes.github_light.warning,
+      bridge.themes.github_light.buttonSecondary,
+      bridge.themes.github_light.secondaryAction,
+      bridge.themes.one_dark_pro.primary,
+      bridge.themes.one_dark_pro.success,
+      bridge.themes.one_dark_pro.error,
+      bridge.themes.one_dark_pro.warning,
+      bridge.themes.one_dark_pro.buttonSecondary,
+      bridge.themes.one_dark_pro.secondaryAction,
+      bridge.themes.dracula.primary,
+      bridge.themes.dracula.success,
+      bridge.themes.dracula.error,
+      bridge.themes.dracula.warning,
+      bridge.themes.dracula.buttonSecondary,
+      bridge.themes.dracula.secondaryAction,
     ]
       .map(normalize)
       .includes(normalized);
@@ -525,6 +565,11 @@ fn build_theme_bridge_script(preference: ThemePreference) -> String {
         classic_dark = classic_dark,
         classic_light = classic_light,
         tokyo_night = tokyo_night,
+        tokyo_night_light = tokyo_night_light,
+        atom_one_light = atom_one_light,
+        github_light = github_light,
+        one_dark_pro = one_dark_pro,
+        dracula = dracula,
     )
 }
 
@@ -668,8 +713,8 @@ await new Promise(() => {});
                 display: "flex",
                 flex_direction: "column",
                 height: "100vh",
-                background: "{colors.background}",
-                color: "{colors.text}",
+                background: COLOR_BG,
+                color: COLOR_TEXT,
                 overflow: "hidden",
 
                 div {
@@ -853,7 +898,7 @@ await new Promise(() => {});
                                 align_items: "center",
                                 justify_content: "center",
                                 gap: "16px",
-                                background: "{colors.surface_low}",
+                                background: "{COLOR_SURFACE_LOW}",
 
                                 style { {r#"
                                 @keyframes spin {
@@ -865,14 +910,14 @@ await new Promise(() => {});
                                 div {
                                     width: "40px",
                                     height: "40px",
-                                    border: "3px solid {colors.accent}",
+                                    border: "3px solid {COLOR_ACCENT}",
                                     border_top_color: "transparent",
                                     border_radius: "50%",
                                     animation: "spin 0.8s linear infinite",
                                 }
 
                                 div {
-                                    color: "{colors.text_secondary}",
+                                    color: "{COLOR_TEXT_SECONDARY}",
                                     font_size: "14px",
 
                                     "正在重新连接..."
@@ -886,10 +931,10 @@ await new Promise(() => {});
                                 align_items: "center",
                                 justify_content: "center",
                                 gap: "16px",
-                                background: "{colors.surface_low}",
+                                background: "{COLOR_SURFACE_LOW}",
 
                                 div {
-                                    color: "{colors.error}",
+                                    color: "{COLOR_ERROR}",
                                     font_size: "14px",
 
                                     "连接失败，请检查连接配置后重试"
@@ -897,8 +942,8 @@ await new Promise(() => {});
 
                                 button {
                                     padding: "10px 20px",
-                                    background: "{colors.primary}",
-                                    color: "{colors.primary_text}",
+                                    background: "{COLOR_PRIMARY}",
+                                    color: "{COLOR_TEXT_CONTRAST}",
                                     border: "none",
                                     border_radius: "6px",
                                     cursor: "pointer",
@@ -943,7 +988,7 @@ await new Promise(() => {});
                                 align_items: "center",
                                 justify_content: "center",
                                 gap: "16px",
-                                background: "{colors.surface_low}",
+                                background: "{COLOR_SURFACE_LOW}",
 
                                 style { {r#"
                                 @keyframes spin {
@@ -955,14 +1000,14 @@ await new Promise(() => {});
                                 div {
                                     width: "40px",
                                     height: "40px",
-                                    border: "3px solid {colors.accent}",
+                                    border: "3px solid {COLOR_ACCENT}",
                                     border_top_color: "transparent",
                                     border_radius: "50%",
                                     animation: "spin 0.8s linear infinite",
                                 }
 
                                 div {
-                                    color: "{colors.text_secondary}",
+                                    color: "{COLOR_TEXT_SECONDARY}",
                                     font_size: "14px",
 
                                     "正在加载连接..."
@@ -976,7 +1021,7 @@ await new Promise(() => {});
                                 min_height: "0",
                                 display: "flex",
                                 flex_direction: "column",
-                                background: "{colors.surface_low}",
+                                background: "{COLOR_SURFACE_LOW}",
                                 overflow: "hidden",
 
                                 div {
@@ -984,8 +1029,8 @@ await new Promise(() => {});
                                     align_items: "center",
                                     gap: "8px",
                                     padding: "10px 16px",
-                                    border_bottom: "1px solid {colors.border}",
-                                    background: "{colors.background_secondary}",
+                                    border_bottom: "1px solid {COLOR_BORDER}",
+                                    background: "{COLOR_BG_SECONDARY}",
 
                                     for (tab, label) in [
                                         (Tab::Data, "数据"),
@@ -996,15 +1041,15 @@ await new Promise(() => {});
                                     ] {
                                         button {
                                             padding: "8px 14px",
-                                            background: if current_tab() == tab { colors.background } else { "transparent" },
-                                            color: if current_tab() == tab { colors.text } else { colors.text_secondary },
+                                            background: if current_tab() == tab { COLOR_BG } else { "transparent" },
+                                            color: if current_tab() == tab { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
                                             border: if current_tab() == tab {
-                                                format!("1px solid {}", colors.border)
+                                                format!("1px solid {}", COLOR_BORDER)
                                             } else {
                                                 "1px solid transparent".to_string()
                                             },
                                             border_bottom: if current_tab() == tab {
-                                                format!("2px solid {}", colors.accent)
+                                                format!("2px solid {}", COLOR_ACCENT)
                                             } else {
                                                 "2px solid transparent".to_string()
                                             },
@@ -1080,7 +1125,7 @@ await new Promise(() => {});
                                 align_items: "center",
                                 justify_content: "center",
                                 gap: "16px",
-                                background: "{colors.surface_low}",
+                                background: "{COLOR_SURFACE_LOW}",
 
                                 style { {r#"
                                 @keyframes spin {
@@ -1092,14 +1137,14 @@ await new Promise(() => {});
                                 div {
                                     width: "40px",
                                     height: "40px",
-                                    border: "3px solid {colors.accent}",
+                                    border: "3px solid {COLOR_ACCENT}",
                                     border_top_color: "transparent",
                                     border_radius: "50%",
                                     animation: "spin 0.8s linear infinite",
                                 }
 
                                 div {
-                                    color: "{colors.text_secondary}",
+                                    color: "{COLOR_TEXT_SECONDARY}",
                                     font_size: "14px",
 
                                     "正在初始化连接..."
@@ -1114,7 +1159,7 @@ await new Promise(() => {});
                                 align_items: "center",
                                 justify_content: "center",
                                 gap: "16px",
-                                background: "{colors.surface_low}",
+                                background: "{COLOR_SURFACE_LOW}",
 
                                 style { {r#"
                                 @keyframes spin {
@@ -1126,14 +1171,14 @@ await new Promise(() => {});
                                 div {
                                     width: "40px",
                                     height: "40px",
-                                    border: "3px solid {colors.accent}",
+                                    border: "3px solid {COLOR_ACCENT}",
                                     border_top_color: "transparent",
                                     border_radius: "50%",
                                     animation: "spin 0.8s linear infinite",
                                 }
 
                                 div {
-                                    color: "{colors.text_secondary}",
+                                    color: "{COLOR_TEXT_SECONDARY}",
                                     font_size: "14px",
 
                                     "正在连接..."
@@ -1148,13 +1193,13 @@ await new Promise(() => {});
                             align_items: "center",
                             justify_content: "center",
                             gap: "10px",
-                            color: "{colors.text_secondary}",
-                            background: "{colors.surface_low}",
+                            color: "{COLOR_TEXT_SECONDARY}",
+                            background: "{COLOR_SURFACE_LOW}",
 
                             div {
                                 font_size: "28px",
                                 font_weight: "700",
-                                color: "{colors.text}",
+                                color: "{COLOR_TEXT}",
 
                                 "Redis 工作台"
                             }
