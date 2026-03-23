@@ -568,9 +568,18 @@ await new Promise(() => {});
                         colors: colors.clone(),
                         on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
                         on_select_connection: move |id: Uuid| {
-                            selected_connection.set(Some(id));
+                            let previous_conn = selected_connection();
+                            
                             selected_key.set(String::new());
                             current_tab.set(Tab::Data);
+
+                            if previous_conn != Some(id) {
+                                connection_states
+                                    .write()
+                                    .insert(id, ConnectionState::Connecting);
+                            }
+                            
+                            selected_connection.set(Some(id));
 
                             if let Some(pool) = connection_pools.read().get(&id).cloned() {
                                 current_db.set(pool.current_db());
@@ -592,6 +601,7 @@ await new Promise(() => {});
                                     let version =
                                         connection_versions.read().get(&id).copied().unwrap_or(0);
                                     connection_versions.write().insert(id, version + 1);
+                                    connection_states.write().insert(id, ConnectionState::Connected);
                                     return;
                                 }
 
@@ -834,7 +844,8 @@ await new Promise(() => {});
                                     "正在加载连接..."
                                 }
                             }
-                        } else if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
+                        } else if selected_conn_state == ConnectionState::Connected {
+                            if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
                             div {
                                 flex: "1",
                                 min_width: "0",
@@ -933,6 +944,73 @@ await new Promise(() => {});
                                             connection_pool: pool.clone(),
                                         }
                                     }
+                                }
+                            }
+                        } else {
+                            div {
+                                flex: "1",
+                                display: "flex",
+                                flex_direction: "column",
+                                align_items: "center",
+                                justify_content: "center",
+                                gap: "16px",
+                                background: "{colors.surface_low}",
+
+                                style { {r#"
+                                @keyframes spin {
+                                    from { transform: rotate(0deg); }
+                                    to { transform: rotate(360deg); }
+                                }
+                            "#} }
+
+                                div {
+                                    width: "40px",
+                                    height: "40px",
+                                    border: "3px solid {colors.accent}",
+                                    border_top_color: "transparent",
+                                    border_radius: "50%",
+                                    animation: "spin 0.8s linear infinite",
+                                }
+
+                                div {
+                                    color: "{colors.text_secondary}",
+                                    font_size: "14px",
+
+                                    "正在初始化连接..."
+                                }
+                            }
+                        }
+                        } else {
+                            div {
+                                flex: "1",
+                                display: "flex",
+                                flex_direction: "column",
+                                align_items: "center",
+                                justify_content: "center",
+                                gap: "16px",
+                                background: "{colors.surface_low}",
+
+                                style { {r#"
+                                @keyframes spin {
+                                    from { transform: rotate(0deg); }
+                                    to { transform: rotate(360deg); }
+                                }
+                            "#} }
+
+                                div {
+                                    width: "40px",
+                                    height: "40px",
+                                    border: "3px solid {colors.accent}",
+                                    border_top_color: "transparent",
+                                    border_radius: "50%",
+                                    animation: "spin 0.8s linear infinite",
+                                }
+
+                                div {
+                                    color: "{colors.text_secondary}",
+                                    font_size: "14px",
+
+                                    "正在连接..."
                                 }
                             }
                         }
