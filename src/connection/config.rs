@@ -69,6 +69,31 @@ impl Default for SentinelConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ClusterConfig {
+    pub nodes: Vec<String>,
+    #[serde(default)]
+    pub read_from_replicas: bool,
+}
+
+impl Default for ClusterConfig {
+    fn default() -> Self {
+        Self {
+            nodes: vec!["127.0.0.1:6379".to_string()],
+            read_from_replicas: false,
+        }
+    }
+}
+
+impl ClusterConfig {
+    pub fn to_urls(&self) -> Vec<String> {
+        self.nodes
+            .iter()
+            .map(|n| format!("redis://{}", n))
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConnectionConfig {
     pub id: Uuid,
     pub name: String,
@@ -87,8 +112,10 @@ pub struct ConnectionConfig {
     pub ssl: SSLConfig,
     #[serde(default)]
     pub sentinel: Option<SentinelConfig>,
+    #[serde(default)]
+    pub cluster: Option<ClusterConfig>,
     #[serde(default, skip_serializing)]
-    pub use_ssl: bool, // Deprecated, for backward compatibility
+    pub use_ssl: bool,
 }
 
 impl Default for ConnectionConfig {
@@ -106,6 +133,7 @@ impl Default for ConnectionConfig {
             ssh: None,
             ssl: SSLConfig::default(),
             sentinel: None,
+            cluster: None,
             use_ssl: false,
         }
     }
@@ -151,6 +179,12 @@ impl ConnectionConfig {
 
     pub fn with_cluster_mode(mut self) -> Self {
         self.mode = ConnectionMode::Cluster;
+        self
+    }
+
+    pub fn with_cluster(mut self, cluster: ClusterConfig) -> Self {
+        self.mode = ConnectionMode::Cluster;
+        self.cluster = Some(cluster);
         self
     }
 

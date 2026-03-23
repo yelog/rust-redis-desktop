@@ -1,14 +1,38 @@
-use super::{ConnectionConfig, ConnectionError, Result};
+use super::{ConnectionConfig, ConnectionError, ConnectionMode, Result};
 use redis::aio::ConnectionManager;
-use redis::AsyncCommands;
+use redis::cluster::ClusterClient;
+use redis::cluster_async::ClusterConnection;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+pub enum RedisConnection {
+    Single(ConnectionManager),
+    Cluster(ClusterConnection),
+}
+
+impl RedisConnection {
+    pub async fn execute_cmd<V>(&mut self, cmd: &mut redis::Cmd) -> Result<V>
+    where
+        V: redis::FromRedisValue,
+    {
+        match self {
+            RedisConnection::Single(c) => cmd
+                .query_async(c)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string())),
+            RedisConnection::Cluster(c) => cmd
+                .query_async(c)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string())),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ConnectionPool {
     pub(crate) config: ConnectionConfig,
-    pub(crate) connection: Arc<Mutex<Option<ConnectionManager>>>,
+    pub(crate) connection: Arc<Mutex<Option<RedisConnection>>>,
     pub(crate) selected_db: Arc<AtomicU8>,
 }
 
@@ -42,6 +66,14 @@ impl ConnectionPool {
     }
 
     async fn connect(&self) -> Result<()> {
+        match self.config.mode {
+            ConnectionMode::Direct => self.connect_single().await,
+            ConnectionMode::Cluster => self.connect_cluster().await,
+            ConnectionMode::Sentinel => self.connect_single().await,
+        }
+    }
+
+    async fn connect_single(&self) -> Result<()> {
         let url = self.config.to_redis_url();
 
         let client = redis::Client::open(url.as_str())
@@ -59,7 +91,46 @@ impl ConnectionPool {
         self.ensure_selected_database(&mut conn).await?;
 
         let mut connection = self.connection.lock().await;
-        *connection = Some(conn);
+        *connection = Some(RedisConnection::Single(conn));
+
+        Ok(())
+    }
+
+    async fn connect_cluster(&self) -> Result<()> {
+        let cluster_config = self.config.cluster.as_ref().ok_or_else(|| {
+            ConnectionError::InvalidConfig("Cluster configuration is required".to_string())
+        })?;
+
+        let nodes = if cluster_config.nodes.is_empty() {
+            vec![format!("redis://{}:{}", self.config.host, self.config.port)]
+        } else {
+            cluster_config.to_urls()
+        };
+
+        let mut builder = ClusterClient::builder(nodes);
+
+        if let Some(ref password) = self.config.password {
+            builder = builder.password(password.clone());
+        }
+
+        if let Some(ref username) = self.config.username {
+            builder = builder.username(username.clone());
+        }
+
+        let client = builder
+            .build()
+            .map_err(|e| ConnectionError::InvalidConfig(e.to_string()))?;
+
+        let conn = tokio::time::timeout(
+            std::time::Duration::from_millis(self.config.connection_timeout),
+            client.get_async_connection(),
+        )
+        .await
+        .map_err(|_| ConnectionError::Timeout)?
+        .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+
+        let mut connection = self.connection.lock().await;
+        *connection = Some(RedisConnection::Cluster(conn));
 
         Ok(())
     }
@@ -68,9 +139,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.ping()
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.execute_cmd(redis::cmd("PING")).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -105,11 +174,13 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            redis::cmd("SELECT")
-                .arg(db)
-                .query_async::<()>(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            match conn {
+                RedisConnection::Single(c) => {
+                    conn.execute_cmd::<()>(redis::cmd("SELECT").arg(db))
+                        .await?;
+                }
+                RedisConnection::Cluster(_) => {}
+            }
         }
 
         Ok(())

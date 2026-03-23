@@ -1,7 +1,6 @@
 use super::{KeyInfo, KeyType};
 use crate::connection::{ConnectionError, ConnectionPool, Result};
 use crate::ui::add_key_dialog::{HashField, ListValue, SetValue, StreamEntry, ZSetMember};
-use redis::AsyncCommands;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -42,20 +41,20 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             let mut keys = Vec::new();
             let mut cursor: u64 = 0;
 
             loop {
-                let result: (u64, Vec<String>) = redis::cmd("SCAN")
-                    .arg(cursor)
-                    .arg("MATCH")
-                    .arg(pattern)
-                    .arg("COUNT")
-                    .arg(count)
-                    .query_async(conn)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                let result: (u64, Vec<String>) = conn
+                    .execute_cmd(
+                        redis::cmd("SCAN")
+                            .arg(cursor)
+                            .arg("MATCH")
+                            .arg(pattern)
+                            .arg("COUNT")
+                            .arg(count),
+                    )
+                    .await?;
 
                 cursor = result.0;
                 keys.extend(result.1);
@@ -80,16 +79,16 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: (u64, Vec<String>) = redis::cmd("SCAN")
-                .arg(cursor)
-                .arg("MATCH")
-                .arg(pattern)
-                .arg("COUNT")
-                .arg(count)
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            let result: (u64, Vec<String>) = conn
+                .execute_cmd(
+                    redis::cmd("SCAN")
+                        .arg(cursor)
+                        .arg("MATCH")
+                        .arg(pattern)
+                        .arg("COUNT")
+                        .arg(count),
+                )
+                .await?;
 
             Ok(result)
         } else {
@@ -109,20 +108,20 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             let mut total_count = 0;
             let mut cursor: u64 = 0;
 
             loop {
-                let result: (u64, Vec<String>) = redis::cmd("SCAN")
-                    .arg(cursor)
-                    .arg("MATCH")
-                    .arg(pattern)
-                    .arg("COUNT")
-                    .arg(batch_size)
-                    .query_async(conn)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                let result: (u64, Vec<String>) = conn
+                    .execute_cmd(
+                        redis::cmd("SCAN")
+                            .arg(cursor)
+                            .arg("MATCH")
+                            .arg(pattern)
+                            .arg("COUNT")
+                            .arg(batch_size),
+                    )
+                    .await?;
 
                 cursor = result.0;
                 let batch_len = result.1.len();
@@ -145,13 +144,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let type_str: String = redis::cmd("TYPE")
-                .arg(key)
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
+            let type_str: String = conn.execute_cmd(redis::cmd("TYPE").arg(key)).await?;
             Ok(KeyType::from(type_str))
         } else {
             Err(ConnectionError::Closed)
@@ -166,15 +159,10 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             let mut result = HashMap::new();
 
             for key in keys {
-                let type_str: String = redis::cmd("TYPE")
-                    .arg(key)
-                    .query_async(conn)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                let type_str: String = conn.execute_cmd(redis::cmd("TYPE").arg(key)).await?;
                 result.insert(key.clone(), KeyType::from(type_str));
             }
 
@@ -190,11 +178,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let ttl: i64 = conn
-                .ttl(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            let ttl: i64 = conn.ttl(key).await?;
 
             let ttl = if ttl == -1 { None } else { Some(ttl) };
 
@@ -213,10 +197,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            conn.get(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.get(key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -226,10 +207,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            conn.get(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.get(key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -239,10 +217,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            conn.set(key, value)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.set(key, value).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -252,12 +227,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let deleted: i32 = conn
-                .del(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
+            let deleted: i32 = conn.del(key).await?;
             Ok(deleted > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -268,10 +238,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            conn.hgetall(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.hgetall(key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -281,10 +248,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            conn.lrange(key, start as isize, stop as isize)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.lrange(key, start as isize, stop as isize).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -294,10 +258,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            conn.smembers(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.smembers(key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -312,13 +273,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: Vec<(String, f64)> = conn
-                .zrange_withscores(key, start as isize, stop as isize)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
-            Ok(result)
+            conn.zrange_withscores(key, start as isize, stop as isize).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -328,12 +283,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: i32 = conn
-                .expire(key, ttl)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
+            let result: i32 = conn.expire(key, ttl).await?;
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -344,12 +294,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: i32 = conn
-                .persist(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
+            let result: i32 = conn.persist(key).await?;
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -360,10 +305,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            conn.rename(old_key, new_key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.rename(old_key, new_key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -373,10 +315,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            conn.hset(key, field, value)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.hset(key, field, value).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -386,12 +325,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let deleted: i32 = conn
-                .hdel(key, field)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
+            let deleted: i32 = conn.hdel(key, field).await?;
             Ok(deleted > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -402,7 +336,6 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             let parts: Vec<&str> = command.split_whitespace().collect();
             if parts.is_empty() {
                 return Ok("Empty command".to_string());
@@ -416,11 +349,7 @@ impl ConnectionPool {
                 redis_cmd.arg(arg);
             }
 
-            let result: redis::Value = redis_cmd
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
+            let result: redis::Value = conn.execute_cmd(&mut redis_cmd).await?;
             let formatted = format_redis_value(&result);
             Ok(formatted)
         } else {
@@ -432,12 +361,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let info: String = redis::cmd("INFO")
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
+            let info: String = conn.execute_cmd(redis::cmd("INFO")).await?;
             Ok(parse_server_info(&info))
         } else {
             Err(ConnectionError::Closed)
@@ -448,12 +372,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let info: String = redis::cmd("INFO")
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
+            let info: String = conn.execute_cmd(redis::cmd("INFO")).await?;
             Ok(info)
         } else {
             Err(ConnectionError::Closed)
@@ -593,11 +512,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             for field in fields {
-                conn.hset::<_, _, _, ()>(key, field.field.clone(), field.value.clone())
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                conn.hset(key, field.field.clone(), field.value.clone()).await?;
             }
             Ok(())
         } else {
@@ -615,11 +531,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             let items: Vec<String> = values.into_iter().map(|v| v.value).collect();
-            conn.rpush(key, items)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.rpush(key, items).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -635,11 +548,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             let items: Vec<String> = values.into_iter().map(|v| v.value).collect();
-            conn.sadd(key, items)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            conn.sadd(key, items).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -655,12 +565,9 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             for member in members {
                 let score: f64 = member.score.parse().unwrap_or(0.0);
-                conn.zadd::<_, _, _, ()>(key, member.value.clone(), score)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                conn.zadd(key, member.value.clone(), score).await?;
             }
             Ok(())
         } else {
@@ -678,21 +585,20 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             for entry in entries {
                 let id = if entry.id.is_empty() || entry.id == "*" {
                     "*"
                 } else {
                     &entry.id
                 };
-                redis::cmd("XADD")
-                    .arg(key)
-                    .arg(id)
-                    .arg(&entry.field)
-                    .arg(&entry.value)
-                    .query_async::<redis::Value>(conn)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                conn.execute_cmd::<redis::Value>(
+                    redis::cmd("XADD")
+                        .arg(key)
+                        .arg(id)
+                        .arg(&entry.field)
+                        .arg(&entry.value),
+                )
+                .await?;
             }
             Ok(())
         } else {
@@ -704,15 +610,10 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             let result: i64 = if left {
-                conn.lpush(key, value)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+                conn.lpush(key, value).await?
             } else {
-                conn.rpush(key, value)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+                conn.rpush(key, value).await?
             };
             Ok(result)
         } else {
@@ -724,15 +625,10 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
             let result: Option<String> = if left {
-                conn.lpop(key, None)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+                conn.lpop(key).await?
             } else {
-                conn.rpop(key, None)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+                conn.rpop(key).await?
             };
             Ok(result)
         } else {
@@ -744,12 +640,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let _: () = conn
-                .lset(key, index as isize, value)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(())
+            conn.lset(key, index as isize, value).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -759,12 +650,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: i64 = conn
-                .lrem(key, count as isize, value)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(result)
+            conn.lrem(key, count as isize, value).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -774,12 +660,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let len: u64 = conn
-                .llen(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(len)
+            conn.llen(key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -789,11 +670,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: i32 = conn
-                .sadd(key, member)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            let result: i32 = conn.sadd(key, member).await?;
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -804,11 +681,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: i32 = conn
-                .srem(key, member)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            let result: i32 = conn.srem(key, member).await?;
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -819,11 +692,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: i32 = conn
-                .zadd(key, member, score)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            let result: i32 = conn.zadd(key, member, score).await?;
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -834,11 +703,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: i32 = conn
-                .zrem(key, member)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            let result: i32 = conn.zrem(key, member).await?;
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -849,12 +714,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let count: u64 = conn
-                .zcard(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(count)
+            conn.zcard(key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -864,13 +724,9 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: i32 = redis::cmd("XDEL")
-                .arg(key)
-                .arg(id)
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            let result: i32 = conn
+                .execute_cmd(redis::cmd("XDEL").arg(key).arg(id))
+                .await?;
             Ok(result > 0)
         } else {
             Err(ConnectionError::Closed)
@@ -881,13 +737,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: u64 = redis::cmd("XLEN")
-                .arg(key)
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(result)
+            conn.execute_cmd(redis::cmd("XLEN").arg(key)).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -902,15 +752,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: Vec<(String, Vec<(String, String)>)> = redis::cmd("XRANGE")
-                .arg(key)
-                .arg(start)
-                .arg(end)
-                .query_async(conn)
+            conn.execute_cmd(redis::cmd("XRANGE").arg(key).arg(start).arg(end))
                 .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(result)
         } else {
             Err(ConnectionError::Closed)
         }
@@ -920,12 +763,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let len: u64 = conn
-                .hlen(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(len)
+            conn.hlen(key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -935,12 +773,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let len: u64 = conn
-                .scard(key)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(len)
+            conn.scard(key).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -955,16 +788,14 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: (u64, Vec<(String, String)>) = redis::cmd("HSCAN")
-                .arg(key)
-                .arg(cursor)
-                .arg("COUNT")
-                .arg(count)
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(result)
+            conn.execute_cmd(
+                redis::cmd("HSCAN")
+                    .arg(key)
+                    .arg(cursor)
+                    .arg("COUNT")
+                    .arg(count),
+            )
+            .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -979,16 +810,14 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: (u64, Vec<String>) = redis::cmd("SSCAN")
-                .arg(key)
-                .arg(cursor)
-                .arg("COUNT")
-                .arg(count)
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(result)
+            conn.execute_cmd(
+                redis::cmd("SSCAN")
+                    .arg(key)
+                    .arg(cursor)
+                    .arg("COUNT")
+                    .arg(count),
+            )
+            .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1003,16 +832,14 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: (u64, Vec<(String, f64)>) = redis::cmd("ZSCAN")
-                .arg(key)
-                .arg(cursor)
-                .arg("COUNT")
-                .arg(count)
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(result)
+            conn.execute_cmd(
+                redis::cmd("ZSCAN")
+                    .arg(key)
+                    .arg(cursor)
+                    .arg("COUNT")
+                    .arg(count),
+            )
+            .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1022,14 +849,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let result: Option<u64> = redis::cmd("MEMORY")
-                .arg("USAGE")
-                .arg(key)
-                .query_async(conn)
+            conn.execute_cmd(redis::cmd("MEMORY").arg("USAGE").arg(key))
                 .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(result)
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1039,12 +860,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            redis::cmd("FLUSHDB")
-                .query_async::<()>(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(())
+            conn.execute_cmd::<()>(redis::cmd("FLUSHDB")).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1054,12 +870,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            self.ensure_selected_database(conn).await?;
-            let size: u64 = redis::cmd("DBSIZE")
-                .query_async(conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-            Ok(size)
+            conn.execute_cmd(redis::cmd("DBSIZE")).await
         } else {
             Err(ConnectionError::Closed)
         }

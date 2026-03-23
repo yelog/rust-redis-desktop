@@ -1,4 +1,4 @@
-use crate::connection::{ConnectionConfig, ConnectionMode, SSHConfig};
+use crate::connection::{ClusterConfig, ConnectionConfig, ConnectionMode, SSHConfig};
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
 use dioxus::prelude::*;
@@ -46,6 +46,13 @@ pub fn ConnectionForm(
             .as_ref()
             .map(|c| c.ssh.is_some())
             .unwrap_or(false)
+    });
+    let mut cluster_nodes = use_signal(|| {
+        editing_config
+            .as_ref()
+            .and_then(|c| c.cluster.as_ref())
+            .map(|c| c.nodes.join("\n"))
+            .unwrap_or_else(|| "127.0.0.1:6379".to_string())
     });
 
     let is_editing = editing_config.is_some();
@@ -258,6 +265,37 @@ pub fn ConnectionForm(
                 }
             }
 
+            if mode() == ConnectionMode::Cluster {
+                div {
+                    margin_bottom: "16px",
+
+                    label {
+                        display: "block",
+                        color: "{colors.text_secondary}",
+                        font_size: "13px",
+                        margin_bottom: "8px",
+
+                        "集群节点 (每行一个 host:port)"
+                    }
+
+                    textarea {
+                        width: "100%",
+                        height: "80px",
+                        padding: "8px 12px",
+                        background: "{colors.background_tertiary}",
+                        border: "1px solid {colors.border}",
+                        border_radius: "4px",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        font_family: "monospace",
+                        box_sizing: "border_box",
+                        resize: "vertical",
+                        value: "{cluster_nodes}",
+                        oninput: move |e| cluster_nodes.set(e.value()),
+                    }
+                }
+            }
+
             div {
                 margin_bottom: "16px",
 
@@ -319,6 +357,18 @@ pub fn ConnectionForm(
 
                             if enable_ssh() {
                                 config.ssh = Some(SSHConfig::default());
+                            }
+
+                            if mode() == ConnectionMode::Cluster {
+                                let nodes: Vec<String> = cluster_nodes()
+                                    .lines()
+                                    .map(|s| s.trim().to_string())
+                                    .filter(|s| !s.is_empty())
+                                    .collect();
+                                config.cluster = Some(ClusterConfig {
+                                    nodes,
+                                    read_from_replicas: false,
+                                });
                             }
 
                             on_save.call(config);
