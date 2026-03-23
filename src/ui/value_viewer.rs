@@ -1279,34 +1279,40 @@ match info.key_type {
                                                         align_items: "center",
                                                         gap: "4px",
                                                         title: "复制",
-                                                        onclick: {
-                                                            let val = str_val.clone();
+                                                        onclick: move |_| {
                                                             let current_format = binary_format();
-                                                            let serial_info = serialization_info.clone();
-                                                            move |_| {
-                                                                let copy_text = match current_format {
-                                                                    BinaryFormat::JavaSerialized
-                                                                    | BinaryFormat::Php
-                                                                    | BinaryFormat::MsgPack
-                                                                    | BinaryFormat::Pickle
-                                                                    | BinaryFormat::Kryo => {
-                                                                        if let Some(ref data) = serial_info {
-                                                                            parse_to_json(&data.1, data.0).unwrap_or_else(|_| val.clone())
-                                                                        } else {
-                                                                            val.clone()
+                                                            let serial_info = serialization_data();
+                                                            let current_str = string_value();
+                                                            let copy_text = match current_format {
+                                                                BinaryFormat::JavaSerialized
+                                                                | BinaryFormat::Php
+                                                                | BinaryFormat::MsgPack
+                                                                | BinaryFormat::Pickle
+                                                                | BinaryFormat::Kryo => {
+                                                                    if let Some((fmt, data)) = serial_info.as_ref() {
+                                                                        parse_to_json(data, *fmt).unwrap_or(current_str)
+                                                                    } else {
+                                                                        current_str
+                                                                    }
+                                                                }
+                                                                _ => current_str,
+                                                            };
+                                                            match Clipboard::new() {
+                                                                Ok(mut clipboard) => {
+                                                                    match clipboard.set_text(&copy_text) {
+                                                                        Ok(_) => {
+                                                                            shell_status_message.set("复制成功".to_string());
+                                                                            shell_status_error.set(false);
+                                                                        }
+                                                                        Err(e) => {
+                                                                            shell_status_message.set(format!("复制失败：{}", e));
+                                                                            shell_status_error.set(true);
                                                                         }
                                                                     }
-                                                                    _ => val.clone(),
-                                                                };
-                                                                match copy_value_to_clipboard(&copy_text) {
-                                                                    Ok(_) => {
-                                                                        shell_status_message.set("复制成功".to_string());
-                                                                        shell_status_error.set(false);
-                                                                    }
-                                                                    Err(error) => {
-                                                                        shell_status_message.set(format!("复制失败：{error}"));
-                                                                        shell_status_error.set(true);
-                                                                    }
+                                                                }
+                                                                Err(e) => {
+                                                                    shell_status_message.set(format!("复制失败：{}", e));
+                                                                    shell_status_error.set(true);
                                                                 }
                                                             }
                                                         },
@@ -1600,65 +1606,54 @@ match info.key_type {
 
                                                 "+ 新增行"
                                             }
-                                        }
-
-                                        div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "12px",
-
-                                            button {
-                                                padding: "6px 10px",
-                                                background: "rgba(47, 133, 90, 0.16)",
-                                                color: COLOR_SUCCESS,
-                                                border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                border_radius: "6px",
-                                                cursor: "pointer",
-                                                display: "flex",
-                                                align_items: "center",
-                                                gap: "4px",
-                                                title: "复制",
-                                                onclick: {
-                                                    let hash = hash_val.clone();
-                                                    move |_| {
-                                                        let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
-                                                        match copy_value_to_clipboard(&json) {
-                                                            Ok(_) => {
-                                                                hash_status_message.set("复制成功".to_string());
-                                                                hash_status_error.set(false);
-                                                            }
-                                                            Err(error) => {
-                                                                hash_status_message.set(format!("复制失败：{error}"));
-                                                                hash_status_error.set(true);
-                                                            }
-                                                        }
-                                                    }
-                                                },
-
-                                                IconCopy { size: Some(14) }
-                                                "复制"
-                                            }
 
                                             div {
-                                                text_align: "right",
+                                                color: COLOR_TEXT_SECONDARY,
+                                                font_size: "13px",
 
+                                                "Hash Fields ({filtered_entries.len()}/{hash_val.len()})"
+                                            }
+
+                                            if !status_message.is_empty() {
                                                 div {
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    font_size: "13px",
+                                                    color: "{status_color}",
+                                                    font_size: "12px",
 
-                                                    "Hash Fields ({filtered_entries.len()}/{hash_val.len()})"
-                                                }
-
-                                                if !status_message.is_empty() {
-                                                    div {
-                                                        margin_top: "4px",
-                                                        color: "{status_color}",
-                                                        font_size: "12px",
-
-                                                        "{status_message}"
-                                                    }
+                                                    "{status_message}"
                                                 }
                                             }
+                                        }
+
+                                        button {
+                                            padding: "6px 10px",
+                                            background: "rgba(47, 133, 90, 0.16)",
+                                            color: COLOR_SUCCESS,
+                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "4px",
+                                            title: "复制",
+                                            onclick: {
+                                                let hash = hash_val.clone();
+                                                move |_| {
+                                                    let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
+                                                    match copy_value_to_clipboard(&json) {
+                                                        Ok(_) => {
+                                                            hash_status_message.set("复制成功".to_string());
+                                                            hash_status_error.set(false);
+                                                        }
+                                                        Err(error) => {
+                                                            hash_status_message.set(format!("复制失败：{error}"));
+                                                            hash_status_error.set(true);
+                                                        }
+                                                    }
+                                                }
+                                            },
+
+                                            IconCopy { size: Some(14) }
+                                            "复制"
                                         }
                                     }
 
@@ -2509,44 +2504,6 @@ match info.key_type {
 
                                                 "RPUSH"
                                             }
-                                        }
-
-                                        div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "12px",
-
-                                            button {
-                                                padding: "6px 10px",
-                                                background: "rgba(47, 133, 90, 0.16)",
-                                                color: COLOR_SUCCESS,
-                                                border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                border_radius: "6px",
-                                                cursor: "pointer",
-                                                display: "flex",
-                                                align_items: "center",
-                                                gap: "4px",
-                                                title: "复制",
-                                                onclick: {
-                                                    let list = list_val.clone();
-                                                    move |_| {
-                                                        let json = serde_json::to_string_pretty(&list).unwrap_or_default();
-                                                        match copy_value_to_clipboard(&json) {
-                                                            Ok(_) => {
-                                                                list_status_message.set("复制成功".to_string());
-                                                                list_status_error.set(false);
-                                                            }
-                                                            Err(error) => {
-                                                                list_status_message.set(format!("复制失败：{error}"));
-                                                                list_status_error.set(true);
-                                                            }
-                                                        }
-                                                    }
-                                                },
-
-                                                IconCopy { size: Some(14) }
-                                                "复制"
-                                            }
 
                                             div {
                                                 color: COLOR_TEXT_SECONDARY,
@@ -2554,6 +2511,38 @@ match info.key_type {
 
                                                 "List Items ({list_val.len()})"
                                             }
+                                        }
+
+                                        button {
+                                            padding: "6px 10px",
+                                            background: "rgba(47, 133, 90, 0.16)",
+                                            color: COLOR_SUCCESS,
+                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "4px",
+                                            title: "复制",
+                                            onclick: {
+                                                let list = list_val.clone();
+                                                move |_| {
+                                                    let json = serde_json::to_string_pretty(&list).unwrap_or_default();
+                                                    match copy_value_to_clipboard(&json) {
+                                                        Ok(_) => {
+                                                            list_status_message.set("复制成功".to_string());
+                                                            list_status_error.set(false);
+                                                        }
+                                                        Err(error) => {
+                                                            list_status_message.set(format!("复制失败：{error}"));
+                                                            list_status_error.set(true);
+                                                        }
+                                                    }
+                                                }
+                                            },
+
+                                            IconCopy { size: Some(14) }
+                                            "复制"
                                         }
                                     }
 
@@ -2991,55 +2980,45 @@ match info.key_type {
 
                                                 if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
                                             }
-                                        }
-
-                                        div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "12px",
-
-                                            button {
-                                                padding: "6px 10px",
-                                                background: "rgba(47, 133, 90, 0.16)",
-                                                color: COLOR_SUCCESS,
-                                                border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                border_radius: "6px",
-                                                cursor: "pointer",
-                                                display: "flex",
-                                                align_items: "center",
-                                                gap: "4px",
-                                                title: "复制",
-                                                onclick: {
-                                                    let set = set_val.clone();
-                                                    move |_| {
-                                                        let json = serde_json::to_string_pretty(&set).unwrap_or_default();
-                                                        match copy_value_to_clipboard(&json) {
-                                                            Ok(_) => {
-                                                                set_status_message.set("复制成功".to_string());
-                                                                set_status_error.set(false);
-                                                            }
-                                                            Err(error) => {
-                                                                set_status_message.set(format!("复制失败：{error}"));
-                                                                set_status_error.set(true);
-                                                            }
-                                                        }
-                                                    }
-                                                },
-
-                                                IconCopy { size: Some(14) }
-                                                "复制"
-                                            }
 
                                             div {
-                                                text_align: "right",
+                                                color: COLOR_TEXT_SECONDARY,
+                                                font_size: "13px",
 
-                                                div {
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    font_size: "13px",
-
-                                                    "Set Members ({filtered_set_members.len()}/{set_val.len()})"
-                                                }
+                                                "Set Members ({filtered_set_members.len()}/{set_val.len()})"
                                             }
+                                        }
+
+                                        button {
+                                            padding: "6px 10px",
+                                            background: "rgba(47, 133, 90, 0.16)",
+                                            color: COLOR_SUCCESS,
+                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "4px",
+                                            title: "复制",
+                                            onclick: {
+                                                let set = set_val.clone();
+                                                move |_| {
+                                                    let json = serde_json::to_string_pretty(&set).unwrap_or_default();
+                                                    match copy_value_to_clipboard(&json) {
+                                                        Ok(_) => {
+                                                            set_status_message.set("复制成功".to_string());
+                                                            set_status_error.set(false);
+                                                        }
+                                                        Err(error) => {
+                                                            set_status_message.set(format!("复制失败：{error}"));
+                                                            set_status_error.set(true);
+                                                        }
+                                                    }
+                                                }
+                                            },
+
+                                            IconCopy { size: Some(14) }
+                                            "复制"
                                         }
                                     }
 
@@ -3529,55 +3508,45 @@ match info.key_type {
 
                                                 if zset_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
                                             }
-                                        }
-
-                                        div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "12px",
-
-                                            button {
-                                                padding: "6px 10px",
-                                                background: "rgba(47, 133, 90, 0.16)",
-                                                color: COLOR_SUCCESS,
-                                                border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                border_radius: "6px",
-                                                cursor: "pointer",
-                                                display: "flex",
-                                                align_items: "center",
-                                                gap: "4px",
-                                                title: "复制",
-                                                onclick: {
-                                                    let zset = zset_val.clone();
-                                                    move |_| {
-                                                        let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
-                                                        match copy_value_to_clipboard(&json) {
-                                                            Ok(_) => {
-                                                                zset_status_message.set("复制成功".to_string());
-                                                                zset_status_error.set(false);
-                                                            }
-                                                            Err(error) => {
-                                                                zset_status_message.set(format!("复制失败：{error}"));
-                                                                zset_status_error.set(true);
-                                                            }
-                                                        }
-                                                    }
-                                                },
-
-                                                IconCopy { size: Some(14) }
-                                                "复制"
-                                            }
 
                                             div {
-                                                text_align: "right",
+                                                color: COLOR_TEXT_SECONDARY,
+                                                font_size: "13px",
 
-                                                div {
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    font_size: "13px",
-
-                                                    "ZSet Members ({filtered_zset_members.len()}/{zset_val.len()})"
-                                                }
+                                                "ZSet Members ({filtered_zset_members.len()}/{zset_val.len()})"
                                             }
+                                        }
+
+                                        button {
+                                            padding: "6px 10px",
+                                            background: "rgba(47, 133, 90, 0.16)",
+                                            color: COLOR_SUCCESS,
+                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "4px",
+                                            title: "复制",
+                                            onclick: {
+                                                let zset = zset_val.clone();
+                                                move |_| {
+                                                    let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
+                                                    match copy_value_to_clipboard(&json) {
+                                                        Ok(_) => {
+                                                            zset_status_message.set("复制成功".to_string());
+                                                            zset_status_error.set(false);
+                                                        }
+                                                        Err(error) => {
+                                                            zset_status_message.set(format!("复制失败：{error}"));
+                                                            zset_status_error.set(true);
+                                                        }
+                                                    }
+                                                }
+                                            },
+
+                                            IconCopy { size: Some(14) }
+                                            "复制"
                                         }
                                     }
 

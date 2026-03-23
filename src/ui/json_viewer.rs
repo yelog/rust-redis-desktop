@@ -3,6 +3,7 @@ use crate::theme::{
     COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST, SYNTAX_BOOLEAN,
     SYNTAX_BRACKET, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING,
 };
+use crate::ui::icons::IconCopy;
 use dioxus::prelude::*;
 use serde_json::Value;
 
@@ -236,15 +237,19 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                 }
 
                 button {
-                    padding: "4px 8px",
-                    background: COLOR_BUTTON_SECONDARY,
-                    color: COLOR_TEXT,
-                    border: "none",
-                    border_radius: "4px",
+                    padding: "4px 10px",
+                    background: "rgba(47, 133, 90, 0.16)",
+                    color: COLOR_SUCCESS,
+                    border: "1px solid rgba(104, 211, 145, 0.28)",
+                    border_radius: "6px",
                     cursor: "pointer",
+                    display: "flex",
+                    align_items: "center",
+                    gap: "4px",
                     font_size: "12px",
                     onclick: copy_to_clipboard,
 
+                    IconCopy { size: Some(14) }
                     "复制"
                 }
 
