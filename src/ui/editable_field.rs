@@ -1,5 +1,5 @@
 use crate::theme::{
-    COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT, COLOR_TEXT_CONTRAST,
+    COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST,
     COLOR_TEXT_SECONDARY,
 };
 use crate::ui::icons::IconCopy;
@@ -34,15 +34,6 @@ pub fn EditableField(
     rsx! {
         div {
             margin_bottom: "12px",
-
-            label {
-                display: "block",
-                color: COLOR_TEXT_SECONDARY,
-                font_size: "12px",
-                margin_bottom: "4px",
-
-                "{label}"
-            }
 
             if is_editing() {
                 div {
@@ -104,69 +95,83 @@ pub fn EditableField(
                 }
             } else {
                 div {
+                    // 工具栏
                     display: "flex",
+                    justify_content: "space_between",
                     align_items: "center",
-                    gap: "8px",
+                    margin_bottom: "8px",
+
+                    label {
+                        color: COLOR_TEXT_SECONDARY,
+                        font_size: "12px",
+
+                        "{label}"
+                    }
 
                     div {
-                        flex: "1",
-                        padding: "8px",
-                        background: COLOR_BG,
-                        border_radius: "4px",
-                        color: COLOR_TEXT,
-                        font_family: if multiline { "Consolas, monospace" } else { "inherit" },
-                        overflow: if multiline { "auto" } else { "hidden" },
-                        text_overflow: if multiline { "unset" } else { "ellipsis" },
-                        white_space: if multiline { "pre-wrap" } else { "nowrap" },
-                        word_break: if multiline { "break-all" } else { "normal" },
-
-                        "{value}"
-                    }
-
-                    button {
-                        width: "32px",
-                        height: "32px",
                         display: "flex",
                         align_items: "center",
-                        justify_content: "center",
-                        background: "rgba(47, 133, 90, 0.16)",
-                        color: "#68d391",
-                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                        border_radius: "6px",
-                        cursor: "pointer",
-                        title: "复制",
-                        onclick: {
-                            let val = value.clone();
-                            move |_| match copy_to_clipboard(&val) {
-                                Ok(_) => {}
-                                Err(_) => {}
-                            }
-                        },
+                        gap: "8px",
 
-                        IconCopy { size: Some(15) }
-                    }
+                        button {
+                            padding: "6px 10px",
+                            background: "rgba(47, 133, 90, 0.16)",
+                            color: COLOR_SUCCESS,
+                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            align_items: "center",
+                            gap: "4px",
+                            title: "复制",
+                            onclick: {
+                                let val = value.clone();
+                                move |_| match copy_to_clipboard(&val) {
+                                    Ok(_) => {}
+                                    Err(_) => {}
+                                }
+                            },
 
-                    if editable {
-                        {
-                            let val = value.clone();
-                            rsx! {
-                                button {
-                                    padding: "6px 12px",
-                                    background: "#3182ce",
-                                    color: COLOR_TEXT_CONTRAST,
-                                    border: "none",
-                                    border_radius: "4px",
-                                    cursor: "pointer",
-                                    onclick: move |_| {
-                                        temp_value.set(val.clone());
-                                        is_editing.set(true);
-                                    },
+                            IconCopy { size: Some(14) }
+                            "复制"
+                        }
 
-                                    "✏️"
+                        if editable {
+                            {
+                                let val = value.clone();
+                                rsx! {
+                                    button {
+                                        padding: "6px 12px",
+                                        background: "#3182ce",
+                                        color: COLOR_TEXT_CONTRAST,
+                                        border: "none",
+                                        border_radius: "4px",
+                                        cursor: "pointer",
+                                        onclick: move |_| {
+                                            temp_value.set(val.clone());
+                                            is_editing.set(true);
+                                        },
+
+                                        "✏️"
+                                    }
                                 }
                             }
                         }
                     }
+                }
+
+                div {
+                    padding: "8px",
+                    background: COLOR_BG,
+                    border_radius: "4px",
+                    color: COLOR_TEXT,
+                    font_family: if multiline { "Consolas, monospace" } else { "inherit" },
+                    overflow: if multiline { "auto" } else { "hidden" },
+                    text_overflow: if multiline { "unset" } else { "ellipsis" },
+                    white_space: if multiline { "pre-wrap" } else { "nowrap" },
+                    word_break: if multiline { "break-all" } else { "normal" },
+
+                    "{value}"
                 }
             }
         }

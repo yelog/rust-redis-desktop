@@ -1268,13 +1268,16 @@ match info.key_type {
                                                     }
 
                                                     button {
-                                                        padding: "4px 8px",
-                                                        background: COLOR_BG_TERTIARY,
-                                                        color: COLOR_TEXT,
-                                                        border: "none",
-                                                        border_radius: "4px",
+                                                        padding: "4px 10px",
+                                                        background: "rgba(47, 133, 90, 0.16)",
+                                                        color: COLOR_SUCCESS,
+                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                        border_radius: "6px",
                                                         cursor: "pointer",
                                                         font_size: "12px",
+                                                        display: "flex",
+                                                        align_items: "center",
+                                                        gap: "4px",
                                                         title: "复制",
                                                         onclick: {
                                                             let val = str_val.clone();
@@ -1308,7 +1311,8 @@ match info.key_type {
                                                             }
                                                         },
 
-                                                        IconCopy { size: Some(12) }
+                                                        IconCopy { size: Some(14) }
+                                                        "复制"
                                                     }
                                                 }
                                             }
@@ -1596,15 +1600,24 @@ match info.key_type {
 
                                                 "+ 新增行"
                                             }
+                                        }
+
+                                        div {
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "12px",
 
                                             button {
-                                                padding: "8px 12px",
-                                                background: COLOR_BG_TERTIARY,
-                                                color: COLOR_TEXT,
-                                                border: "1px solid {COLOR_BORDER}",
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
                                                 border_radius: "6px",
                                                 cursor: "pointer",
-                                                title: "复制全部",
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
                                                 onclick: {
                                                     let hash = hash_val.clone();
                                                     move |_| {
@@ -1622,27 +1635,28 @@ match info.key_type {
                                                     }
                                                 },
 
-                                                "复制全部"
+                                                IconCopy { size: Some(14) }
+                                                "复制"
                                             }
-                                        }
-
-                                        div {
-                                            text_align: "right",
 
                                             div {
-                                                color: COLOR_TEXT_SECONDARY,
-                                                font_size: "13px",
+                                                text_align: "right",
 
-                                                "Hash Fields ({filtered_entries.len()}/{hash_val.len()})"
-                                            }
-
-                                            if !status_message.is_empty() {
                                                 div {
-                                                    margin_top: "4px",
-                                                    color: "{status_color}",
-                                                    font_size: "12px",
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
 
-                                                    "{status_message}"
+                                                    "Hash Fields ({filtered_entries.len()}/{hash_val.len()})"
+                                                }
+
+                                                if !status_message.is_empty() {
+                                                    div {
+                                                        margin_top: "4px",
+                                                        color: "{status_color}",
+                                                        font_size: "12px",
+
+                                                        "{status_message}"
+                                                    }
                                                 }
                                             }
                                         }
@@ -2495,15 +2509,24 @@ match info.key_type {
 
                                                 "RPUSH"
                                             }
+                                        }
+
+                                        div {
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "12px",
 
                                             button {
-                                                padding: "8px 12px",
-                                                background: COLOR_BG_TERTIARY,
-                                                color: COLOR_TEXT,
-                                                border: "1px solid {COLOR_BORDER}",
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
                                                 border_radius: "6px",
                                                 cursor: "pointer",
-                                                title: "复制全部",
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
                                                 onclick: {
                                                     let list = list_val.clone();
                                                     move |_| {
@@ -2521,15 +2544,16 @@ match info.key_type {
                                                     }
                                                 },
 
-                                                "复制全部"
+                                                IconCopy { size: Some(14) }
+                                                "复制"
                                             }
-                                        }
 
-                                        div {
-                                            color: COLOR_TEXT_SECONDARY,
-                                            font_size: "13px",
+                                            div {
+                                                color: COLOR_TEXT_SECONDARY,
+                                                font_size: "13px",
 
-                                            "List Items ({list_val.len()})"
+                                                "List Items ({list_val.len()})"
+                                            }
                                         }
                                     }
 
@@ -2967,15 +2991,24 @@ match info.key_type {
 
                                                 if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
                                             }
+                                        }
+
+                                        div {
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "12px",
 
                                             button {
-                                                padding: "8px 12px",
-                                                background: COLOR_BG_TERTIARY,
-                                                color: COLOR_TEXT,
-                                                border: "1px solid {COLOR_BORDER}",
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
                                                 border_radius: "6px",
                                                 cursor: "pointer",
-                                                title: "复制全部",
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
                                                 onclick: {
                                                     let set = set_val.clone();
                                                     move |_| {
@@ -2993,18 +3026,19 @@ match info.key_type {
                                                     }
                                                 },
 
-                                                "复制全部"
+                                                IconCopy { size: Some(14) }
+                                                "复制"
                                             }
-                                        }
-
-                                        div {
-                                            text_align: "right",
 
                                             div {
-                                                color: COLOR_TEXT_SECONDARY,
-                                                font_size: "13px",
+                                                text_align: "right",
 
-                                                "Set Members ({filtered_set_members.len()}/{set_val.len()})"
+                                                div {
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "Set Members ({filtered_set_members.len()}/{set_val.len()})"
+                                                }
                                             }
                                         }
                                     }
@@ -3495,15 +3529,24 @@ match info.key_type {
 
                                                 if zset_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
                                             }
+                                        }
+
+                                        div {
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "12px",
 
                                             button {
-                                                padding: "8px 12px",
-                                                background: COLOR_BG_TERTIARY,
-                                                color: COLOR_TEXT,
-                                                border: "1px solid {COLOR_BORDER}",
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
                                                 border_radius: "6px",
                                                 cursor: "pointer",
-                                                title: "复制全部",
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
                                                 onclick: {
                                                     let zset = zset_val.clone();
                                                     move |_| {
@@ -3521,18 +3564,19 @@ match info.key_type {
                                                     }
                                                 },
 
-                                                "复制全部"
+                                                IconCopy { size: Some(14) }
+                                                "复制"
                                             }
-                                        }
-
-                                        div {
-                                            text_align: "right",
 
                                             div {
-                                                color: COLOR_TEXT_SECONDARY,
-                                                font_size: "13px",
+                                                text_align: "right",
 
-                                                "ZSet Members ({filtered_zset_members.len()}/{zset_val.len()})"
+                                                div {
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "ZSet Members ({filtered_zset_members.len()}/{zset_val.len()})"
+                                                }
                                             }
                                         }
                                     }
