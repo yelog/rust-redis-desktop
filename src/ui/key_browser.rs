@@ -251,44 +251,12 @@ pub fn KeyBrowser(
 
     let toggle_node = {
         let mut tree_state = tree_state.clone();
-        let tree_nodes = tree_nodes.clone();
-        let key_type_cache = key_type_cache.clone();
-        let pool = connection_pool.clone();
         move |node_id: String| {
             let mut state = tree_state.write();
-            let is_expanding = !state.expanded_nodes.contains(&node_id);
-            if is_expanding {
-                state.expanded_nodes.insert(node_id.clone());
-            } else {
+            if state.expanded_nodes.contains(&node_id) {
                 state.expanded_nodes.remove(&node_id);
-            }
-            drop(state);
-
-            if is_expanding {
-                let leaf_keys = collect_leaf_keys_by_node_id(&tree_nodes(), &node_id);
-                let uncached_keys: Vec<String> = leaf_keys
-                    .into_iter()
-                    .filter(|k| !key_type_cache.read().contains_key(k))
-                    .collect();
-
-                if !uncached_keys.is_empty() {
-                    let pool = pool.clone();
-                    let mut key_type_cache = key_type_cache.clone();
-                    let mut tree_nodes = tree_nodes.clone();
-                    spawn(async move {
-                        match pool.get_key_types(&uncached_keys).await {
-                            Ok(types) => {
-                                let mut cache = key_type_cache.write();
-                                let mut nodes = tree_nodes.write();
-                                for (key, key_type) in types {
-                                    cache.insert(key.clone(), key_type.clone());
-                                    update_node_key_type(&mut nodes, &key, key_type);
-                                }
-                            }
-                            Err(e) => tracing::error!("Failed to batch load key types: {}", e),
-                        }
-                    });
-                }
+            } else {
+                state.expanded_nodes.insert(node_id);
             }
         }
     };
@@ -300,40 +268,6 @@ pub fn KeyBrowser(
             let _ = connection_version;
             let _ = connection_id;
             load_keys();
-        }
-    });
-
-    use_effect({
-        let pool = connection_pool.clone();
-        let tree_nodes = tree_nodes.clone();
-        let key_type_cache = key_type_cache.clone();
-        move || {
-            let _ = selected_key();
-            let key = selected_key.read().clone();
-            if key.is_empty() {
-                return;
-            }
-
-            let cached_types = key_type_cache.read().clone();
-            if cached_types.contains_key(&key) {
-                return;
-            }
-
-            let pool = pool.clone();
-            let mut key_type_cache = key_type_cache.clone();
-            let mut tree_nodes = tree_nodes.clone();
-            spawn(async move {
-                match pool.get_key_info(&key).await {
-                    Ok(info) => {
-                        key_type_cache
-                            .write()
-                            .insert(key.clone(), info.key_type.clone());
-                        let mut nodes = tree_nodes.write();
-                        update_node_key_info(&mut nodes, &key, info);
-                    }
-                    Err(e) => tracing::error!("Failed to get key info: {}", e),
-                }
-            });
         }
     });
 
