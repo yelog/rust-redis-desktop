@@ -54,6 +54,41 @@ pub fn ConnectionForm(
             .map(|c| c.nodes.join("\n"))
             .unwrap_or_else(|| "127.0.0.1:6379".to_string())
     });
+    let mut ssh_host = use_signal(|| {
+        editing_config
+            .as_ref()
+            .and_then(|c| c.ssh.as_ref())
+            .map(|s| s.host.clone())
+            .unwrap_or_default()
+    });
+    let mut ssh_port = use_signal(|| {
+        editing_config
+            .as_ref()
+            .and_then(|c| c.ssh.as_ref())
+            .map(|s| s.port)
+            .unwrap_or(22)
+    });
+    let mut ssh_username = use_signal(|| {
+        editing_config
+            .as_ref()
+            .and_then(|c| c.ssh.as_ref())
+            .map(|s| s.username.clone())
+            .unwrap_or_default()
+    });
+    let mut ssh_password = use_signal(|| {
+        editing_config
+            .as_ref()
+            .and_then(|c| c.ssh.as_ref())
+            .and_then(|s| s.password.clone())
+            .unwrap_or_default()
+    });
+    let mut ssh_key_path = use_signal(|| {
+        editing_config
+            .as_ref()
+            .and_then(|c| c.ssh.as_ref())
+            .and_then(|s| s.private_key_path.clone())
+            .unwrap_or_default()
+    });
 
     let is_editing = editing_config.is_some();
     let title = if is_editing {
@@ -317,6 +352,161 @@ pub fn ConnectionForm(
                 }
             }
 
+            if enable_ssh() {
+                div {
+                    margin_bottom: "16px",
+                    padding: "12px",
+                    background: "{colors.background_tertiary}",
+                    border_radius: "4px",
+
+                    label {
+                        display: "block",
+                        color: "{colors.text_secondary}",
+                        font_size: "12px",
+                        margin_bottom: "12px",
+                        font_weight: "500",
+                        "SSH 配置"
+                    }
+
+                    div {
+                        display: "flex",
+                        gap: "8px",
+                        margin_bottom: "8px",
+
+                        div {
+                            flex: "2",
+
+                            label {
+                                display: "block",
+                                color: "{colors.text_secondary}",
+                                font_size: "11px",
+                                margin_bottom: "4px",
+                                "SSH Host"
+                            }
+
+                            input {
+                                width: "100%",
+                                padding: "6px 10px",
+                                background: "{colors.background}",
+                                border: "1px solid {colors.border}",
+                                border_radius: "4px",
+                                color: "{colors.text}",
+                                font_size: "12px",
+                                box_sizing: "border_box",
+                                value: "{ssh_host}",
+                                oninput: move |e| ssh_host.set(e.value()),
+                            }
+                        }
+
+                        div {
+                            flex: "1",
+
+                            label {
+                                display: "block",
+                                color: "{colors.text_secondary}",
+                                font_size: "11px",
+                                margin_bottom: "4px",
+                                "SSH Port"
+                            }
+
+                            input {
+                                width: "100%",
+                                padding: "6px 10px",
+                                background: "{colors.background}",
+                                border: "1px solid {colors.border}",
+                                border_radius: "4px",
+                                color: "{colors.text}",
+                                font_size: "12px",
+                                box_sizing: "border_box",
+                                r#type: "number",
+                                value: "{ssh_port}",
+                                oninput: move |e| {
+                                    if let Ok(p) = e.value().parse() {
+                                        ssh_port.set(p);
+                                    }
+                                },
+                            }
+                        }
+                    }
+
+                    div {
+                        margin_bottom: "8px",
+
+                        label {
+                            display: "block",
+                            color: "{colors.text_secondary}",
+                            font_size: "11px",
+                            margin_bottom: "4px",
+                            "SSH 用户名"
+                        }
+
+                        input {
+                            width: "100%",
+                            padding: "6px 10px",
+                            background: "{colors.background}",
+                            border: "1px solid {colors.border}",
+                            border_radius: "4px",
+                            color: "{colors.text}",
+                            font_size: "12px",
+                            box_sizing: "border_box",
+                            value: "{ssh_username}",
+                            oninput: move |e| ssh_username.set(e.value()),
+                        }
+                    }
+
+                    div {
+                        margin_bottom: "8px",
+
+                        label {
+                            display: "block",
+                            color: "{colors.text_secondary}",
+                            font_size: "11px",
+                            margin_bottom: "4px",
+                            "SSH 密码"
+                        }
+
+                        input {
+                            width: "100%",
+                            padding: "6px 10px",
+                            background: "{colors.background}",
+                            border: "1px solid {colors.border}",
+                            border_radius: "4px",
+                            color: "{colors.text}",
+                            font_size: "12px",
+                            box_sizing: "border_box",
+                            r#type: "password",
+                            value: "{ssh_password}",
+                            oninput: move |e| ssh_password.set(e.value()),
+                        }
+                    }
+
+                    div {
+
+                        label {
+                            display: "block",
+                            color: "{colors.text_secondary}",
+                            font_size: "11px",
+                            margin_bottom: "4px",
+                            "私钥路径 (可选)"
+                        }
+
+                        input {
+                            width: "100%",
+                            padding: "6px 10px",
+                            background: "{colors.background}",
+                            border: "1px solid {colors.border}",
+                            border_radius: "4px",
+                            color: "{colors.text}",
+                            font_size: "12px",
+                            box_sizing: "border_box",
+                            placeholder: "~/.ssh/id_rsa",
+                            value: "{ssh_key_path}",
+                            oninput: move |e| ssh_key_path.set(e.value()),
+                        }
+                    }
+                }
+            }
+
             div {
                     display: "flex",
                     gap: "8px",
@@ -356,7 +546,14 @@ pub fn ConnectionForm(
                             config.mode = mode();
 
                             if enable_ssh() {
-                                config.ssh = Some(SSHConfig::default());
+                                config.ssh = Some(SSHConfig {
+                                    host: ssh_host(),
+                                    port: ssh_port(),
+                                    username: ssh_username(),
+                                    password: if ssh_password.read().is_empty() { None } else { Some(ssh_password()) },
+                                    private_key_path: if ssh_key_path.read().is_empty() { None } else { Some(ssh_key_path()) },
+                                    passphrase: None,
+                                });
                             }
 
                             if mode() == ConnectionMode::Cluster {

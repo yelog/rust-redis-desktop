@@ -15,6 +15,9 @@ tokio = { version = "1", features = ["full"] }
 # Redis
 redis = { version = "1", features = ["tokio-comp", "cluster", "cluster-async", "connection-manager"] }
 
+# SSH tunnel
+ssh2 = "0.9"
+
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
