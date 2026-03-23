@@ -198,29 +198,63 @@ pub fn ConnectionForm(
                     "连接模式"
                 }
 
-                select {
-                    width: "100%",
-                    padding: "8px 12px",
-                    background: "{colors.background_tertiary}",
-                    border: "1px solid {colors.border}",
-                    border_radius: "4px",
-                    color: "{colors.text}",
-                    font_size: "13px",
-                    box_sizing: "border_box",
-                    value: "{mode_display(mode())}",
-                    onchange: move |e| {
-                        let new_mode = match e.value().as_str() {
-                            "Direct" => ConnectionMode::Direct,
-                            "Cluster" => ConnectionMode::Cluster,
-                            "Sentinel" => ConnectionMode::Sentinel,
-                            _ => ConnectionMode::Direct,
-                        };
-                        mode.set(new_mode);
-                    },
+                div {
+                    display: "flex",
+                    gap: "16px",
 
-                    option { value: "Direct", "Direct" }
-                    option { value: "Cluster", "Cluster" }
-                    option { value: "Sentinel", "Sentinel" }
+                    label {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        cursor: "pointer",
+
+                        input {
+                            r#type: "radio",
+                            name: "connection_mode",
+                            checked: mode() == ConnectionMode::Direct,
+                            onchange: move |_| mode.set(ConnectionMode::Direct),
+                        }
+
+                        "Direct"
+                    }
+
+                    label {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        cursor: "pointer",
+
+                        input {
+                            r#type: "radio",
+                            name: "connection_mode",
+                            checked: mode() == ConnectionMode::Cluster,
+                            onchange: move |_| mode.set(ConnectionMode::Cluster),
+                        }
+
+                        "Cluster"
+                    }
+
+                    label {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        cursor: "pointer",
+
+                        input {
+                            r#type: "radio",
+                            name: "connection_mode",
+                            checked: mode() == ConnectionMode::Sentinel,
+                            onchange: move |_| mode.set(ConnectionMode::Sentinel),
+                        }
+
+                        "Sentinel"
+                    }
                 }
             }
 
@@ -294,13 +328,5 @@ pub fn ConnectionForm(
                     }
                 }
         }
-    }
-}
-
-fn mode_display(mode: ConnectionMode) -> String {
-    match mode {
-        ConnectionMode::Direct => "Direct".to_string(),
-        ConnectionMode::Cluster => "Cluster".to_string(),
-        ConnectionMode::Sentinel => "Sentinel".to_string(),
     }
 }
