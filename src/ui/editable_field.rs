@@ -2,7 +2,16 @@ use crate::theme::{
     COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT, COLOR_TEXT_CONTRAST,
     COLOR_TEXT_SECONDARY,
 };
+use crate::ui::icons::IconCopy;
+use arboard::Clipboard;
 use dioxus::prelude::*;
+
+fn copy_to_clipboard(value: &str) -> Result<(), String> {
+    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
+    clipboard
+        .set_text(value.to_string())
+        .map_err(|e| e.to_string())
+}
 
 #[derive(Clone, PartialEq)]
 pub enum EditorMode {
@@ -114,20 +123,48 @@ pub fn EditableField(
                         "{value}"
                     }
 
-                    if editable {
-                        button {
-                            padding: "6px 12px",
-                            background: "#3182ce",
-                            color: COLOR_TEXT_CONTRAST,
-                            border: "none",
-                            border_radius: "4px",
-                            cursor: "pointer",
-                            onclick: move |_| {
-                                temp_value.set(value.clone());
-                                is_editing.set(true);
-                            },
+                    button {
+                        width: "32px",
+                        height: "32px",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        background: "rgba(47, 133, 90, 0.16)",
+                        color: "#68d391",
+                        border: "1px solid rgba(104, 211, 145, 0.28)",
+                        border_radius: "6px",
+                        cursor: "pointer",
+                        title: "复制",
+                        onclick: {
+                            let val = value.clone();
+                            move |_| match copy_to_clipboard(&val) {
+                                Ok(_) => {}
+                                Err(_) => {}
+                            }
+                        },
 
-                            "✏️"
+                        IconCopy { size: Some(15) }
+                    }
+
+                    if editable {
+                        {
+                            let val = value.clone();
+                            rsx! {
+                                button {
+                                    padding: "6px 12px",
+                                    background: "#3182ce",
+                                    color: COLOR_TEXT_CONTRAST,
+                                    border: "none",
+                                    border_radius: "4px",
+                                    cursor: "pointer",
+                                    onclick: move |_| {
+                                        temp_value.set(val.clone());
+                                        is_editing.set(true);
+                                    },
+
+                                    "✏️"
+                                }
+                            }
                         }
                     }
                 }

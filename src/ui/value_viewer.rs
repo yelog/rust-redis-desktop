@@ -1,19 +1,19 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
-use crate::serialization::is_java_serialization;
+use crate::serialization::{is_java_serialization, parse_java_to_json};
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
     COLOR_PRIMARY, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
     COLOR_TEXT_SOFT, COLOR_TEXT_SUBTLE, COLOR_WARNING,
 };
 use crate::ui::editable_field::EditableField;
-use crate::ui::icons::{IconCopy, IconDownload, IconEdit, IconTrash};
+use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
 use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
 use arboard::Clipboard;
 use dioxus::prelude::*;
-use serde_json::json;
+use serde_json;
 use std::collections::HashMap;
 
 const LARGE_KEY_THRESHOLD: usize = 1000;
@@ -92,14 +92,6 @@ fn sorted_hash_entries(fields: &HashMap<String, String>) -> Vec<(String, String)
     entries
 }
 
-fn binary_format_label(format: BinaryFormat) -> &'static str {
-    match format {
-        BinaryFormat::Hex => "hex",
-        BinaryFormat::Base64 => "base64",
-        BinaryFormat::JavaSerialized => "java",
-    }
-}
-
 fn format_memory_usage(bytes: Option<u64>) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
@@ -138,46 +130,6 @@ fn value_metric_label(
         KeyType::Stream => "流".to_string(),
         KeyType::None => "--".to_string(),
     }
-}
-
-fn build_export_json(
-    info: &KeyInfo,
-    string_value: &str,
-    hash_value: &HashMap<String, String>,
-    list_value: &[String],
-    set_value: &[String],
-    zset_value: &[(String, f64)],
-    is_binary: bool,
-    binary_format: BinaryFormat,
-    memory_usage: Option<u64>,
-) -> Result<String, String> {
-    let value = match info.key_type {
-        KeyType::String => json!(string_value),
-        KeyType::Hash => json!(hash_value),
-        KeyType::List => json!(list_value),
-        KeyType::Set => json!(set_value),
-        KeyType::ZSet => json!(zset_value
-            .iter()
-            .map(|(member, score)| json!({"member": member, "score": score}))
-            .collect::<Vec<_>>()),
-        KeyType::Stream => json!("stream 导出暂未实现"),
-        KeyType::None => json!(null),
-    };
-
-    serde_json::to_string_pretty(&json!({
-        "key": info.name,
-        "type": info.key_type.to_string(),
-        "ttl": info.ttl,
-        "memory_usage": memory_usage,
-        "binary": is_binary,
-        "binary_format": if is_binary {
-            Some(binary_format_label(binary_format))
-        } else {
-            None
-        },
-        "value": value,
-    }))
-    .map_err(|error| format!("导出 JSON 失败: {error}"))
 }
 
 async fn load_key_data(
@@ -993,49 +945,7 @@ pub fn ValueViewer(
                                     }
                                 }
 
-                                {
-                                    let export_payload = build_export_json(
-                                        &info,
-                                        &str_val,
-                                        &hash_val,
-                                        &list_val,
-                                        &set_val,
-                                        &zset_val,
-                                        is_binary(),
-                                        binary_format(),
-                                        memory_usage(),
-                                    );
-                                    rsx! {
-                                        button {
-                                            padding: "3px 10px",
-                                            background: "transparent",
-                                            color: COLOR_TEXT_SECONDARY,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "4px",
-                                            cursor: "pointer",
-                                            font_size: "11px",
-                                            onclick: move |_| match export_payload.as_ref() {
-                                                Ok(payload) => match copy_value_to_clipboard(payload) {
-                                                    Ok(_) => {
-                                                        shell_status_message.set("已导出为 JSON".to_string());
-                                                        shell_status_error.set(false);
-                                                    }
-                                                    Err(error) => {
-                                                        shell_status_message.set(format!("导出失败：{error}"));
-                                                        shell_status_error.set(true);
-                                                    }
-                                                },
-                                                Err(error) => {
-                                                    shell_status_message.set(error.clone());
-                                                    shell_status_error.set(true);
-                                                }
-                                            },
-
-                                            "导出 JSON"
-                                        }
-                                    }
                                 }
-                            }
                         } else {
                             span {
                                 color: COLOR_TEXT_SECONDARY,
@@ -1103,17 +1013,6 @@ pub fn ValueViewer(
                         );
                         let ttl_badge = format_ttl_label(info.ttl);
                         let memory_badge = format_memory_usage(memory_usage());
-                        let export_payload = build_export_json(
-                            &info,
-                            &str_val,
-                            &hash_val,
-                            &list_val,
-                            &set_val,
-                            &zset_val,
-                            is_binary(),
-                            binary_format(),
-                            memory_usage(),
-                        );
 
                         rsx! {
                         div {
@@ -1272,6 +1171,45 @@ pub fn ValueViewer(
                                                         "Java解析"
                                                     }
                                                 }
+
+                                                button {
+                                                    padding: "4px 8px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    color: COLOR_TEXT,
+                                                    border: "none",
+                                                    border_radius: "4px",
+                                                    cursor: "pointer",
+                                                    font_size: "12px",
+                                                    title: "复制",
+                                                    onclick: {
+                                                        let val = str_val.clone();
+                                                        let current_format = binary_format();
+                                                        let java_data = java_info_val.clone();
+                                                        move |_| {
+                                                            let copy_text = if current_format == BinaryFormat::JavaSerialized {
+                                                                if let Some(ref data) = java_data {
+                                                                    parse_java_to_json(data).unwrap_or_else(|_| val.clone())
+                                                                } else {
+                                                                    val.clone()
+                                                                }
+                                                            } else {
+                                                                val.clone()
+                                                            };
+                                                            match copy_value_to_clipboard(&copy_text) {
+                                                                Ok(_) => {
+                                                                    shell_status_message.set("复制成功".to_string());
+                                                                    shell_status_error.set(false);
+                                                                }
+                                                                Err(error) => {
+                                                                    shell_status_message.set(format!("复制失败：{error}"));
+                                                                    shell_status_error.set(true);
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+
+                                                    IconCopy { size: Some(12) }
+                                                }
                                             }
                                         }
 
@@ -1389,6 +1327,34 @@ pub fn ValueViewer(
                                                 },
 
                                                 "+ 新增行"
+                                            }
+
+                                            button {
+                                                padding: "8px 12px",
+                                                background: COLOR_BG_TERTIARY,
+                                                color: COLOR_TEXT,
+                                                border: "1px solid {COLOR_BORDER}",
+                                                border_radius: "6px",
+                                                cursor: "pointer",
+                                                title: "复制全部",
+                                                onclick: {
+                                                    let hash = hash_val.clone();
+                                                    move |_| {
+                                                        let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                hash_status_message.set("复制成功".to_string());
+                                                                hash_status_error.set(false);
+                                                            }
+                                                            Err(error) => {
+                                                                hash_status_message.set(format!("复制失败：{error}"));
+                                                                hash_status_error.set(true);
+                                                            }
+                                                        }
+                                                    }
+                                                },
+
+                                                "复制全部"
                                             }
                                         }
 
@@ -2261,6 +2227,34 @@ pub fn ValueViewer(
 
                                                 "RPUSH"
                                             }
+
+                                            button {
+                                                padding: "8px 12px",
+                                                background: COLOR_BG_TERTIARY,
+                                                color: COLOR_TEXT,
+                                                border: "1px solid {COLOR_BORDER}",
+                                                border_radius: "6px",
+                                                cursor: "pointer",
+                                                title: "复制全部",
+                                                onclick: {
+                                                    let list = list_val.clone();
+                                                    move |_| {
+                                                        let json = serde_json::to_string_pretty(&list).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                list_status_message.set("复制成功".to_string());
+                                                                list_status_error.set(false);
+                                                            }
+                                                            Err(error) => {
+                                                                list_status_message.set(format!("复制失败：{error}"));
+                                                                list_status_error.set(true);
+                                                            }
+                                                        }
+                                                    }
+                                                },
+
+                                                "复制全部"
+                                            }
                                         }
 
                                         div {
@@ -2486,6 +2480,37 @@ pub fn ValueViewer(
                                                                         display: "flex",
                                                                         align_items: "center",
                                                                         justify_content: "center",
+                                                                        background: "rgba(47, 133, 90, 0.16)",
+                                                                        color: "#68d391",
+                                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                                        border_radius: "6px",
+                                                                        cursor: "pointer",
+                                                                        title: "复制",
+                                                                        onclick: {
+                                                                            let value = value.clone();
+                                                                            move |_| {
+                                                                                match copy_value_to_clipboard(&value) {
+                                                                                    Ok(_) => {
+                                                                                        list_status_message.set("复制成功".to_string());
+                                                                                        list_status_error.set(false);
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        list_status_message.set(format!("复制失败：{error}"));
+                                                                                        list_status_error.set(true);
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+
+                                                                        IconCopy { size: Some(15) }
+                                                                    }
+
+                                                                    button {
+                                                                        width: "32px",
+                                                                        height: "32px",
+                                                                        display: "flex",
+                                                                        align_items: "center",
+                                                                        justify_content: "center",
                                                                         background: "rgba(49, 130, 206, 0.18)",
                                                                         color: "#63b3ed",
                                                                         border: "1px solid rgba(99, 179, 237, 0.30)",
@@ -2673,6 +2698,34 @@ pub fn ValueViewer(
                                                 },
 
                                                 if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                                            }
+
+                                            button {
+                                                padding: "8px 12px",
+                                                background: COLOR_BG_TERTIARY,
+                                                color: COLOR_TEXT,
+                                                border: "1px solid {COLOR_BORDER}",
+                                                border_radius: "6px",
+                                                cursor: "pointer",
+                                                title: "复制全部",
+                                                onclick: {
+                                                    let set = set_val.clone();
+                                                    move |_| {
+                                                        let json = serde_json::to_string_pretty(&set).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                set_status_message.set("复制成功".to_string());
+                                                                set_status_error.set(false);
+                                                            }
+                                                            Err(error) => {
+                                                                set_status_message.set(format!("复制失败：{error}"));
+                                                                set_status_error.set(true);
+                                                            }
+                                                        }
+                                                    }
+                                                },
+
+                                                "复制全部"
                                             }
                                         }
 
@@ -3174,6 +3227,34 @@ pub fn ValueViewer(
 
                                                 if zset_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
                                             }
+
+                                            button {
+                                                padding: "8px 12px",
+                                                background: COLOR_BG_TERTIARY,
+                                                color: COLOR_TEXT,
+                                                border: "1px solid {COLOR_BORDER}",
+                                                border_radius: "6px",
+                                                cursor: "pointer",
+                                                title: "复制全部",
+                                                onclick: {
+                                                    let zset = zset_val.clone();
+                                                    move |_| {
+                                                        let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                zset_status_message.set("复制成功".to_string());
+                                                                zset_status_error.set(false);
+                                                            }
+                                                            Err(error) => {
+                                                                zset_status_message.set(format!("复制失败：{error}"));
+                                                                zset_status_error.set(true);
+                                                            }
+                                                        }
+                                                    }
+                                                },
+
+                                                "复制全部"
+                                            }
                                         }
 
                                         div {
@@ -3433,6 +3514,37 @@ pub fn ValueViewer(
                                                                 div {
                                                                     display: "flex",
                                                                     gap: "6px",
+
+                                                                    button {
+                                                                        width: "32px",
+                                                                        height: "32px",
+                                                                        display: "flex",
+                                                                        align_items: "center",
+                                                                        justify_content: "center",
+                                                                        background: "rgba(47, 133, 90, 0.16)",
+                                                                        color: "#68d391",
+                                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                                        border_radius: "6px",
+                                                                        cursor: "pointer",
+                                                                        title: "复制",
+                                                                        onclick: {
+                                                                            let member = member.clone();
+                                                                            move |_| {
+                                                                                match copy_value_to_clipboard(&member) {
+                                                                                    Ok(_) => {
+                                                                                        zset_status_message.set("复制成功".to_string());
+                                                                                        zset_status_error.set(false);
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        zset_status_message.set(format!("复制失败：{error}"));
+                                                                                        zset_status_error.set(true);
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+
+                                                                        IconCopy { size: Some(15) }
+                                                                    }
 
                                                                     button {
                                                                         width: "32px",
