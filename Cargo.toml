@@ -7,6 +7,7 @@ edition = "2021"
 # GUI
 dioxus = { version = "0.7", features = ["desktop"] }
 freya = "0.3"
+tao = "0.34"
 
 # Async
 tokio = { version = "1", features = ["full"] }

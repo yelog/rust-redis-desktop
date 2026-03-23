@@ -5654,6 +5654,7 @@ dependencies = [
  "serde",
  "serde-pickle",
  "serde_json",
+ "tao",
  "thiserror 2.0.18",
  "tokio",
  "tokio-test",
