@@ -15,12 +15,11 @@ enum VisibilityState {
 
 #[component]
 pub fn AnimatedDialog(
-    is_open: bool,
-    on_close: EventHandler<()>,
     colors: ThemeColors,
     width: Option<String>,
     max_height: Option<String>,
     trigger_selector: Option<String>,
+    on_close: EventHandler<()>,
     children: Element,
 ) -> Element {
     let width_val = width.unwrap_or_else(|| "450px".to_string());
@@ -32,7 +31,7 @@ pub fn AnimatedDialog(
     let backdrop_color = colors.overlay_backdrop;
 
     use_effect(move || {
-        if is_open && *visibility.read() == VisibilityState::Hidden {
+        if *visibility.read() == VisibilityState::Hidden {
             visibility.set(VisibilityState::Visible);
 
             if let Some(selector) = &trigger_selector {
@@ -68,24 +67,13 @@ pub fn AnimatedDialog(
                     }
                 });
             }
-        } else if !is_open && *visibility.read() == VisibilityState::Visible {
-            visibility.set(VisibilityState::Exiting);
-
-            if !reduced_motion {
-                let mut vis = visibility.clone();
-                spawn(async move {
-                    tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
-                    vis.set(VisibilityState::Hidden);
-                });
-            } else {
-                visibility.set(VisibilityState::Hidden);
-            }
         }
     });
 
     let mut escape_received = use_signal(|| false);
     let on_close_for_escape = on_close.clone();
-    
+    let mut visibility_for_escape = visibility.clone();
+
     use_future(move || {
         let mut escape_received = escape_received.clone();
         async move {
@@ -107,9 +95,28 @@ pub fn AnimatedDialog(
         }
     });
 
+    let close_dialog = {
+        let on_close = on_close.clone();
+        let mut visibility = visibility.clone();
+        move || {
+            let state = *visibility.read();
+            if state == VisibilityState::Visible {
+                visibility.set(VisibilityState::Exiting);
+                
+                let mut vis = visibility.clone();
+                spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                    vis.set(VisibilityState::Hidden);
+                });
+                
+                on_close.call(());
+            }
+        }
+    };
+
     use_effect(move || {
-        if escape_received() && *visibility.read() == VisibilityState::Visible {
-            on_close_for_escape.call(());
+        if escape_received() && *visibility_for_escape.read() == VisibilityState::Visible {
+            close_dialog();
         }
         if escape_received() {
             escape_received.set(false);
@@ -130,6 +137,11 @@ pub fn AnimatedDialog(
         None => ("50%".to_string(), "50%".to_string()),
     };
 
+    let on_backdrop_click = {
+        let close_dialog = close_dialog.clone();
+        move |_| close_dialog()
+    };
+
     rsx! {
         div {
             position: "fixed",
@@ -142,7 +154,7 @@ pub fn AnimatedDialog(
             align_items: "center",
             justify_content: "center",
             z_index: "1000",
-            onclick: move |_| on_close.call(()),
+            onclick: on_backdrop_click,
 
             div {
                 width: "{width_val}",
