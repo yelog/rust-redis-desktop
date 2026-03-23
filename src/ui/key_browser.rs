@@ -111,6 +111,41 @@ pub fn KeyBrowser(
     let mut context_menu = use_signal(|| None::<(String, bool, (i32, i32))>);
     let mut key_list_width = use_signal(|| 320.0);
 
+    {
+        let mut show_delete_dialog = show_delete_dialog.clone();
+        let mut show_add_key_dialog = show_add_key_dialog.clone();
+        let mut show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
+        
+        use_future(move || {
+            let mut show_delete_dialog = show_delete_dialog.clone();
+            let mut show_add_key_dialog = show_add_key_dialog.clone();
+            let mut show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
+            async move {
+                let mut eval = dioxus::document::eval(
+                    r#"
+                    document.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') {
+                            dioxus.send('escape_key_browser');
+                        }
+                    });
+                    await new Promise(() => {});
+                    "#,
+                );
+                while let Ok(msg) = eval.recv::<String>().await {
+                    if msg == "escape_key_browser" {
+                        if show_delete_dialog().is_some() {
+                            show_delete_dialog.set(None);
+                        } else if show_add_key_dialog() {
+                            show_add_key_dialog.set(false);
+                        } else if show_batch_ttl_dialog().is_some() {
+                            show_batch_ttl_dialog.set(None);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     let load_keyspace = {
         let pool = connection_pool.clone();
         let db_keys_count = db_keys_count.clone();

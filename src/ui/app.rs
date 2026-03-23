@@ -621,6 +621,8 @@ pub fn App() -> Element {
 
     use_future(move || {
         let mut show_settings = show_settings.clone();
+        let mut form_mode = form_mode.clone();
+        let mut show_flush_dialog = show_flush_dialog.clone();
         async move {
             let mut eval = document::eval(
                 r#"
@@ -643,6 +645,10 @@ await new Promise(() => {});
                 } else if msg == "escape_pressed" {
                     if show_settings() {
                         show_settings.set(false);
+                    } else if form_mode().is_some() {
+                        form_mode.set(None);
+                    } else if show_flush_dialog().is_some() {
+                        show_flush_dialog.set(None);
                     }
                 }
             }

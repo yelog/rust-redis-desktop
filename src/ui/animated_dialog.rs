@@ -26,18 +26,17 @@ pub fn AnimatedDialog(
     let max_height_val = max_height.unwrap_or_else(|| "90vh".to_string());
 
     let mut visibility = use_signal(VisibilityState::default);
-    let mut prev_is_open = use_signal(|| false);
     let reduced_motion = prefers_reduced_motion();
     let backdrop_color = colors.overlay_backdrop;
 
     let should_show = is_open || *visibility.read() == VisibilityState::Exiting;
 
-    use_effect(move || {
-        let prev = *prev_is_open.read();
+    {
+        let current_visibility = *visibility.read();
         
-        if is_open && !prev {
+        if is_open && current_visibility == VisibilityState::Hidden {
             visibility.set(VisibilityState::Visible);
-        } else if !is_open && prev && *visibility.read() == VisibilityState::Visible {
+        } else if !is_open && current_visibility == VisibilityState::Visible {
             visibility.set(VisibilityState::Exiting);
             
             let mut vis = visibility.clone();
@@ -46,49 +45,7 @@ pub fn AnimatedDialog(
                 vis.set(VisibilityState::Hidden);
             });
         }
-        
-        prev_is_open.set(is_open);
-    });
-
-    let mut escape_received = use_signal(|| false);
-    let mut visibility_for_escape = visibility.clone();
-    let on_close_for_escape = on_close.clone();
-    
-    use_future(move || {
-        let mut escape_received = escape_received.clone();
-        async move {
-            let mut eval = dioxus::document::eval(
-                r#"
-                document.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape') {
-                        dioxus.send('escape');
-                    }
-                });
-                await new Promise(() => {});
-                "#,
-            );
-            while let Ok(msg) = eval.recv::<String>().await {
-                if msg == "escape" {
-                    escape_received.set(true);
-                }
-            }
-        }
-    });
-
-    use_effect(move || {
-        if escape_received() && *visibility_for_escape.read() == VisibilityState::Visible {
-            visibility_for_escape.set(VisibilityState::Exiting);
-            
-            let mut vis = visibility_for_escape.clone();
-            let on_close = on_close_for_escape.clone();
-            spawn(async move {
-                tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
-                vis.set(VisibilityState::Hidden);
-                on_close.call(());
-            });
-        }
-        escape_received.set(false);
-    });
+    }
 
     if !should_show {
         return rsx! {};
@@ -114,7 +71,8 @@ pub fn AnimatedDialog(
             justify_content: "center",
             z_index: "1000",
             onclick: move |_| {
-                if *visibility_for_click.read() == VisibilityState::Visible {
+                let current = *visibility_for_click.read();
+                if current == VisibilityState::Visible {
                     visibility_for_click.set(VisibilityState::Exiting);
                     
                     let mut vis = visibility_for_click.clone();
