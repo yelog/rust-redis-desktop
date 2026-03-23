@@ -643,6 +643,33 @@ pub fn ValueViewer(
                                     "{info.key_type}"
                                 }
 
+                                {
+                                    let value_metric = value_metric_label(
+                                        &info.key_type,
+                                        &str_val,
+                                        &hash_val,
+                                        &list_val,
+                                        &set_val,
+                                        &zset_val,
+                                    );
+                                    let memory_badge = format_memory_usage(memory_usage());
+                                    let ttl_badge = format_ttl_label(info.ttl);
+
+                                    rsx! {
+                                        for badge in [value_metric, format!("内存: {memory_badge}"), format!("TTL: {ttl_badge}")] {
+                                            span {
+                                                padding: "4px 8px",
+                                                border_radius: "6px",
+                                                background: COLOR_BG_TERTIARY,
+                                                color: COLOR_TEXT_SECONDARY,
+                                                font_size: "11px",
+
+                                                "{badge}"
+                                            }
+                                        }
+                                    }
+                                }
+
                                 button {
                                     width: "22px",
                                     height: "22px",
@@ -1029,67 +1056,7 @@ pub fn ValueViewer(
                                 display: "flex",
                                 flex_direction: "column",
                                 gap: "14px",
-                                overflow: "hidden",
-
-                                div {
-                                    padding: "16px",
-                                    border: "1px solid {COLOR_BORDER}",
-                                    border_radius: "12px",
-                                    background: COLOR_BG_SECONDARY,
-
-                                    div {
-                                        display: "flex",
-                                        justify_content: "space_between",
-                                        align_items: "center",
-                                        gap: "12px",
-                                        flex_wrap: "wrap",
-
-                                        div {
-                                            display: "flex",
-                                            flex_direction: "column",
-                                            gap: "4px",
-
-                                            span {
-                                                color: COLOR_TEXT_SUBTLE,
-                                                font_size: "11px",
-                                                font_weight: "700",
-                                                text_transform: "uppercase",
-                                                letter_spacing: "0.16em",
-
-                                                "当前值"
-                                            }
-
-                                            span {
-                                                color: COLOR_ACCENT,
-                                                font_size: "14px",
-                                                font_weight: "700",
-                                                font_family: "Consolas, 'Courier New', monospace",
-
-                                                "{display_key}"
-                                            }
-                                        }
-
-                                        div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "8px",
-                                            flex_wrap: "wrap",
-
-                                            for badge in [value_metric.clone(), format!("内存: {memory_badge}"), format!("TTL: {ttl_badge}")] {
-                                                span {
-                                                    key: "{badge}",
-                                                    padding: "6px 10px",
-                                                    border_radius: "6px",
-                                                    background: COLOR_BG_TERTIARY,
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    font_size: "12px",
-
-                                                    "{badge}"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+overflow: "hidden",
 
                                 div {
                                     flex: "1",
@@ -1101,7 +1068,7 @@ pub fn ValueViewer(
                                     background: COLOR_BG_SECONDARY,
 
                                     match info.key_type {
-                            KeyType::String => {
+                             KeyType::String => {
                                 let is_json = !is_binary() && is_json_content(&str_val);
                                 let java_info_val = java_serialization_info();
                                 let is_java = java_info_val.is_some();
