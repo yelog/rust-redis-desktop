@@ -432,7 +432,6 @@ pub fn ValueViewer(
     let mut ttl_processing = use_signal(|| false);
     let mut delete_key_confirm = use_signal(|| false);
     let mut delete_key_processing = use_signal(|| false);
-    let mut show_ttl_editor = use_signal(|| false);
 
     let pool = connection_pool.clone();
     let pool_for_edit = connection_pool.clone();
@@ -497,7 +496,6 @@ pub fn ValueViewer(
         ttl_processing.set(false);
         delete_key_confirm.set(false);
         delete_key_processing.set(false);
-        show_ttl_editor.set(false);
 
         let pool = pool.clone();
 
@@ -687,47 +685,6 @@ pub fn ValueViewer(
                                     "{display_key}"
                                 }
 
-                                span {
-                                    padding: "4px 8px",
-                                    border_radius: "999px",
-                                    background: "rgba(255, 180, 166, 0.10)",
-                                    border: "1px solid rgba(255, 180, 166, 0.20)",
-                                    color: COLOR_PRIMARY,
-                                    font_size: "11px",
-                                    font_weight: "700",
-                                    text_transform: "uppercase",
-                                    letter_spacing: "0.12em",
-
-                                    "{info.key_type}"
-                                }
-
-                                {
-                                    let value_metric = value_metric_label(
-                                        &info.key_type,
-                                        &str_val,
-                                        &hash_val,
-                                        &list_val,
-                                        &set_val,
-                                        &zset_val,
-                                    );
-                                    let memory_badge = format_memory_usage(memory_usage());
-                                    let ttl_badge = format_ttl_label(info.ttl);
-
-                                    rsx! {
-                                        for badge in [value_metric, format!("内存: {memory_badge}"), format!("TTL: {ttl_badge}")] {
-                                            span {
-                                                padding: "4px 8px",
-                                                border_radius: "6px",
-                                                background: COLOR_BG_TERTIARY,
-                                                color: COLOR_TEXT_SECONDARY,
-                                                font_size: "11px",
-
-                                                "{badge}"
-                                            }
-                                        }
-                                    }
-                                }
-
                                 button {
                                     width: "22px",
                                     height: "22px",
@@ -835,203 +792,199 @@ pub fn ValueViewer(
                                         IconTrash { size: Some(12) }
                                     }
                                 }
-                            }
 
-                            div {
-                                display: "flex",
-                                align_items: "center",
-                                gap: "8px",
-                                margin_top: "6px",
+                                span {
+                                    padding: "4px 8px",
+                                    border_radius: "999px",
+                                    background: "rgba(255, 180, 166, 0.10)",
+                                    border: "1px solid rgba(255, 180, 166, 0.20)",
+                                    color: COLOR_PRIMARY,
+                                    font_size: "11px",
+                                    font_weight: "700",
+                                    text_transform: "uppercase",
+                                    letter_spacing: "0.12em",
 
-                                if show_ttl_editor() {
-                                    div {
-                                        display: "flex",
-                                        align_items: "center",
-                                        gap: "6px",
+                                    "{info.key_type}"
+                                }
 
-                                        span {
-                                            color: COLOR_TEXT_SECONDARY,
-                                            font_size: "12px",
+                                {
+                                    let value_metric = value_metric_label(
+                                        &info.key_type,
+                                        &str_val,
+                                        &hash_val,
+                                        &list_val,
+                                        &set_val,
+                                        &zset_val,
+                                    );
+                                    let memory_badge = format_memory_usage(memory_usage());
 
-                                            "TTL:"
-                                        }
-
-                                        input {
-                                            width: "80px",
-                                            padding: "4px 8px",
-                                            background: COLOR_BG_TERTIARY,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "4px",
-                                            color: COLOR_TEXT,
-                                            font_size: "12px",
-                                            r#type: "number",
-                                            min: "1",
-                                            value: "{ttl_input}",
-                                            placeholder: "秒",
-                                            oninput: move |event| ttl_input.set(event.value()),
-                                        }
-
-                                        button {
-                                            padding: "4px 10px",
-                                            background: COLOR_PRIMARY,
-                                            color: COLOR_TEXT_CONTRAST,
-                                            border: "none",
-                                            border_radius: "4px",
-                                            cursor: "pointer",
-                                            font_size: "11px",
-                                            disabled: ttl_processing(),
-                                            onclick: {
-                                                let pool = connection_pool.clone();
-                                                let key = display_key.clone();
-                                                move |_| {
-                                                    let ttl_text = ttl_input().trim().to_string();
-                                                    if ttl_text.is_empty() {
-                                                        shell_status_message.set("请输入 TTL".to_string());
-                                                        shell_status_error.set(true);
-                                                        return;
-                                                    }
-
-                                                    let ttl = match ttl_text.parse::<i64>() {
-                                                        Ok(ttl) if ttl > 0 => ttl,
-                                                        _ => {
-                                                            shell_status_message.set("TTL 必须大于 0".to_string());
-                                                            shell_status_error.set(true);
-                                                            return;
-                                                        }
-                                                    };
-
-                                                    let pool = pool.clone();
-                                                    let key = key.clone();
-                                                    spawn(async move {
-                                                        ttl_processing.set(true);
-                                                        shell_status_message.set(String::new());
-                                                        shell_status_error.set(false);
-
-                                                        match pool.set_ttl(&key, ttl).await {
-                                                            Ok(_) => {
-                                                                shell_status_message.set("TTL 已更新".to_string());
-                                                                shell_status_error.set(false);
-                                                                show_ttl_editor.set(false);
-                                                                if let Err(error) = load_key_data(
-                                                                    pool.clone(),
-                                                                    key.clone(),
-                                                                    key_info,
-                                                                    string_value,
-                                                                    hash_value,
-                                                                    list_value,
-                                                                    set_value,
-                                                                    zset_value,
-                                                                    is_binary,
-                                                                    binary_format,
-                                                                    serialization_data,
-                                                                    loading,
-                                                                ).await {
-                                                                    tracing::error!("{error}");
-                                                                } else {
-                                                                    on_refresh.call(());
-                                                                }
-                                                            }
-                                                            Err(error) => {
-                                                                shell_status_message.set(format!("TTL 更新失败：{error}"));
-                                                                shell_status_error.set(true);
-                                                            }
-                                                        }
-
-                                                        ttl_processing.set(false);
-                                                    });
-                                                }
-                                            },
-
-                                            if ttl_processing() { "..." } else { "应用" }
-                                        }
-
-                                        button {
-                                            padding: "4px 10px",
-                                            background: COLOR_BG_TERTIARY,
-                                            color: COLOR_TEXT,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "4px",
-                                            cursor: "pointer",
-                                            font_size: "11px",
-                                            onclick: move |_| show_ttl_editor.set(false),
-
-                                            "取消"
-                                        }
-
-                                        button {
-                                            padding: "4px 10px",
-                                            background: "transparent",
-                                            color: COLOR_TEXT_SECONDARY,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "4px",
-                                            cursor: "pointer",
-                                            font_size: "11px",
-                                            onclick: {
-                                                let pool = connection_pool.clone();
-                                                let key = display_key.clone();
-                                                move |_| {
-                                                    let pool = pool.clone();
-                                                    let key = key.clone();
-                                                    spawn(async move {
-                                                        match pool.remove_ttl(&key).await {
-                                                            Ok(_) => {
-                                                                shell_status_message.set("已设为永久".to_string());
-                                                                shell_status_error.set(false);
-                                                                if let Err(error) = load_key_data(
-                                                                    pool.clone(),
-                                                                    key.clone(),
-                                                                    key_info,
-                                                                    string_value,
-                                                                    hash_value,
-                                                                    list_value,
-                                                                    set_value,
-                                                                    zset_value,
-                                                                    is_binary,
-                                                                    binary_format,
-                                                                    serialization_data,
-                                                                    loading,
-                                                                ).await {
-                                                                    tracing::error!("{error}");
-                                                                } else {
-                                                                    on_refresh.call(());
-                                                                }
-                                                            }
-                                                            Err(error) => {
-                                                                shell_status_message.set(format!("设置失败：{error}"));
-                                                                shell_status_error.set(true);
-                                                            }
-                                                        }
-                                                    });
-                                                }
-                                            },
-
-                                            "永久"
-                                        }
-                                    }
-                                } else {
-                                    {
-                                        let current_ttl = info.ttl;
-                                        rsx! {
-                                            button {
-                                                padding: "3px 10px",
-                                                background: "transparent",
+                                    rsx! {
+                                        for badge in [value_metric, format!("内存: {memory_badge}")] {
+                                            span {
+                                                padding: "4px 8px",
+                                                border_radius: "6px",
+                                                background: COLOR_BG_TERTIARY,
                                                 color: COLOR_TEXT_SECONDARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "4px",
-                                                cursor: "pointer",
                                                 font_size: "11px",
-                                                onclick: move |_| {
-                                                    show_ttl_editor.set(true);
-                                                    ttl_input.set(current_ttl.map(|t| t.to_string()).unwrap_or_default());
-                                                },
 
-                                                "TTL {format_ttl_label(info.ttl)}  ✎"
+                                                "{badge}"
                                             }
                                         }
                                     }
                                 }
 
+                                div {
+                                    display: "flex",
+                                    align_items: "center",
+                                    gap: "4px",
+
+                                    span {
+                                        color: COLOR_TEXT_SECONDARY,
+                                        font_size: "11px",
+
+                                        "TTL:"
+                                    }
+
+                                    input {
+                                        width: "60px",
+                                        padding: "2px 6px",
+                                        background: COLOR_BG_TERTIARY,
+                                        border: "1px solid {COLOR_BORDER}",
+                                        border_radius: "4px",
+                                        color: COLOR_TEXT,
+                                        font_size: "11px",
+                                        r#type: "number",
+                                        min: "0",
+                                        value: "{ttl_input}",
+                                        placeholder: "秒",
+                                        oninput: move |event| ttl_input.set(event.value()),
+                                    }
+
+                                    button {
+                                        padding: "2px 6px",
+                                        background: COLOR_PRIMARY,
+                                        color: COLOR_TEXT_CONTRAST,
+                                        border: "none",
+                                        border_radius: "4px",
+                                        cursor: "pointer",
+                                        font_size: "10px",
+                                        disabled: ttl_processing(),
+                                        onclick: {
+                                            let pool = connection_pool.clone();
+                                            let key = display_key.clone();
+                                            move |_| {
+                                                let ttl_text = ttl_input().trim().to_string();
+                                                if ttl_text.is_empty() {
+                                                    shell_status_message.set("请输入 TTL".to_string());
+                                                    shell_status_error.set(true);
+                                                    return;
+                                                }
+
+                                                let ttl = match ttl_text.parse::<i64>() {
+                                                    Ok(ttl) if ttl > 0 => ttl,
+                                                    _ => {
+                                                        shell_status_message.set("TTL 必须大于 0".to_string());
+                                                        shell_status_error.set(true);
+                                                        return;
+                                                    }
+                                                };
+
+                                                let pool = pool.clone();
+                                                let key = key.clone();
+                                                spawn(async move {
+                                                    ttl_processing.set(true);
+                                                    shell_status_message.set(String::new());
+                                                    shell_status_error.set(false);
+
+                                                    match pool.set_ttl(&key, ttl).await {
+                                                        Ok(_) => {
+                                                            shell_status_message.set("TTL 已更新".to_string());
+                                                            shell_status_error.set(false);
+                                                            if let Err(error) = load_key_data(
+                                                                pool.clone(),
+                                                                key.clone(),
+                                                                key_info,
+                                                                string_value,
+                                                                hash_value,
+                                                                list_value,
+                                                                set_value,
+                                                                zset_value,
+                                                                is_binary,
+                                                                binary_format,
+                                                                serialization_data,
+                                                                loading,
+                                                            ).await {
+                                                                tracing::error!("{error}");
+                                                            } else {
+                                                                on_refresh.call(());
+                                                            }
+                                                        }
+                                                        Err(error) => {
+                                                            shell_status_message.set(format!("TTL 更新失败：{error}"));
+                                                            shell_status_error.set(true);
+                                                        }
+                                                    }
+
+                                                    ttl_processing.set(false);
+                                                });
+                                            }
+                                        },
+
+                                        if ttl_processing() { "..." } else { "✓" }
+                                    }
+
+                                    button {
+                                        padding: "2px 6px",
+                                        background: "transparent",
+                                        color: COLOR_TEXT_SECONDARY,
+                                        border: "1px solid {COLOR_BORDER}",
+                                        border_radius: "4px",
+                                        cursor: "pointer",
+                                        font_size: "10px",
+                                        onclick: {
+                                            let pool = connection_pool.clone();
+                                            let key = display_key.clone();
+                                            move |_| {
+                                                let pool = pool.clone();
+                                                let key = key.clone();
+                                                spawn(async move {
+                                                    match pool.remove_ttl(&key).await {
+                                                        Ok(_) => {
+                                                            shell_status_message.set("已设为永久".to_string());
+                                                            shell_status_error.set(false);
+                                                            ttl_input.set(String::new());
+                                                            if let Err(error) = load_key_data(
+                                                                pool.clone(),
+                                                                key.clone(),
+                                                                key_info,
+                                                                string_value,
+                                                                hash_value,
+                                                                list_value,
+                                                                set_value,
+                                                                zset_value,
+                                                                is_binary,
+                                                                binary_format,
+                                                                serialization_data,
+                                                                loading,
+                                                            ).await {
+                                                                tracing::error!("{error}");
+                                                            } else {
+                                                                on_refresh.call(());
+                                                            }
+                                                        }
+                                                        Err(error) => {
+                                                            shell_status_message.set(format!("设置失败：{error}"));
+                                                            shell_status_error.set(true);
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        },
+
+                                        "∞"
+                                    }
                                 }
+                            }
                         } else {
                             span {
                                 color: COLOR_TEXT_SECONDARY,

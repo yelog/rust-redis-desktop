@@ -131,40 +131,42 @@ pub fn AddKeyDialog(
                     display: "block",
                     color: "{colors.text_secondary}",
                     font_size: "12px",
-                    margin_bottom: "4px",
+                    margin_bottom: "8px",
 
                     "类型"
                 }
 
-                select {
-                    width: "100%",
-                    padding: "8px 12px",
-                    background: "{colors.background_tertiary}",
-                    border: "1px solid {colors.border}",
-                    border_radius: "4px",
-                    color: "{colors.text}",
-                    font_size: "13px",
-                    box_sizing: "border_box",
-                    value: "{key_type}",
-                    onchange: move |e| {
-                        let new_type = match e.value().as_str() {
-                            "String" => KeyType::String,
-                            "Hash" => KeyType::Hash,
-                            "List" => KeyType::List,
-                            "Set" => KeyType::Set,
-                            "ZSet" => KeyType::ZSet,
-                            "Stream" => KeyType::Stream,
-                            _ => KeyType::String,
-                        };
-                        key_type.set(new_type);
-                    },
+                div {
+                    display: "flex",
+                    flex_wrap: "wrap",
+                    gap: "8px",
 
                     for type_name in ["String", "Hash", "List", "Set", "ZSet", "Stream"] {
-                        option {
-                            value: type_name,
-                            selected: key_type() == KeyType::from(type_name.to_string()),
+                        {
+                            let kt = KeyType::from(type_name.to_string());
+                            let is_selected = key_type() == kt;
+                            let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
+                            let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
+                            let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                            rsx! {
+                                div {
+                                    key: "{type_name}",
+                                    padding: "6px 14px",
+                                    background: "{bg}",
+                                    border: "1px solid {border_color}",
+                                    border_radius: "16px",
+                                    color: "{text_color}",
+                                    font_size: "13px",
+                                    cursor: "pointer",
+                                    user_select: "none",
+                                    onclick: {
+                                        let kt = kt.clone();
+                                        move |_| key_type.set(kt.clone())
+                                    },
 
-                            "{type_name}"
+                                    "{type_name}"
+                                }
+                            }
                         }
                     }
                 }
@@ -174,6 +176,7 @@ pub fn AddKeyDialog(
                 margin_bottom: "16px",
                 flex: "1",
                 overflow_y: "auto",
+                overflow_x: "hidden",
 
                 label {
                     display: "block",
@@ -523,6 +526,8 @@ pub fn AddKeyDialog(
                             display: "flex",
                             flex_direction: "column",
                             gap: "8px",
+                            width: "100%",
+                            box_sizing: "border_box",
 
                             for (idx, entry) in stream_entries.read().iter().enumerate() {
                                 div {
@@ -530,9 +535,11 @@ pub fn AddKeyDialog(
                                     display: "flex",
                                     gap: "8px",
                                     align_items: "center",
+                                    min_width: "0",
 
                                     input {
-                                        width: "120px",
+                                        width: "100px",
+                                        min_width: "0",
                                         padding: "6px 8px",
                                         background: "{colors.background_tertiary}",
                                         border: "1px solid {colors.border}",
@@ -540,6 +547,7 @@ pub fn AddKeyDialog(
                                         color: "{colors.text}",
                                         font_size: "12px",
                                         placeholder: "ID (*)",
+                                        box_sizing: "border_box",
                                         value: "{entry.id}",
                                         oninput: {
                                             let mut entries = stream_entries.clone();
@@ -552,6 +560,7 @@ pub fn AddKeyDialog(
 
                                     input {
                                         flex: "1",
+                                        min_width: "0",
                                         padding: "6px 8px",
                                         background: "{colors.background_tertiary}",
                                         border: "1px solid {colors.border}",
@@ -559,6 +568,7 @@ pub fn AddKeyDialog(
                                         color: "{colors.text}",
                                         font_size: "12px",
                                         placeholder: "Field",
+                                        box_sizing: "border_box",
                                         value: "{entry.field}",
                                         oninput: {
                                             let mut entries = stream_entries.clone();
@@ -571,6 +581,7 @@ pub fn AddKeyDialog(
 
                                     input {
                                         flex: "1",
+                                        min_width: "0",
                                         padding: "6px 8px",
                                         background: "{colors.background_tertiary}",
                                         border: "1px solid {colors.border}",
@@ -578,6 +589,7 @@ pub fn AddKeyDialog(
                                         color: "{colors.text}",
                                         font_size: "12px",
                                         placeholder: "Value",
+                                        box_sizing: "border_box",
                                         value: "{entry.value}",
                                         oninput: {
                                             let mut entries = stream_entries.clone();
@@ -596,6 +608,7 @@ pub fn AddKeyDialog(
                                         border_radius: "4px",
                                         cursor: "pointer",
                                         font_size: "12px",
+                                        flex_shrink: "0",
                                         onclick: {
                                             let mut entries = stream_entries.clone();
                                             move |_| {
