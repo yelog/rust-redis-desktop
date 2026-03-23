@@ -1,11 +1,16 @@
 use crate::theme::ThemeColors;
 use crate::ui::animation_utils::prefers_reduced_motion;
 use dioxus::prelude::*;
+use std::time::Duration;
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum DialogAnimationState {
-    Closed,
-    Open,
+const EXIT_ANIMATION_DURATION_MS: u64 = 200;
+
+#[derive(Clone, Copy, PartialEq, Default)]
+enum VisibilityState {
+    #[default]
+    Hidden,
+    Visible,
+    Exiting,
 }
 
 #[component]
@@ -20,17 +25,36 @@ pub fn AnimatedDialog(
     let width_val = width.unwrap_or_else(|| "450px".to_string());
     let max_height_val = max_height.unwrap_or_else(|| "90vh".to_string());
 
-    if !is_open {
+    let mut visibility = use_signal(VisibilityState::default);
+    let reduced_motion = prefers_reduced_motion();
+    let backdrop_color = colors.overlay_backdrop;
+
+    use_effect(move || {
+        if is_open && *visibility.read() == VisibilityState::Hidden {
+            visibility.set(VisibilityState::Visible);
+        } else if !is_open && *visibility.read() == VisibilityState::Visible {
+            visibility.set(VisibilityState::Exiting);
+            
+            if !reduced_motion {
+                let mut vis = visibility.clone();
+                spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                    vis.set(VisibilityState::Hidden);
+                });
+            } else {
+                visibility.set(VisibilityState::Hidden);
+            }
+        }
+    });
+
+    let state = *visibility.read();
+    
+    if state == VisibilityState::Hidden {
         return rsx! {};
     }
 
-    let transition_style = if prefers_reduced_motion() {
-        "none".to_string()
-    } else {
-        "opacity 150ms ease-out, transform 200ms ease-out".to_string()
-    };
-
-    let backdrop_color = colors.overlay_backdrop;
+    let is_exiting = state == VisibilityState::Exiting;
+    let animation_name = if is_exiting { "modalFadeOut" } else { "modalFadeIn" };
 
     rsx! {
         div {
@@ -54,11 +78,33 @@ pub fn AnimatedDialog(
                 border_radius: "8px",
                 box_shadow: "0 4px 24px rgba(0, 0, 0, 0.5)",
                 overflow_y: "auto",
-                transition: "{transition_style}",
+                animation: "{animation_name} 0.2s ease-out forwards",
+                onclick: move |evt| evt.stop_propagation(),
 
-                onclick: move |evt| {
-                    evt.stop_propagation();
-                },
+                style {
+                    r#"
+                    @keyframes modalFadeIn {{
+                        from {{
+                            opacity: 0;
+                            transform: scale(0.8);
+                        }}
+                        to {{
+                            opacity: 1;
+                            transform: scale(1);
+                        }}
+                    }}
+                    @keyframes modalFadeOut {{
+                        from {{
+                            opacity: 1;
+                            transform: scale(1);
+                        }}
+                        to {{
+                            opacity: 0;
+                            transform: scale(0.8);
+                        }}
+                    }}
+                    "#
+                }
 
                 {children}
             }

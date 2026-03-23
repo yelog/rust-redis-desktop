@@ -1290,6 +1290,7 @@ await new Promise(() => {});
                     FlushConfirmDialog {
                         connection_pool: pool,
                         current_db: current_db(),
+                        colors,
                         on_confirm: move |_| {
                             show_flush_dialog.set(None);
                             refresh_trigger.set(refresh_trigger() + 1);

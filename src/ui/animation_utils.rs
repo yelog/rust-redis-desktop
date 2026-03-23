@@ -50,6 +50,68 @@ pub fn prefers_reduced_motion() -> bool {
     false
 }
 
+pub mod modal_animation {
+    use crate::theme::ThemeColors;
+
+    pub const DURATION_MS: u64 = 200;
+    pub const BACKDROP_DURATION_MS: u64 = 300;
+
+    pub const EASE_OUT_CIRC: &str = "cubic-bezier(0.16, 1, 0.3, 1)";
+    pub const EASE_IN_OUT_CIRC: &str = "cubic-bezier(0.78, 0.14, 0.15, 0.86)";
+
+    pub fn backdrop_style(colors: &ThemeColors, opacity: f32) -> String {
+        let bg = &colors.overlay_backdrop;
+        let opacity = opacity.clamp(0.0, 1.0);
+        format!(
+            "position: fixed; top: 0; left: 0; right: 0; bottom: 0; \
+             background: {}; display: flex; align-items: center; justify_content: center; \
+             z_index: 1000; opacity: {}; transition: opacity {}ms {};",
+            bg, opacity, BACKDROP_DURATION_MS, EASE_OUT_CIRC
+        )
+    }
+
+    pub fn modal_container_style(
+        colors: &ThemeColors,
+        width: &str,
+        max_height: &str,
+        opacity: f32,
+        scale: f32,
+    ) -> String {
+        format!(
+            "width: {}; max_height: {}; padding: 24px; background: {}; \
+             border_radius: 8px; box_shadow: 0 4px 24px rgba(0, 0, 0, 0.5); \
+             overflow_y: auto; opacity: {:.2}; transform: scale({:.2}); \
+             transition: opacity {}ms {}, transform {}ms {};",
+            width,
+            max_height,
+            colors.background,
+            opacity,
+            scale,
+            DURATION_MS,
+            EASE_OUT_CIRC,
+            DURATION_MS,
+            EASE_OUT_CIRC
+        )
+    }
+
+    pub fn no_animation_backdrop_style(colors: &ThemeColors) -> String {
+        format!(
+            "position: fixed; top: 0; left: 0; right: 0; bottom: 0; \
+             background: {}; display: flex; align_items: center; justify_content: center; \
+             z_index: 1000;",
+            colors.overlay_backdrop
+        )
+    }
+
+    pub fn no_animation_modal_style(colors: &ThemeColors, width: &str, max_height: &str) -> String {
+        format!(
+            "width: {}; max_height: {}; padding: 24px; background: {}; \
+             border_radius: 8px; box_shadow: 0 4px 24px rgba(0, 0, 0, 0.5); overflow_y: auto;",
+            width, max_height, colors.background
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
