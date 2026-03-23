@@ -12,12 +12,21 @@ use crate::ui::icons::*;
 use crate::ui::{LazyTreeNode, TreeState, ValueViewer};
 use arboard::Clipboard;
 use dioxus::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use uuid::Uuid;
 
 const SCAN_BATCH_SIZE: usize = 500;
+
+fn collect_all_node_ids(nodes: &[TreeNode]) -> HashSet<String> {
+    let mut ids = HashSet::new();
+    for node in nodes {
+        ids.insert(node.node_id.clone());
+        ids.extend(collect_all_node_ids(&node.children));
+    }
+    ids
+}
 
 fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     let mut keys = Vec::new();
@@ -153,10 +162,8 @@ pub fn KeyBrowser(
 
             spawn(async move {
                 loading.set(true);
+                let preserved_expanded = tree_state.read().expanded_nodes.clone();
                 tree_nodes.set(Vec::new());
-                tree_state.write().expanded_nodes.clear();
-                tree_state.write().selected_keys.clear();
-                tree_state.write().selection_mode = false;
                 key_type_cache.set(HashMap::new());
                 scan_progress.write().is_scanning = true;
                 scan_progress.write().scanned = 0;
@@ -197,7 +204,20 @@ pub fn KeyBrowser(
                 keys_count.set(all_keys.len());
 
                 let builder = TreeBuilder::new(":");
-                tree_nodes.set(builder.build(all_keys));
+                let new_nodes = builder.build(all_keys);
+                let new_node_ids = collect_all_node_ids(&new_nodes);
+                tree_nodes.set(new_nodes);
+
+                {
+                    let mut state = tree_state.write();
+                    let valid_expanded: HashSet<String> = preserved_expanded
+                        .into_iter()
+                        .filter(|id| new_node_ids.contains(id))
+                        .collect();
+                    state.expanded_nodes = valid_expanded;
+                    state.selected_keys.clear();
+                    state.selection_mode = false;
+                }
 
                 loading.set(false);
                 scan_progress.write().is_scanning = false;
@@ -762,26 +782,25 @@ pub fn KeyBrowser(
                     "复制路径"
                 }
 
-                if is_leaf {
-                    div {
-                        padding: "8px 12px",
-                        cursor: "pointer",
-                        color: COLOR_ERROR,
-                        font_size: "12px",
+                div {
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    color: COLOR_ERROR,
+                    font_size: "12px",
 
-                        onclick: {
-                            let node_path = node_path.clone();
-                            move |_| {
-                                context_menu.set(None);
-                                show_delete_dialog.set(Some(vec![DeleteTarget {
-                                    key: node_path.clone(),
-                                    is_folder: false,
-                                }]));
-                            }
-                        },
+                    onclick: {
+                        let node_path = node_path.clone();
+                        let is_leaf = is_leaf;
+                        move |_| {
+                            context_menu.set(None);
+                            show_delete_dialog.set(Some(vec![DeleteTarget {
+                                key: node_path.clone(),
+                                is_folder: !is_leaf,
+                            }]));
+                        }
+                    },
 
-                        "删除"
-                    }
+                    "删除"
                 }
             }
 
