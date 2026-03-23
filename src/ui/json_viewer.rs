@@ -356,6 +356,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                     background: COLOR_BG,
                     border: "1px solid {COLOR_BORDER}",
                     border_radius: "4px",
+                    max_height: "600px",
 
                     pre {
                         margin: "0",

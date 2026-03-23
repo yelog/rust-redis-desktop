@@ -1416,6 +1416,8 @@ pub fn ValueViewer(
 
                                     div {
                                         overflow_x: "auto",
+                                        overflow_y: "auto",
+                                        max_height: "calc(100vh - 400px)",
                                         border: "1px solid {COLOR_BORDER}",
                                         border_radius: "8px",
                                         background: COLOR_BG_SECONDARY,
@@ -2292,6 +2294,8 @@ pub fn ValueViewer(
 
                                     div {
                                         overflow_x: "auto",
+                                        overflow_y: "auto",
+                                        max_height: "calc(100vh - 400px)",
                                         border: "1px solid {COLOR_BORDER}",
                                         border_radius: "8px",
                                         background: COLOR_BG_SECONDARY,
@@ -2710,7 +2714,7 @@ pub fn ValueViewer(
                                         border: "1px solid {COLOR_BORDER}",
                                         border_radius: "8px",
                                         background: COLOR_BG_SECONDARY,
-                                        max_height: "500px",
+                                        max_height: "calc(100vh - 400px)",
                                         overflow_y: "auto",
 
                                         table {
@@ -3207,6 +3211,8 @@ pub fn ValueViewer(
 
                                     div {
                                         overflow_x: "auto",
+                                        overflow_y: "auto",
+                                        max_height: "calc(100vh - 400px)",
                                         border: "1px solid {COLOR_BORDER}",
                                         border_radius: "8px",
                                         background: COLOR_BG_SECONDARY,

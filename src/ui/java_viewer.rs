@@ -112,6 +112,8 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
             background: COLOR_BG_SECONDARY,
             border: "1px solid {COLOR_BORDER}",
             border_radius: "8px",
+            max_height: "600px",
+            overflow_y: "auto",
 
             div {
                 display: "flex",
