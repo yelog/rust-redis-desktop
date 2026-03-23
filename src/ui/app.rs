@@ -3,7 +3,7 @@ use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, Con
 use crate::theme::{resolve_theme, theme_spec, ThemePreference, ThemeSpec, COLOR_BG, COLOR_BG_SECONDARY, COLOR_SURFACE_LOW, COLOR_BG_LOWEST, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_TEXT_CONTRAST, COLOR_BORDER, COLOR_ACCENT, COLOR_ERROR, COLOR_PRIMARY};
 use crate::ui::{
     ClientsPanel, ConnectionForm, FlushConfirmDialog, ImportPanel, KeyBrowser, LeftRail, MonitorPanel,
-    PubSubPanel, ResizableDivider, SettingsDialog, SlowLogPanel, Terminal,
+    PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog, SlowLogPanel, Terminal,
 };
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
@@ -18,6 +18,7 @@ pub enum Tab {
     SlowLog,
     Clients,
     PubSub,
+    Script,
 }
 
 #[derive(Clone, PartialEq)]
@@ -1050,6 +1051,7 @@ await new Promise(() => {});
                                         (Tab::SlowLog, "慢日志"),
                                         (Tab::Clients, "客户端"),
                                         (Tab::PubSub, "Pub/Sub"),
+                                        (Tab::Script, "脚本"),
                                     ] {
                                         button {
                                             padding: "8px 14px",
@@ -1126,8 +1128,13 @@ await new Promise(() => {});
                                             key: "{conn_id}",
                                             connection_pool: pool.clone(),
                                         }
-                                    } else {
+                                    } else if current_tab() == Tab::PubSub {
                                         PubSubPanel {
+                                            key: "{conn_id}",
+                                            connection_pool: pool.clone(),
+                                        }
+                                    } else {
+                                        ScriptPanel {
                                             key: "{conn_id}",
                                             connection_pool: pool.clone(),
                                         }

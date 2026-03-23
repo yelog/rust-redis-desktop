@@ -995,3 +995,76 @@ pub struct ImportKeyData {
     pub members: Option<Vec<String>>,
     pub scored_members: Option<Vec<(String, String)>>,
 }
+
+impl ConnectionPool {
+    pub async fn eval_script(&self, script: &str, keys: &[String], args: &[String]) -> Result<redis::Value> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let mut cmd = redis::cmd("EVAL");
+            cmd.arg(script).arg(keys.len() as i32);
+            for key in keys {
+                cmd.arg(key);
+            }
+            for arg in args {
+                cmd.arg(arg);
+            }
+            conn.execute_cmd(cmd).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn evalsha(&self, sha: &str, keys: &[String], args: &[String]) -> Result<redis::Value> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let mut cmd = redis::cmd("EVALSHA");
+            cmd.arg(sha).arg(keys.len() as i32);
+            for key in keys {
+                cmd.arg(key);
+            }
+            for arg in args {
+                cmd.arg(arg);
+            }
+            conn.execute_cmd(cmd).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn script_load(&self, script: &str) -> Result<String> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(redis::cmd("SCRIPT").arg("LOAD").arg(script)).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn script_exists(&self, sha: &[String]) -> Result<Vec<bool>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let mut cmd = redis::cmd("SCRIPT");
+            cmd.arg("EXISTS");
+            for s in sha {
+                cmd.arg(s);
+            }
+            conn.execute_cmd(cmd).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn script_flush(&self) -> Result<()> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd::<()>(redis::cmd("SCRIPT").arg("FLUSH")).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+}
