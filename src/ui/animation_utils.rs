@@ -112,44 +112,6 @@ pub mod modal_animation {
     }
 }
 
-#[derive(Clone, Copy, Default, Debug)]
-pub struct TriggerPosition {
-    pub x: f32,
-    pub y: f32,
-}
-
-impl TriggerPosition {
-    pub fn to_transform_origin(&self) -> (String, String) {
-        let origin_x = if self.x < 0.33 {
-            "0%"
-        } else if self.x > 0.67 {
-            "100%"
-        } else {
-            "50%"
-        };
-
-        let origin_y = if self.y < 0.33 {
-            "0%"
-        } else if self.y > 0.67 {
-            "100%"
-        } else {
-            "50%"
-        };
-
-        (origin_x.to_string(), origin_y.to_string())
-    }
-}
-
-pub mod triggers {
-    pub const ADD_CONNECTION: &str = "add-connection-btn";
-    pub const EDIT_CONNECTION: &str = "edit-connection-btn";
-    pub const SETTINGS: &str = "settings-btn";
-    pub const FLUSH_DB: &str = "flush-db-btn";
-    pub const ADD_KEY: &str = "add-key-btn";
-    pub const DELETE_KEY: &str = "delete-key-btn";
-    pub const BATCH_TTL: &str = "batch-ttl-btn";
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
