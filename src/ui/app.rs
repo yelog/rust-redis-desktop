@@ -2,7 +2,7 @@ use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::theme::{resolve_theme, theme_spec, ThemePreference, ThemeSpec, COLOR_BG, COLOR_BG_SECONDARY, COLOR_SURFACE_LOW, COLOR_BG_LOWEST, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_TEXT_CONTRAST, COLOR_BORDER, COLOR_ACCENT, COLOR_ERROR, COLOR_PRIMARY};
 use crate::ui::{
-    ClientsPanel, ConnectionForm, FlushConfirmDialog, KeyBrowser, LeftRail, MonitorPanel,
+    ClientsPanel, ConnectionForm, FlushConfirmDialog, ImportPanel, KeyBrowser, LeftRail, MonitorPanel,
     PubSubPanel, ResizableDivider, SettingsDialog, SlowLogPanel, Terminal,
 };
 use dioxus::prelude::*;
@@ -591,6 +591,7 @@ pub fn App() -> Element {
     let mut app_settings = use_signal(AppSettings::default);
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
+    let mut show_import_dialog = use_signal(|| None::<Uuid>);
     let mut current_db = use_signal(|| 0u8);
     let mut theme_preference = use_signal(ThemePreference::default);
     let mut system_theme_dark = use_signal(system_theme_is_dark);
@@ -886,6 +887,9 @@ await new Promise(() => {});
                         },
                         on_flush_connection: move |id: Uuid| {
                             show_flush_dialog.set(Some(id));
+                        },
+                        on_import_connection: move |id: Uuid| {
+                            show_import_dialog.set(Some(id));
                         },
                         on_open_settings: move |_| show_settings.set(true),
                     }
@@ -1298,7 +1302,7 @@ await new Promise(() => {});
                 }
             }
 
-            if let Some(flush_id) = show_flush_dialog() {
+if let Some(flush_id) = show_flush_dialog() {
                 if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
                     FlushConfirmDialog {
                         connection_pool: pool,
@@ -1312,5 +1316,27 @@ await new Promise(() => {});
                     }
                 }
             }
+
+if let Some(import_id) = show_import_dialog() {
+                if let Some(pool) = connection_pools.read().get(&import_id).cloned() {
+                    div {
+                        position: "fixed",
+                        top: "0",
+                        left: "0",
+                        right: "0",
+                        bottom: "0",
+                        background: "rgba(0, 0, 0, 0.5)",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        z_index: "1000",
+
+                        ImportPanel {
+                            connection_pool: pool,
+                            on_close: move |_| show_import_dialog.set(None),
+                        }
+                    }
+                }
+            }
         }
-}
+    }

@@ -34,6 +34,7 @@ pub fn LeftRail(
     on_reconnect_connection: EventHandler<Uuid>,
     on_close_connection: EventHandler<Uuid>,
     on_flush_connection: EventHandler<Uuid>,
+    on_import_connection: EventHandler<Uuid>,
     on_open_settings: EventHandler<()>,
 ) -> Element {
     let has_connections = !connections.is_empty();
@@ -199,6 +200,19 @@ pub fn LeftRail(
                             onclick: move |_| on_flush_connection.call(id),
 
                             "清空当前数据库"
+                        }
+
+                        button {
+                            padding: "7px 10px",
+                            background: "transparent",
+                            color: COLOR_TEXT_SECONDARY,
+                            border: "1px dashed {COLOR_OUTLINE_VARIANT}",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            font_size: "12px",
+                            onclick: move |_| on_import_connection.call(id),
+
+                            "导入数据"
                         }
                     }
                 }

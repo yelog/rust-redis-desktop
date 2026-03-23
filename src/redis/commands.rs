@@ -875,4 +875,123 @@ impl ConnectionPool {
             Err(ConnectionError::Closed)
         }
     }
+
+    pub async fn dump_key(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: Option<Vec<u8>> = conn.execute_cmd(redis::cmd("DUMP").arg(key)).await?;
+            Ok(result)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn restore_key(&self, key: &str, ttl: i64, data: &[u8]) -> Result<()> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd::<()>(redis::cmd("RESTORE").arg(key).arg(ttl).arg(data)).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn restore_key_replace(&self, key: &str, ttl: i64, data: &[u8]) -> Result<()> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd::<()>(redis::cmd("RESTORE").arg(key).arg(ttl).arg(data).arg("REPLACE")).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn import_json_data(&self, data: &str) -> Result<usize> {
+        let import_data: Vec<ImportKeyData> = serde_json::from_str(data)
+            .map_err(|e| ConnectionError::ConnectionFailed(format!("Invalid JSON: {}", e)))?;
+
+        let mut imported = 0;
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            for key_data in import_data {
+                let ttl = key_data.ttl.unwrap_or(-1);
+                
+                match key_data.key_type.as_str() {
+                    "string" => {
+                        if let Some(value) = key_data.value {
+                            conn.execute_cmd::<()>(redis::cmd("SET").arg(&key_data.key).arg(&value)).await?;
+                            if ttl > 0 {
+                                conn.execute_cmd::<()>(redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                            }
+                            imported += 1;
+                        }
+                    }
+                    "hash" => {
+                        if let Some(fields) = key_data.fields {
+                            for (field, value) in fields {
+                                conn.execute_cmd::<()>(redis::cmd("HSET").arg(&key_data.key).arg(&field).arg(&value)).await?;
+                            }
+                            if ttl > 0 {
+                                conn.execute_cmd::<()>(redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                            }
+                            imported += 1;
+                        }
+                    }
+                    "list" => {
+                        if let Some(elements) = key_data.elements {
+                            if !elements.is_empty() {
+                                conn.execute_cmd::<()>(redis::cmd("RPUSH").arg(&key_data.key).arg(&elements)).await?;
+                                if ttl > 0 {
+                                    conn.execute_cmd::<()>(redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                                }
+                                imported += 1;
+                            }
+                        }
+                    }
+                    "set" => {
+                        if let Some(members) = key_data.members {
+                            if !members.is_empty() {
+                                conn.execute_cmd::<()>(redis::cmd("SADD").arg(&key_data.key).arg(&members)).await?;
+                                if ttl > 0 {
+                                    conn.execute_cmd::<()>(redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                                }
+                                imported += 1;
+                            }
+                        }
+                    }
+                    "zset" => {
+                        if let Some(members) = key_data.scored_members {
+                            for (member, score) in members {
+                                if let Ok(s) = score.parse::<f64>() {
+                                    conn.execute_cmd::<()>(redis::cmd("ZADD").arg(&key_data.key).arg(s).arg(&member)).await?;
+                                }
+                            }
+                            if ttl > 0 {
+                                conn.execute_cmd::<()>(redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                            }
+                            imported += 1;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(imported)
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ImportKeyData {
+    pub key: String,
+    #[serde(rename = "type")]
+    pub key_type: String,
+    pub ttl: Option<i64>,
+    pub value: Option<String>,
+    pub fields: Option<HashMap<String, String>>,
+    pub elements: Option<Vec<String>>,
+    pub members: Option<Vec<String>>,
+    pub scored_members: Option<Vec<(String, String)>>,
 }
