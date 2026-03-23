@@ -27,9 +27,8 @@ async fn get_client_list(pool: &ConnectionPool) -> Result<Vec<ClientInfo>, Strin
     let mut connection = pool.connection.lock().await;
 
     if let Some(ref mut conn) = *connection {
-        let result: String = redis::cmd("CLIENT")
-            .arg("LIST")
-            .query_async(conn)
+        let result: String = conn
+            .execute_cmd(redis::cmd("CLIENT").arg("LIST"))
             .await
             .map_err(|e| format!("Failed to get client list: {}", e))?;
 
@@ -90,11 +89,8 @@ async fn kill_client(pool: &ConnectionPool, addr: &str) -> Result<bool, String> 
     let mut connection = pool.connection.lock().await;
 
     if let Some(ref mut conn) = *connection {
-        let result: i32 = redis::cmd("CLIENT")
-            .arg("KILL")
-            .arg("ADDR")
-            .arg(addr)
-            .query_async(conn)
+        let result: i32 = conn
+            .execute_cmd(redis::cmd("CLIENT").arg("KILL").arg("ADDR").arg(addr))
             .await
             .map_err(|e| format!("Failed to kill client: {}", e))?;
 

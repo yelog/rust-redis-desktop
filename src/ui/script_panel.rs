@@ -149,14 +149,14 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
         status_message.set(Some(format!("脚本 '{}' 已保存", name)));
     };
 
-    let load_saved_script = move |name: String| {
+    let mut load_saved_script = move |name: String| {
         if let Some(saved) = saved_scripts.read().get(&name) {
             script_content.set(saved.script.clone());
             script_name.set(name);
         }
     };
 
-    let delete_saved_script = move |name: String| {
+    let mut delete_saved_script = move |name: String| {
         saved_scripts.write().remove(&name);
     };
 

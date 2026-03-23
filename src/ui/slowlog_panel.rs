@@ -17,10 +17,8 @@ async fn get_slowlog(pool: &ConnectionPool) -> Result<Vec<SlowLogEntry>, String>
     let mut connection = pool.connection.lock().await;
 
     if let Some(ref mut conn) = *connection {
-        let result: Vec<(u64, u64, u64, Vec<String>)> = redis::cmd("SLOWLOG")
-            .arg("GET")
-            .arg(100)
-            .query_async(conn)
+        let result: Vec<(u64, u64, u64, Vec<String>)> = conn
+            .execute_cmd(redis::cmd("SLOWLOG").arg("GET").arg(100))
             .await
             .map_err(|e| format!("Failed to get slowlog: {}", e))?;
 

@@ -2,6 +2,7 @@ use super::{ConnectionConfig, ConnectionError, ConnectionMode, Result, SSHTunnel
 use redis::aio::ConnectionManager;
 use redis::cluster::ClusterClient;
 use redis::cluster_async::ClusterConnection;
+use std::fmt;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -9,6 +10,15 @@ use tokio::sync::Mutex;
 pub enum RedisConnection {
     Single(ConnectionManager),
     Cluster(ClusterConnection),
+}
+
+impl fmt::Debug for RedisConnection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RedisConnection::Single(_) => write!(f, "RedisConnection::Single"),
+            RedisConnection::Cluster(_) => write!(f, "RedisConnection::Cluster"),
+        }
+    }
 }
 
 impl RedisConnection {
@@ -27,14 +37,226 @@ impl RedisConnection {
                 .map_err(|e| ConnectionError::ConnectionFailed(e.to_string())),
         }
     }
+
+    pub async fn get_string(&mut self, key: &str) -> Result<String> {
+        let mut cmd = redis::cmd("GET");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn get_bytes(&mut self, key: &str) -> Result<Vec<u8>> {
+        let mut cmd = redis::cmd("GET");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn set_string(&mut self, key: &str, value: &str) -> Result<()> {
+        let mut cmd = redis::cmd("SET");
+        cmd.arg(key).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn del_key(&mut self, key: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("DEL");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn ttl(&mut self, key: &str) -> Result<i64> {
+        let mut cmd = redis::cmd("TTL");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn expire(&mut self, key: &str, seconds: i64) -> Result<i32> {
+        let mut cmd = redis::cmd("EXPIRE");
+        cmd.arg(key).arg(seconds);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn persist(&mut self, key: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("PERSIST");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn rename(&mut self, old_key: &str, new_key: &str) -> Result<()> {
+        let mut cmd = redis::cmd("RENAME");
+        cmd.arg(old_key).arg(new_key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn hgetall(&mut self, key: &str) -> Result<std::collections::HashMap<String, String>> {
+        let mut cmd = redis::cmd("HGETALL");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn hset(&mut self, key: &str, field: &str, value: &str) -> Result<()> {
+        let mut cmd = redis::cmd("HSET");
+        cmd.arg(key).arg(field).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn hdel(&mut self, key: &str, field: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("HDEL");
+        cmd.arg(key).arg(field);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn hlen(&mut self, key: &str) -> Result<u64> {
+        let mut cmd = redis::cmd("HLEN");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn lrange(&mut self, key: &str, start: isize, stop: isize) -> Result<Vec<String>> {
+        let mut cmd = redis::cmd("LRANGE");
+        cmd.arg(key).arg(start).arg(stop);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn lpush(&mut self, key: &str, value: &str) -> Result<i64> {
+        let mut cmd = redis::cmd("LPUSH");
+        cmd.arg(key).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn rpush(&mut self, key: &str, value: &str) -> Result<i64> {
+        let mut cmd = redis::cmd("RPUSH");
+        cmd.arg(key).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn lpop(&mut self, key: &str) -> Result<Option<String>> {
+        let mut cmd = redis::cmd("LPOP");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn rpop(&mut self, key: &str) -> Result<Option<String>> {
+        let mut cmd = redis::cmd("RPOP");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn lset(&mut self, key: &str, index: isize, value: &str) -> Result<()> {
+        let mut cmd = redis::cmd("LSET");
+        cmd.arg(key).arg(index).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn lrem(&mut self, key: &str, count: isize, value: &str) -> Result<i64> {
+        let mut cmd = redis::cmd("LREM");
+        cmd.arg(key).arg(count).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn llen(&mut self, key: &str) -> Result<u64> {
+        let mut cmd = redis::cmd("LLEN");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn smembers(&mut self, key: &str) -> Result<Vec<String>> {
+        let mut cmd = redis::cmd("SMEMBERS");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn sadd(&mut self, key: &str, member: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("SADD");
+        cmd.arg(key).arg(member);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn srem(&mut self, key: &str, member: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("SREM");
+        cmd.arg(key).arg(member);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn scard(&mut self, key: &str) -> Result<u64> {
+        let mut cmd = redis::cmd("SCARD");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn zrange_withscores(&mut self, key: &str, start: isize, stop: isize) -> Result<Vec<(String, f64)>> {
+        let mut cmd = redis::cmd("ZRANGE");
+        cmd.arg(key).arg(start).arg(stop).arg("WITHSCORES");
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn zadd(&mut self, key: &str, score: f64, member: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("ZADD");
+        cmd.arg(key).arg(score).arg(member);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn zrem(&mut self, key: &str, member: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("ZREM");
+        cmd.arg(key).arg(member);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn zcard(&mut self, key: &str) -> Result<u64> {
+        let mut cmd = redis::cmd("ZCARD");
+        cmd.arg(key);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn rpush_vec(&mut self, key: &str, values: Vec<String>) -> Result<()> {
+        let mut cmd = redis::cmd("RPUSH");
+        cmd.arg(key);
+        for v in &values {
+            cmd.arg(v);
+        }
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn sadd_vec(&mut self, key: &str, members: Vec<String>) -> Result<()> {
+        let mut cmd = redis::cmd("SADD");
+        cmd.arg(key);
+        for m in &members {
+            cmd.arg(m);
+        }
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn zadd_str(&mut self, key: &str, score: f64, member: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("ZADD");
+        cmd.arg(key).arg(score).arg(member);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn lpush_str(&mut self, key: &str, value: &str) -> Result<i64> {
+        let mut cmd = redis::cmd("LPUSH");
+        cmd.arg(key).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn rpush_str(&mut self, key: &str, value: &str) -> Result<i64> {
+        let mut cmd = redis::cmd("RPUSH");
+        cmd.arg(key).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
 }
 
-#[derive(Debug)]
 pub struct ConnectionPool {
     pub(crate) config: ConnectionConfig,
     pub(crate) connection: Arc<Mutex<Option<RedisConnection>>>,
     pub(crate) selected_db: Arc<AtomicU8>,
     ssh_tunnel: Arc<Mutex<Option<SSHTunnel>>>,
+}
+
+impl fmt::Debug for ConnectionPool {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConnectionPool")
+            .field("config", &self.config)
+            .field("selected_db", &self.selected_db)
+            .finish()
+    }
 }
 
 impl PartialEq for ConnectionPool {
@@ -187,7 +409,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd(redis::cmd("PING")).await
+            conn.execute_cmd(&mut redis::cmd("PING")).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -222,13 +444,7 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            match conn {
-                RedisConnection::Single(c) => {
-                    conn.execute_cmd::<()>(redis::cmd("SELECT").arg(db))
-                        .await?;
-                }
-                RedisConnection::Cluster(_) => {}
-            }
+            conn.execute_cmd::<()>(&mut redis::cmd("SELECT").arg(db)).await?;
         }
 
         Ok(())

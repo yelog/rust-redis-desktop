@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -23,6 +24,15 @@ pub struct SSHTunnel {
     local_port: u16,
     running: Arc<AtomicBool>,
     thread_handle: Option<thread::JoinHandle<()>>,
+}
+
+impl fmt::Debug for SSHTunnel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SSHTunnel")
+            .field("local_port", &self.local_port)
+            .field("running", &self.running.load(Ordering::SeqCst))
+            .finish()
+    }
 }
 
 impl SSHTunnel {

@@ -23,7 +23,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
     let mut status_message = use_signal(|| None::<String>);
     let mut subscribe_handle: Signal<Option<Arc<AtomicBool>>> = use_signal(|| None);
 
-    let stop_subscription = move || {
+    let _stop_subscription = move || {
         if let Some(handle) = subscribe_handle() {
             handle.store(false, Ordering::SeqCst);
             subscribe_handle.set(None);
@@ -54,14 +54,14 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
             let pool = pool.clone();
             let channel_clone = channel.clone();
             let mut messages = messages.clone();
-            let running_clone = running.clone();
             
             spawn(async move {
                 let mut connection = pool.connection.lock().await;
                 if let Some(ref mut conn) = *connection {
-                    let subscribe_cmd = redis::cmd("SUBSCRIBE").arg(&channel_clone);
+                    let mut subscribe_cmd = redis::cmd("SUBSCRIBE");
+                    subscribe_cmd.arg(&channel_clone);
                     
-                    if let Err(e) = conn.execute_cmd::<redis::Value>(subscribe_cmd).await {
+                    if let Err(e) = conn.execute_cmd::<redis::Value>(&mut subscribe_cmd).await {
                         messages.write().push(PubSubMessage {
                             channel: "_system".to_string(),
                             payload: format!("订阅失败: {}", e),
@@ -76,23 +76,6 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
             });
 
             channel_input.set(String::new());
-        }
-    };
-
-    let unsubscribe = {
-        let mut subscribed_channels = subscribed_channels.clone();
-        let pool = connection_pool.clone();
-        move |channel: String| {
-            let pool = pool.clone();
-            let channel = channel.clone();
-            let mut subscribed_channels = subscribed_channels.clone();
-            spawn(async move {
-                let mut connection = pool.connection.lock().await;
-                if let Some(ref mut conn) = *connection {
-                    let _ = conn.execute_cmd::<redis::Value>(redis::cmd("UNSUBSCRIBE").arg(&channel)).await;
-                }
-                subscribed_channels.write().retain(|c| c != &channel);
-            });
         }
     };
 
@@ -116,7 +99,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
             spawn(async move {
                 let mut connection = pool.connection.lock().await;
                 if let Some(ref mut conn) = *connection {
-                    match conn.execute_cmd::<i32>(redis::cmd("PUBLISH").arg(&channel).arg(&message)).await {
+                    match conn.execute_cmd::<i32>(&mut redis::cmd("PUBLISH").arg(&channel).arg(&message)).await {
                         Ok(_) => {
                             status_message.set(Some("消息已发布".to_string()));
                         }
@@ -300,7 +283,20 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                             font_size: "12px",
                             onclick: {
                                 let channel = channel.clone();
-                                move |_| unsubscribe(channel.clone())
+                                let pool = connection_pool.clone();
+                                let mut subscribed_channels = subscribed_channels.clone();
+                                move |_| {
+                                    let pool = pool.clone();
+                                    let channel = channel.clone();
+                                    let mut subscribed_channels = subscribed_channels.clone();
+                                    spawn(async move {
+                                        let mut connection = pool.connection.lock().await;
+                                        if let Some(ref mut conn) = *connection {
+                                            let _ = conn.execute_cmd::<redis::Value>(&mut redis::cmd("UNSUBSCRIBE").arg(&channel)).await;
+                                        }
+                                        subscribed_channels.write().retain(|c| c != &channel);
+                                    });
+                                }
                             },
                             "×"
                         }
