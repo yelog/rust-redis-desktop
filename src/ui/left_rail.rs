@@ -27,6 +27,7 @@ pub fn LeftRail(
     width: Signal<f64>,
     connections: Vec<(Uuid, String)>,
     connection_states: HashMap<Uuid, ConnectionState>,
+    readonly_connections: HashMap<Uuid, bool>,
     selected_connection: Option<Uuid>,
     colors: ThemeColors,
     on_add_connection: EventHandler<()>,
@@ -49,6 +50,9 @@ pub fn LeftRail(
     let selected_state = selected_connection
         .and_then(|id| connection_states.get(&id).copied())
         .unwrap_or(ConnectionState::Disconnected);
+    let is_readonly = selected_connection
+        .and_then(|id| readonly_connections.get(&id).copied())
+        .unwrap_or(false);
 
     rsx! {
         div {
@@ -105,13 +109,33 @@ pub fn LeftRail(
                                 }
                             }
 
-                            span {
-                                color: COLOR_TEXT_SUBTLE,
-                                font_size: "11px",
-                                text_transform: "uppercase",
-                                letter_spacing: "0.12em",
+                            div {
+                                display: "flex",
+                                align_items: "center",
+                                gap: "8px",
 
-                                "{state_label(selected_state)}"
+                                span {
+                                    color: COLOR_TEXT_SUBTLE,
+                                    font_size: "11px",
+                                    text_transform: "uppercase",
+                                    letter_spacing: "0.12em",
+
+                                    "{state_label(selected_state)}"
+                                }
+
+                                if is_readonly {
+                                    span {
+                                        padding: "2px 6px",
+                                        background: "{colors.accent}",
+                                        color: "{colors.primary_text}",
+                                        font_size: "9px",
+                                        font_weight: "600",
+                                        border_radius: "4px",
+                                        text_transform: "uppercase",
+
+                                        "只读"
+                                    }
+                                }
                             }
                         }
                     }

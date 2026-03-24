@@ -16,6 +16,9 @@ pub enum ConnectionError {
 
     #[error("Connection closed")]
     Closed,
+
+    #[error("Connection is in readonly mode, write operations are not allowed")]
+    ReadonlyMode,
 }
 
 pub type Result<T> = std::result::Result<T, ConnectionError>;

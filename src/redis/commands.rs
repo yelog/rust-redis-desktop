@@ -274,6 +274,7 @@ impl ConnectionPool {
     }
 
     pub async fn set_string_value(&self, key: &str, value: &str) -> Result<()> {
+        self.check_write_permission("SET")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -284,6 +285,7 @@ impl ConnectionPool {
     }
 
     pub async fn delete_key(&self, key: &str) -> Result<bool> {
+        self.check_write_permission("DEL")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -341,6 +343,7 @@ impl ConnectionPool {
     }
 
     pub async fn set_ttl(&self, key: &str, ttl: i64) -> Result<bool> {
+        self.check_write_permission("EXPIRE")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -352,6 +355,7 @@ impl ConnectionPool {
     }
 
     pub async fn remove_ttl(&self, key: &str) -> Result<bool> {
+        self.check_write_permission("PERSIST")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -363,6 +367,7 @@ impl ConnectionPool {
     }
 
     pub async fn rename_key(&self, old_key: &str, new_key: &str) -> Result<()> {
+        self.check_write_permission("RENAME")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -373,6 +378,7 @@ impl ConnectionPool {
     }
 
     pub async fn hash_set_field(&self, key: &str, field: &str, value: &str) -> Result<()> {
+        self.check_write_permission("HSET")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -383,6 +389,7 @@ impl ConnectionPool {
     }
 
     pub async fn hash_delete_field(&self, key: &str, field: &str) -> Result<bool> {
+        self.check_write_permission("HDEL")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -394,6 +401,8 @@ impl ConnectionPool {
     }
 
     pub async fn execute_raw_command(&self, command: &str) -> Result<String> {
+        self.check_raw_command_permission(command)?;
+
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -564,6 +573,7 @@ fn parse_db_stats(value: &str) -> Option<DbStats> {
 
 impl ConnectionPool {
     pub async fn set_hash_values(&self, key: &str, fields: Vec<HashField>) -> Result<()> {
+        self.check_write_permission("HSET")?;
         if fields.is_empty() {
             return Err(ConnectionError::ConnectionFailed(
                 "Hash fields cannot be empty".to_string(),
@@ -583,6 +593,7 @@ impl ConnectionPool {
     }
 
     pub async fn set_list_values(&self, key: &str, values: Vec<ListValue>) -> Result<()> {
+        self.check_write_permission("RPUSH")?;
         if values.is_empty() {
             return Err(ConnectionError::ConnectionFailed(
                 "List values cannot be empty".to_string(),
@@ -600,6 +611,7 @@ impl ConnectionPool {
     }
 
     pub async fn set_set_values(&self, key: &str, values: Vec<SetValue>) -> Result<()> {
+        self.check_write_permission("SADD")?;
         if values.is_empty() {
             return Err(ConnectionError::ConnectionFailed(
                 "Set values cannot be empty".to_string(),
@@ -617,6 +629,7 @@ impl ConnectionPool {
     }
 
     pub async fn set_zset_members(&self, key: &str, members: Vec<ZSetMember>) -> Result<()> {
+        self.check_write_permission("ZADD")?;
         if members.is_empty() {
             return Err(ConnectionError::ConnectionFailed(
                 "ZSet members cannot be empty".to_string(),
@@ -637,6 +650,7 @@ impl ConnectionPool {
     }
 
     pub async fn add_stream_entries(&self, key: &str, entries: Vec<StreamEntry>) -> Result<()> {
+        self.check_write_permission("XADD")?;
         if entries.is_empty() {
             return Err(ConnectionError::ConnectionFailed(
                 "Stream entries cannot be empty".to_string(),
@@ -668,6 +682,7 @@ impl ConnectionPool {
     }
 
     pub async fn list_push(&self, key: &str, value: &str, left: bool) -> Result<i64> {
+        self.check_write_permission(if left { "LPUSH" } else { "RPUSH" })?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -683,6 +698,7 @@ impl ConnectionPool {
     }
 
     pub async fn list_pop(&self, key: &str, left: bool) -> Result<Option<String>> {
+        self.check_write_permission(if left { "LPOP" } else { "RPOP" })?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -698,6 +714,7 @@ impl ConnectionPool {
     }
 
     pub async fn list_set(&self, key: &str, index: i64, value: &str) -> Result<()> {
+        self.check_write_permission("LSET")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -708,6 +725,7 @@ impl ConnectionPool {
     }
 
     pub async fn list_remove(&self, key: &str, count: i64, value: &str) -> Result<i64> {
+        self.check_write_permission("LREM")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -728,6 +746,7 @@ impl ConnectionPool {
     }
 
     pub async fn set_add(&self, key: &str, member: &str) -> Result<bool> {
+        self.check_write_permission("SADD")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -739,6 +758,7 @@ impl ConnectionPool {
     }
 
     pub async fn set_remove(&self, key: &str, member: &str) -> Result<bool> {
+        self.check_write_permission("SREM")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -750,6 +770,7 @@ impl ConnectionPool {
     }
 
     pub async fn zset_add(&self, key: &str, member: &str, score: f64) -> Result<bool> {
+        self.check_write_permission("ZADD")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -761,6 +782,7 @@ impl ConnectionPool {
     }
 
     pub async fn zset_remove(&self, key: &str, member: &str) -> Result<bool> {
+        self.check_write_permission("ZREM")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -782,6 +804,7 @@ impl ConnectionPool {
     }
 
     pub async fn stream_delete(&self, key: &str, id: &str) -> Result<bool> {
+        self.check_write_permission("XDEL")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -976,6 +999,7 @@ impl ConnectionPool {
     }
 
     pub async fn flush_db(&self) -> Result<()> {
+        self.check_write_permission("FLUSHDB")?;
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {

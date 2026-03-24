@@ -15,6 +15,34 @@ const MAX_CONSECUTIVE_FAILURES: u32 = 3;
 const RECONNECT_DELAY_SECS: u64 = 1;
 const DEFAULT_POOL_SIZE: usize = 5;
 
+pub const WRITE_COMMANDS: &[&str] = &[
+    "SET", "SETEX", "SETNX", "MSET", "SETRANGE", "APPEND",
+    "DEL", "UNLINK",
+    "HSET", "HSETNX", "HMSET", "HDEL", "HINCRBY", "HINCRBYFLOAT",
+    "LPUSH", "RPUSH", "LSET", "LREM", "LPOP", "RPOP", "LINSERT", "LPUSHX", "RPUSHX",
+    "SADD", "SREM", "SMOVE", "SPOP",
+    "ZADD", "ZREM", "ZINCRBY", "ZPOPMAX", "ZPOPMIN",
+    "XADD", "XDEL", "XTRIM", "XGROUP", "XSETID",
+    "INCR", "INCRBY", "DECR", "DECRBY", "INCRBYFLOAT",
+    "EXPIRE", "PEXPIRE", "EXPIREAT", "PEXPIREAT", "PERSIST",
+    "RENAME", "RENAMENX",
+    "FLUSHDB", "FLUSHALL",
+    "BITSET", "BITFIELD",
+    "PFADD", "PFMERGE",
+    "GEOADD",
+    "SINTERSTORE", "SUNIONSTORE", "SDIFFSTORE",
+    "ZUNIONSTORE", "ZINTERSTORE",
+    "SORT",
+    "MOVE",
+    "MIGRATE",
+    "RESTORE",
+    "EVAL", "EVALSHA",
+    "SCRIPT",
+    "PUBLISH",
+    "SWAPDB",
+    "COPY",
+];
+
 pub enum RedisConnection {
     Single(ConnectionManager),
     Cluster(ClusterConnection),
@@ -453,6 +481,46 @@ impl ConnectionPool {
 
         let mut connection = self.connection.lock().await;
         *connection = Some(RedisConnection::Cluster(conn));
+
+        Ok(())
+    }
+
+    pub fn is_readonly(&self) -> bool {
+        self.config.readonly
+    }
+
+    pub fn check_write_permission(&self, command: &str) -> Result<()> {
+        if !self.config.readonly {
+            return Ok(());
+        }
+
+        let cmd_upper = command.to_uppercase();
+        if WRITE_COMMANDS.contains(&cmd_upper.as_str()) {
+            return Err(ConnectionError::ReadonlyMode);
+        }
+
+        Ok(())
+    }
+
+    pub fn check_raw_command_permission(&self, command: &str) -> Result<()> {
+        if !self.config.readonly {
+            return Ok(());
+        }
+
+        let parts: Vec<&str> = command.split_whitespace().collect();
+        if parts.is_empty() {
+            return Ok(());
+        }
+
+        let cmd = parts[0].to_uppercase();
+        
+        if WRITE_COMMANDS.contains(&cmd.as_str()) {
+            return Err(ConnectionError::ReadonlyMode);
+        }
+
+        if cmd == "COMMAND" || cmd == "INFO" || cmd == "PING" {
+            return Ok(());
+        }
 
         Ok(())
     }

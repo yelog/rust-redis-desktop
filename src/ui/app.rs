@@ -619,6 +619,7 @@ pub fn App() -> Element {
     let mut reconnecting_ids = use_signal(HashSet::<Uuid>::new);
     let mut connection_versions = use_signal(HashMap::<Uuid, u32>::new);
     let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
+    let mut readonly_connections = use_signal(HashMap::<Uuid, bool>::new);
     let mut app_settings = use_signal(load_initial_settings);
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
@@ -644,7 +645,10 @@ pub fn App() -> Element {
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
             if let Ok(saved) = storage.load_connections() {
-                connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
+                let conns: Vec<(Uuid, String)> = saved.iter().map(|c| (c.id, c.name.clone())).collect();
+                let readonly: HashMap<Uuid, bool> = saved.iter().map(|c| (c.id, c.readonly)).collect();
+                connections.set(conns);
+                readonly_connections.set(readonly);
             }
         }
     });
@@ -835,6 +839,7 @@ await new Promise(() => {});
                                 width: left_rail_width,
                                 connections: connections(),
                                 connection_states: connection_states(),
+                                readonly_connections: readonly_connections(),
                                 selected_connection: selected_connection(),
                                 colors: colors.clone(),
                                 on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
@@ -1361,9 +1366,11 @@ await new Promise(() => {});
                                     tracing::info!("Reloading connections...");
                                     match storage.load_connections() {
                                         Ok(saved) => {
-                                            let list: Vec<(Uuid, String)> = saved.into_iter().map(|c| (c.id, c.name)).collect();
+                                            let list: Vec<(Uuid, String)> = saved.iter().map(|c| (c.id, c.name.clone())).collect();
+                                            let readonly: HashMap<Uuid, bool> = saved.iter().map(|c| (c.id, c.readonly)).collect();
                                             tracing::info!("✓ Loaded {} connections: {:?}", list.len(), list);
                                             connections.set(list);
+                                            readonly_connections.set(readonly);
                                         }
                                         Err(e) => {
                                             tracing::error!("✗ Load failed: {}", e);

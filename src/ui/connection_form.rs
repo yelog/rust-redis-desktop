@@ -126,6 +126,7 @@ pub fn ConnectionForm(
             .unwrap_or_default()
     });
     let mut test_result = use_signal(TestResult::default);
+    let mut readonly = use_signal(|| editing_config.as_ref().map(|c| c.readonly).unwrap_or(false));
 
     let is_editing = editing_config.is_some();
     let title = if is_editing {
@@ -153,7 +154,8 @@ pub fn ConnectionForm(
                              enable_ssl: bool,
                              ssl_ca_cert_path: String,
                              ssl_client_cert_path: String,
-                             ssl_client_key_path: String| {
+                             ssl_client_key_path: String,
+                             readonly: bool| {
         let id = editing_config_id.unwrap_or_else(|| uuid::Uuid::new_v4());
 
         let mut config = ConnectionConfig::new(name, host, port);
@@ -175,6 +177,7 @@ pub fn ConnectionForm(
         } else {
             5000
         };
+        config.readonly = readonly;
 
         if enable_ssh {
             config.ssh = Some(SSHConfig {
@@ -456,6 +459,38 @@ pub fn ConnectionForm(
                             resize: "vertical",
                             value: "{cluster_nodes}",
                             oninput: move |e| cluster_nodes.set(e.value()),
+                        }
+                    }
+                }
+
+                div {
+                    margin_bottom: "16px",
+
+                    label {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "8px",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        cursor: "pointer",
+
+                        input {
+                            r#type: "checkbox",
+                            checked: readonly(),
+                            onchange: move |e| readonly.set(e.checked()),
+                        }
+
+                        "只读模式 (禁止写操作)"
+                    }
+
+                    if readonly() {
+                        div {
+                            margin_top: "4px",
+                            margin_left: "24px",
+                            color: "{colors.text_secondary}",
+                            font_size: "11px",
+
+                            "启用后将阻止所有写命令执行 (SET, DEL, HSET, LPUSH 等)"
                         }
                     }
                 }
@@ -815,6 +850,7 @@ pub fn ConnectionForm(
                                 ssl_ca_cert_path(),
                                 ssl_client_cert_path(),
                                 ssl_client_key_path(),
+                                readonly(),
                             );
                             test_result.set(TestResult::Testing);
 
@@ -882,6 +918,7 @@ pub fn ConnectionForm(
                                 ssl_ca_cert_path(),
                                 ssl_client_cert_path(),
                                 ssl_client_key_path(),
+                                readonly(),
                             );
                             on_save.call(config);
                         },
