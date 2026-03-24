@@ -1,5 +1,8 @@
 use crate::connection::ConnectionPool;
-use crate::theme::{COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_SUCCESS, COLOR_ERROR};
+use crate::theme::{
+    COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR, COLOR_PRIMARY,
+    COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+};
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
@@ -63,8 +66,16 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
 
             let pool = pool.clone();
             let script = script.clone();
-            let keys: Vec<String> = keys_input().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-            let args: Vec<String> = args_input().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            let keys: Vec<String> = keys_input()
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            let args: Vec<String> = args_input()
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             let mut result_output = result_output.clone();
             let mut status_message = status_message.clone();
             let mut is_executing = is_executing.clone();
@@ -135,16 +146,19 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
     let save_script = move |_| {
         let name = script_name();
         let script = script_content();
-        
+
         if name.is_empty() || script.is_empty() {
             status_message.set(Some("请输入脚本名称和内容".to_string()));
             return;
         }
 
-        saved_scripts.write().insert(name.clone(), SavedScript {
-            name: name.clone(),
-            script,
-        });
+        saved_scripts.write().insert(
+            name.clone(),
+            SavedScript {
+                name: name.clone(),
+                script,
+            },
+        );
         script_name.set(String::new());
         status_message.set(Some(format!("脚本 '{}' 已保存", name)));
     };

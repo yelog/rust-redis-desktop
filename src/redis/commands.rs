@@ -1,17 +1,39 @@
+use super::cluster::{
+    parse_cluster_info, parse_cluster_nodes, parse_sentinel_masters, ClusterInfo, ClusterNode,
+    SentinelInfo,
+};
 use super::{KeyInfo, KeyType};
-use super::cluster::{parse_cluster_info, parse_cluster_nodes, parse_sentinel_masters, ClusterInfo, ClusterNode, SentinelInfo};
 use crate::connection::{ConnectionError, ConnectionPool, RedisConnection, Result};
 use crate::ui::add_key_dialog::{HashField, ListValue, SetValue, StreamEntry, ZSetMember};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum LargeKeyData {
-    String { value: String },
-    Hash { items: Vec<(String, String)>, cursor: u64, total: u64 },
-    List { items: Vec<String>, total: u64 },
-    Set { items: Vec<String>, cursor: u64, total: u64 },
-    ZSet { items: Vec<(String, f64)>, cursor: u64, total: u64 },
-    Stream { entries: Vec<(String, Vec<(String, String)>)> },
+    String {
+        value: String,
+    },
+    Hash {
+        items: Vec<(String, String)>,
+        cursor: u64,
+        total: u64,
+    },
+    List {
+        items: Vec<String>,
+        total: u64,
+    },
+    Set {
+        items: Vec<String>,
+        cursor: u64,
+        total: u64,
+    },
+    ZSet {
+        items: Vec<(String, f64)>,
+        cursor: u64,
+        total: u64,
+    },
+    Stream {
+        entries: Vec<(String, Vec<(String, String)>)>,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -171,9 +193,9 @@ impl ConnectionPool {
 
         if let Some(ref mut conn) = *connection {
             let mut result = HashMap::new();
-            
+
             const BATCH_SIZE: usize = 100;
-            
+
             for chunk in keys.chunks(BATCH_SIZE) {
                 let types: Vec<String> = match conn {
                     RedisConnection::Single(ref mut c) => {
@@ -181,7 +203,8 @@ impl ConnectionPool {
                         for key in chunk {
                             pipe.cmd("TYPE").arg(key);
                         }
-                        pipe.query_async(c).await
+                        pipe.query_async(c)
+                            .await
                             .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
                     }
                     RedisConnection::Cluster(ref mut c) => {
@@ -310,7 +333,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.zrange_withscores(key, start as isize, stop as isize).await
+            conn.zrange_withscores(key, start as isize, stop as isize)
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -816,12 +840,7 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn get_list_page(
-        &self,
-        key: &str,
-        offset: i64,
-        count: i64,
-    ) -> Result<Vec<String>> {
+    pub async fn get_list_page(&self, key: &str, offset: i64, count: i64) -> Result<Vec<String>> {
         self.get_list_range(key, offset, offset + count - 1).await
     }
 
@@ -841,17 +860,29 @@ impl ConnectionPool {
             KeyType::Set => {
                 let (cursor, items) = self.get_set_page(key, offset as u64, count).await?;
                 let total = self.set_len(key).await?;
-                Ok(LargeKeyData::Set { items, cursor, total })
+                Ok(LargeKeyData::Set {
+                    items,
+                    cursor,
+                    total,
+                })
             }
             KeyType::ZSet => {
                 let (cursor, items) = self.get_zset_page(key, offset as u64, count).await?;
                 let total = self.zset_card(key).await?;
-                Ok(LargeKeyData::ZSet { items, cursor, total })
+                Ok(LargeKeyData::ZSet {
+                    items,
+                    cursor,
+                    total,
+                })
             }
             KeyType::Hash => {
                 let (cursor, items) = self.get_hash_page(key, offset as u64, count).await?;
                 let total = self.hash_len(key).await?;
-                Ok(LargeKeyData::Hash { items, cursor, total })
+                Ok(LargeKeyData::Hash {
+                    items,
+                    cursor,
+                    total,
+                })
             }
             KeyType::String => {
                 let value = self.get_string_value(key).await?;
@@ -861,7 +892,9 @@ impl ConnectionPool {
                 let entries = self.stream_range(key, "-", "+").await?;
                 Ok(LargeKeyData::Stream { entries })
             }
-            KeyType::None => Err(ConnectionError::ConnectionFailed("Key not found".to_string())),
+            KeyType::None => Err(ConnectionError::ConnectionFailed(
+                "Key not found".to_string(),
+            )),
         }
     }
 
@@ -966,7 +999,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let result: Option<Vec<u8>> = conn.execute_cmd(&mut redis::cmd("DUMP").arg(key)).await?;
+            let result: Option<Vec<u8>> =
+                conn.execute_cmd(&mut redis::cmd("DUMP").arg(key)).await?;
             Ok(result)
         } else {
             Err(ConnectionError::Closed)
@@ -977,7 +1011,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd::<()>(&mut redis::cmd("RESTORE").arg(key).arg(ttl).arg(data)).await
+            conn.execute_cmd::<()>(&mut redis::cmd("RESTORE").arg(key).arg(ttl).arg(data))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -987,7 +1022,14 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd::<()>(&mut redis::cmd("RESTORE").arg(key).arg(ttl).arg(data).arg("REPLACE")).await
+            conn.execute_cmd::<()>(
+                &mut redis::cmd("RESTORE")
+                    .arg(key)
+                    .arg(ttl)
+                    .arg(data)
+                    .arg("REPLACE"),
+            )
+            .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1003,13 +1045,19 @@ impl ConnectionPool {
         if let Some(ref mut conn) = *connection {
             for key_data in import_data {
                 let ttl = key_data.ttl.unwrap_or(-1);
-                
+
                 match key_data.key_type.as_str() {
                     "string" => {
                         if let Some(value) = key_data.value {
-                            conn.execute_cmd::<()>(&mut redis::cmd("SET").arg(&key_data.key).arg(&value)).await?;
+                            conn.execute_cmd::<()>(
+                                &mut redis::cmd("SET").arg(&key_data.key).arg(&value),
+                            )
+                            .await?;
                             if ttl > 0 {
-                                conn.execute_cmd::<()>(&mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                                conn.execute_cmd::<()>(
+                                    &mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl),
+                                )
+                                .await?;
                             }
                             imported += 1;
                         }
@@ -1017,10 +1065,19 @@ impl ConnectionPool {
                     "hash" => {
                         if let Some(fields) = key_data.fields {
                             for (field, value) in fields {
-                                conn.execute_cmd::<()>(&mut redis::cmd("HSET").arg(&key_data.key).arg(&field).arg(&value)).await?;
+                                conn.execute_cmd::<()>(
+                                    &mut redis::cmd("HSET")
+                                        .arg(&key_data.key)
+                                        .arg(&field)
+                                        .arg(&value),
+                                )
+                                .await?;
                             }
                             if ttl > 0 {
-                                conn.execute_cmd::<()>(&mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                                conn.execute_cmd::<()>(
+                                    &mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl),
+                                )
+                                .await?;
                             }
                             imported += 1;
                         }
@@ -1028,9 +1085,15 @@ impl ConnectionPool {
                     "list" => {
                         if let Some(elements) = key_data.elements {
                             if !elements.is_empty() {
-                                conn.execute_cmd::<()>(&mut redis::cmd("RPUSH").arg(&key_data.key).arg(&elements)).await?;
+                                conn.execute_cmd::<()>(
+                                    &mut redis::cmd("RPUSH").arg(&key_data.key).arg(&elements),
+                                )
+                                .await?;
                                 if ttl > 0 {
-                                    conn.execute_cmd::<()>(&mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                                    conn.execute_cmd::<()>(
+                                        &mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl),
+                                    )
+                                    .await?;
                                 }
                                 imported += 1;
                             }
@@ -1039,9 +1102,15 @@ impl ConnectionPool {
                     "set" => {
                         if let Some(members) = key_data.members {
                             if !members.is_empty() {
-                                conn.execute_cmd::<()>(&mut redis::cmd("SADD").arg(&key_data.key).arg(&members)).await?;
+                                conn.execute_cmd::<()>(
+                                    &mut redis::cmd("SADD").arg(&key_data.key).arg(&members),
+                                )
+                                .await?;
                                 if ttl > 0 {
-                                    conn.execute_cmd::<()>(&mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                                    conn.execute_cmd::<()>(
+                                        &mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl),
+                                    )
+                                    .await?;
                                 }
                                 imported += 1;
                             }
@@ -1051,11 +1120,20 @@ impl ConnectionPool {
                         if let Some(members) = key_data.scored_members {
                             for (member, score) in members {
                                 if let Ok(s) = score.parse::<f64>() {
-                                    conn.execute_cmd::<()>(&mut redis::cmd("ZADD").arg(&key_data.key).arg(s).arg(&member)).await?;
+                                    conn.execute_cmd::<()>(
+                                        &mut redis::cmd("ZADD")
+                                            .arg(&key_data.key)
+                                            .arg(s)
+                                            .arg(&member),
+                                    )
+                                    .await?;
                                 }
                             }
                             if ttl > 0 {
-                                conn.execute_cmd::<()>(&mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl)).await?;
+                                conn.execute_cmd::<()>(
+                                    &mut redis::cmd("EXPIRE").arg(&key_data.key).arg(ttl),
+                                )
+                                .await?;
                             }
                             imported += 1;
                         }
@@ -1175,18 +1253,16 @@ impl ConnectionPool {
                             scored_members,
                         }
                     }
-                    KeyType::Stream => {
-                        ExportKeyData {
-                            key: key.clone(),
-                            key_type: "stream".to_string(),
-                            ttl,
-                            value: None,
-                            fields: None,
-                            elements: None,
-                            members: None,
-                            scored_members: None,
-                        }
-                    }
+                    KeyType::Stream => ExportKeyData {
+                        key: key.clone(),
+                        key_type: "stream".to_string(),
+                        ttl,
+                        value: None,
+                        fields: None,
+                        elements: None,
+                        members: None,
+                        scored_members: None,
+                    },
                     KeyType::None => continue,
                 };
 
@@ -1195,15 +1271,13 @@ impl ConnectionPool {
         }
 
         match format {
-            ExportFormat::Json => {
-                serde_json::to_string_pretty(&exported_keys)
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
-            }
+            ExportFormat::Json => serde_json::to_string_pretty(&exported_keys)
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string())),
             ExportFormat::Commands => {
                 let mut commands = String::new();
                 for data in exported_keys {
                     let key = &data.key;
-                    
+
                     match data.key_type.as_str() {
                         "string" => {
                             if let Some(v) = &data.value {
@@ -1213,30 +1287,46 @@ impl ConnectionPool {
                         "hash" => {
                             if let Some(fields) = &data.fields {
                                 for (field, value) in fields {
-                                    commands.push_str(&format!("HSET {} {} {}\n", key, field, escape_value(value)));
+                                    commands.push_str(&format!(
+                                        "HSET {} {} {}\n",
+                                        key,
+                                        field,
+                                        escape_value(value)
+                                    ));
                                 }
                             }
                         }
                         "list" => {
                             if let Some(elements) = &data.elements {
                                 if !elements.is_empty() {
-                                    let values: Vec<&str> = elements.iter().map(|s| s.as_str()).collect();
-                                    commands.push_str(&format!("RPUSH {} {}\n", key, values.join(" ")));
+                                    let values: Vec<&str> =
+                                        elements.iter().map(|s| s.as_str()).collect();
+                                    commands.push_str(&format!(
+                                        "RPUSH {} {}\n",
+                                        key,
+                                        values.join(" ")
+                                    ));
                                 }
                             }
                         }
                         "set" => {
                             if let Some(members) = &data.members {
                                 if !members.is_empty() {
-                                    let values: Vec<&str> = members.iter().map(|s| s.as_str()).collect();
-                                    commands.push_str(&format!("SADD {} {}\n", key, values.join(" ")));
+                                    let values: Vec<&str> =
+                                        members.iter().map(|s| s.as_str()).collect();
+                                    commands.push_str(&format!(
+                                        "SADD {} {}\n",
+                                        key,
+                                        values.join(" ")
+                                    ));
                                 }
                             }
                         }
                         "zset" => {
                             if let Some(scored_members) = &data.scored_members {
                                 for (member, score) in scored_members {
-                                    commands.push_str(&format!("ZADD {} {} {}\n", key, score, member));
+                                    commands
+                                        .push_str(&format!("ZADD {} {} {}\n", key, score, member));
                                 }
                             }
                         }
@@ -1269,7 +1359,12 @@ fn escape_value(value: &str) -> String {
 }
 
 impl ConnectionPool {
-    pub async fn eval_script(&self, script: &str, keys: &[String], args: &[String]) -> Result<redis::Value> {
+    pub async fn eval_script(
+        &self,
+        script: &str,
+        keys: &[String],
+        args: &[String],
+    ) -> Result<redis::Value> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -1287,7 +1382,12 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn evalsha(&self, sha: &str, keys: &[String], args: &[String]) -> Result<redis::Value> {
+    pub async fn evalsha(
+        &self,
+        sha: &str,
+        keys: &[String],
+        args: &[String],
+    ) -> Result<redis::Value> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
@@ -1309,7 +1409,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd(&mut redis::cmd("SCRIPT").arg("LOAD").arg(script)).await
+            conn.execute_cmd(&mut redis::cmd("SCRIPT").arg("LOAD").arg(script))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1334,7 +1435,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd::<()>(&mut redis::cmd("SCRIPT").arg("FLUSH")).await
+            conn.execute_cmd::<()>(&mut redis::cmd("SCRIPT").arg("FLUSH"))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1346,7 +1448,9 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let output: String = conn.execute_cmd(&mut redis::cmd("CLUSTER").arg("NODES")).await?;
+            let output: String = conn
+                .execute_cmd(&mut redis::cmd("CLUSTER").arg("NODES"))
+                .await?;
             Ok(parse_cluster_nodes(&output))
         } else {
             Err(ConnectionError::Closed)
@@ -1357,7 +1461,9 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let output: String = conn.execute_cmd(&mut redis::cmd("CLUSTER").arg("INFO")).await?;
+            let output: String = conn
+                .execute_cmd(&mut redis::cmd("CLUSTER").arg("INFO"))
+                .await?;
             Ok(parse_cluster_info(&output))
         } else {
             Err(ConnectionError::Closed)
@@ -1368,7 +1474,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd(&mut redis::cmd("CLUSTER").arg("SLOTS")).await
+            conn.execute_cmd(&mut redis::cmd("CLUSTER").arg("SLOTS"))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1378,7 +1485,9 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            let output: String = conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("MASTERS")).await?;
+            let output: String = conn
+                .execute_cmd(&mut redis::cmd("SENTINEL").arg("MASTERS"))
+                .await?;
             Ok(parse_sentinel_masters(&output))
         } else {
             Err(ConnectionError::Closed)
@@ -1389,7 +1498,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("MASTER").arg(name)).await
+            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("MASTER").arg(name))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1399,7 +1509,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("REPLICAS").arg(name)).await
+            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("REPLICAS").arg(name))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1409,20 +1520,28 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("SENTINELS").arg(name)).await
+            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("SENTINELS").arg(name))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
     }
 
-    pub async fn sentinel_get_master_addr_by_name(&self, name: &str) -> Result<Option<(String, u16)>> {
+    pub async fn sentinel_get_master_addr_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<(String, u16)>> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
             let result: Vec<String> = conn
-                .execute_cmd(&mut redis::cmd("SENTINEL").arg("GET-MASTER-ADDR-BY-NAME").arg(name))
+                .execute_cmd(
+                    &mut redis::cmd("SENTINEL")
+                        .arg("GET-MASTER-ADDR-BY-NAME")
+                        .arg(name),
+                )
                 .await?;
-            
+
             if result.len() >= 2 {
                 let host = result[0].clone();
                 let port: u16 = result[1].parse().unwrap_or(6379);
@@ -1455,7 +1574,12 @@ impl ConnectionPool {
 
         if let Some(ref mut conn) = *connection {
             let result: u8 = conn
-                .execute_cmd(&mut redis::cmd("SETBIT").arg(key).arg(offset).arg(if value { 1 } else { 0 }))
+                .execute_cmd(
+                    &mut redis::cmd("SETBIT")
+                        .arg(key)
+                        .arg(offset)
+                        .arg(if value { 1 } else { 0 }),
+                )
                 .await?;
             Ok(result == 1)
         } else {
@@ -1477,7 +1601,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd(&mut redis::cmd("BITCOUNT").arg(key).arg(start).arg(end)).await
+            conn.execute_cmd(&mut redis::cmd("BITCOUNT").arg(key).arg(start).arg(end))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1487,7 +1612,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd(&mut redis::cmd("BITPOS").arg(key).arg(if bit { 1 } else { 0 })).await
+            conn.execute_cmd(&mut redis::cmd("BITPOS").arg(key).arg(if bit { 1 } else { 0 }))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1496,7 +1622,7 @@ impl ConnectionPool {
     pub async fn get_bitmap_info(&self, key: &str) -> Result<BitmapInfo> {
         let bytes = self.get_string_bytes(key).await?;
         let bit_count = self.bit_count(key).await?;
-        
+
         let set_bits: Vec<u64> = {
             let mut bits = Vec::new();
             for (byte_idx, &byte) in bytes.iter().enumerate() {

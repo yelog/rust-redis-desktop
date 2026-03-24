@@ -62,11 +62,11 @@ pub fn ExportDialog(
             let pool = pool.clone();
             processing.set(true);
             error_msg.set(String::new());
-            
+
             spawn(async move {
                 let keys = keys_to_export.read().clone();
                 let format = *export_format.read();
-                
+
                 match pool.export_keys(&keys, format).await {
                     Ok(content) => {
                         exported_content.set(content);
@@ -76,7 +76,7 @@ pub fn ExportDialog(
                         error_msg.set(format!("导出失败: {}", e));
                     }
                 }
-                
+
                 processing.set(false);
             });
         }
@@ -115,7 +115,7 @@ pub fn ExportDialog(
                 div {
                     div {
                         margin_bottom: "12px",
-                        
+
                         label {
                             display: "block",
                             color: "{colors.text_secondary}",
@@ -236,7 +236,7 @@ pub fn ExportDialog(
                 div {
                     div {
                         margin_bottom: "16px",
-                        
+
                         label {
                             display: "block",
                             color: "{colors.text_secondary}",
@@ -290,7 +290,7 @@ pub fn ExportDialog(
                         padding: "12px",
                         background: "{colors.background_tertiary}",
                         border_radius: "4px",
-                        
+
                         div {
                             color: "{colors.text_secondary}",
                             font_size: "12px",

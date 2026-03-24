@@ -1,7 +1,7 @@
 pub mod add_key_dialog;
-mod app;
 pub mod animated_dialog;
 pub mod animation_utils;
+mod app;
 mod batch_ttl_dialog;
 mod clients_panel;
 mod connection_form;

@@ -33,12 +33,12 @@ pub fn AnimatedDialog(
 
     {
         let current_visibility = *visibility.read();
-        
+
         if is_open && current_visibility == VisibilityState::Hidden {
             visibility.set(VisibilityState::Visible);
         } else if !is_open && current_visibility == VisibilityState::Visible {
             visibility.set(VisibilityState::Exiting);
-            
+
             let mut vis = visibility.clone();
             spawn(async move {
                 tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
@@ -53,7 +53,11 @@ pub fn AnimatedDialog(
 
     let state = *visibility.read();
     let is_exiting = state == VisibilityState::Exiting;
-    let animation_name = if is_exiting { "modalFadeOut" } else { "modalFadeIn" };
+    let animation_name = if is_exiting {
+        "modalFadeOut"
+    } else {
+        "modalFadeIn"
+    };
 
     let mut visibility_for_click = visibility.clone();
     let on_close_for_click = on_close.clone();
@@ -74,7 +78,7 @@ pub fn AnimatedDialog(
                 let current = *visibility_for_click.read();
                 if current == VisibilityState::Visible {
                     visibility_for_click.set(VisibilityState::Exiting);
-                    
+
                     let mut vis = visibility_for_click.clone();
                     let on_close = on_close_for_click.clone();
                     spawn(async move {

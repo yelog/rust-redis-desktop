@@ -1,4 +1,6 @@
-use super::{ConnectionConfig, ConnectionError, ConnectionMode, Result, SSHTunnel, SSHTunnelConfig};
+use super::{
+    ConnectionConfig, ConnectionError, ConnectionMode, Result, SSHTunnel, SSHTunnelConfig,
+};
 use redis::aio::ConnectionManager;
 use redis::cluster::ClusterClient;
 use redis::cluster_async::ClusterConnection;
@@ -92,7 +94,10 @@ impl RedisConnection {
         self.execute_cmd(&mut cmd).await
     }
 
-    pub async fn hgetall(&mut self, key: &str) -> Result<std::collections::HashMap<String, String>> {
+    pub async fn hgetall(
+        &mut self,
+        key: &str,
+    ) -> Result<std::collections::HashMap<String, String>> {
         let mut cmd = redis::cmd("HGETALL");
         cmd.arg(key);
         self.execute_cmd(&mut cmd).await
@@ -188,7 +193,12 @@ impl RedisConnection {
         self.execute_cmd(&mut cmd).await
     }
 
-    pub async fn zrange_withscores(&mut self, key: &str, start: isize, stop: isize) -> Result<Vec<(String, f64)>> {
+    pub async fn zrange_withscores(
+        &mut self,
+        key: &str,
+        start: isize,
+        stop: isize,
+    ) -> Result<Vec<(String, f64)>> {
         let mut cmd = redis::cmd("ZRANGE");
         cmd.arg(key).arg(start).arg(stop).arg("WITHSCORES");
         self.execute_cmd(&mut cmd).await
@@ -339,11 +349,11 @@ impl ConnectionPool {
             remote_port: self.config.port,
         };
 
-        let tunnel = SSHTunnel::start(tunnel_config)
-            .map_err(|e| ConnectionError::ConnectionFailed(e))?;
+        let tunnel =
+            SSHTunnel::start(tunnel_config).map_err(|e| ConnectionError::ConnectionFailed(e))?;
 
         let local_port = tunnel.local_port();
-        
+
         let mut ssh_tunnel = self.ssh_tunnel.lock().await;
         *ssh_tunnel = Some(tunnel);
 
@@ -358,7 +368,11 @@ impl ConnectionPool {
             (self.config.host.clone(), self.config.port)
         };
 
-        let scheme = if self.config.ssl.enabled { "rediss" } else { "redis" };
+        let scheme = if self.config.ssl.enabled {
+            "rediss"
+        } else {
+            "redis"
+        };
         let mut url = format!("{}://", scheme);
 
         if let Some(ref password) = self.config.password {
@@ -396,10 +410,17 @@ impl ConnectionPool {
             ConnectionError::InvalidConfig("Cluster configuration is required".to_string())
         })?;
 
-        let scheme = if self.config.ssl.enabled { "rediss" } else { "redis" };
+        let scheme = if self.config.ssl.enabled {
+            "rediss"
+        } else {
+            "redis"
+        };
 
         let nodes = if cluster_config.nodes.is_empty() {
-            vec![format!("{}://{}:{}", scheme, self.config.host, self.config.port)]
+            vec![format!(
+                "{}://{}:{}",
+                scheme, self.config.host, self.config.port
+            )]
         } else {
             cluster_config
                 .nodes
@@ -475,7 +496,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd::<()>(&mut redis::cmd("SELECT").arg(db)).await?;
+            conn.execute_cmd::<()>(&mut redis::cmd("SELECT").arg(db))
+                .await?;
         }
 
         Ok(())

@@ -1,5 +1,8 @@
 use crate::connection::ConnectionPool;
-use crate::theme::{COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE};
+use crate::theme::{
+    COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT,
+    COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+};
 use dioxus::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -54,13 +57,13 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
             let pool = pool.clone();
             let channel_clone = channel.clone();
             let mut messages = messages.clone();
-            
+
             spawn(async move {
                 let mut connection = pool.connection.lock().await;
                 if let Some(ref mut conn) = *connection {
                     let mut subscribe_cmd = redis::cmd("SUBSCRIBE");
                     subscribe_cmd.arg(&channel_clone);
-                    
+
                     if let Err(e) = conn.execute_cmd::<redis::Value>(&mut subscribe_cmd).await {
                         messages.write().push(PubSubMessage {
                             channel: "_system".to_string(),
@@ -85,7 +88,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
         move |_| {
             let channel = publish_channel();
             let message = message_input();
-            
+
             if channel.is_empty() || message.is_empty() {
                 status_message.set(Some("请输入频道和消息".to_string()));
                 return;
@@ -95,11 +98,14 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
             let channel = channel.clone();
             let message = message.clone();
             let mut status_message = status_message.clone();
-            
+
             spawn(async move {
                 let mut connection = pool.connection.lock().await;
                 if let Some(ref mut conn) = *connection {
-                    match conn.execute_cmd::<i32>(&mut redis::cmd("PUBLISH").arg(&channel).arg(&message)).await {
+                    match conn
+                        .execute_cmd::<i32>(&mut redis::cmd("PUBLISH").arg(&channel).arg(&message))
+                        .await
+                    {
                         Ok(_) => {
                             status_message.set(Some("消息已发布".to_string()));
                         }

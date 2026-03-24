@@ -1,9 +1,9 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType, TreeBuilder, TreeNode};
 use crate::theme::{
-    COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
-    COLOR_ERROR, COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_SURFACE_HIGHEST, COLOR_TEXT,
-    COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, ThemeColors,
+    ThemeColors, COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY,
+    COLOR_BORDER, COLOR_ERROR, COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_SURFACE_HIGHEST,
+    COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
 };
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
@@ -119,7 +119,7 @@ pub fn KeyBrowser(
         let mut show_add_key_dialog = show_add_key_dialog.clone();
         let mut show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
         let mut show_export_dialog = show_export_dialog.clone();
-        
+
         use_future(move || {
             let mut show_delete_dialog = show_delete_dialog.clone();
             let mut show_add_key_dialog = show_add_key_dialog.clone();

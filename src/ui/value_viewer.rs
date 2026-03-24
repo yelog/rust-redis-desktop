@@ -118,8 +118,15 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
         }
         BinaryFormat::Kryo => {
             let detected = detect_serialization_format(data);
-            if matches!(detected, SerializationFormat::Kryo | SerializationFormat::Fst) {
-                let format_name = if detected == SerializationFormat::Fst { "FST" } else { "Kryo" };
+            if matches!(
+                detected,
+                SerializationFormat::Kryo | SerializationFormat::Fst
+            ) {
+                let format_name = if detected == SerializationFormat::Fst {
+                    "FST"
+                } else {
+                    "Kryo"
+                };
                 format!(
                     "{} 数据 ({} 字节)\n\n请切换到 Kryo 视图查看解析结果",
                     format_name,
@@ -130,7 +137,10 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
             }
         }
         BinaryFormat::Bitmap => {
-            format!("Bitmap 数据 ({} 字节)\n\n请点击 Bitmap 按钮查看可视化", data.len())
+            format!(
+                "Bitmap 数据 ({} 字节)\n\n请点击 Bitmap 按钮查看可视化",
+                data.len()
+            )
         }
     }
 }
@@ -674,98 +684,304 @@ pub fn ValueViewer(
         .collect();
 
     rsx! {
-        div {
-            flex: "1",
-            height: "100%",
-            background: COLOR_BG,
-            display: "flex",
-            flex_direction: "column",
-
             div {
-                padding: "18px 20px 16px",
-                border_bottom: "1px solid {COLOR_BORDER}",
+                flex: "1",
+                height: "100%",
                 background: COLOR_BG,
+                display: "flex",
+                flex_direction: "column",
 
                 div {
-                    display: "flex",
-                    justify_content: "space_between",
-                    align_items: "flex_end",
-                    gap: "16px",
-                    flex_wrap: "wrap",
+                    padding: "18px 20px 16px",
+                    border_bottom: "1px solid {COLOR_BORDER}",
+                    background: COLOR_BG,
 
                     div {
                         display: "flex",
-                        flex_direction: "column",
-                        gap: "6px",
+                        justify_content: "space_between",
+                        align_items: "flex_end",
+                        gap: "16px",
+                        flex_wrap: "wrap",
 
-                        span {
-                            color: COLOR_PRIMARY,
-                            font_size: "11px",
-                            font_weight: "800",
-                            text_transform: "uppercase",
-                            letter_spacing: "0.18em",
+                        div {
+                            display: "flex",
+                            flex_direction: "column",
+                            gap: "6px",
 
-                            "值编辑器"
-                        }
+                            span {
+                                color: COLOR_PRIMARY,
+                                font_size: "11px",
+                                font_weight: "800",
+                                text_transform: "uppercase",
+                                letter_spacing: "0.18em",
 
-                        if let Some(ref info) = info {
-                            div {
-                                display: "flex",
-                                align_items: "center",
-                                gap: "10px",
-                                flex_wrap: "wrap",
+                                "值编辑器"
+                            }
 
-                                span {
-                                    color: COLOR_ACCENT,
-                                    font_size: "15px",
-                                    font_weight: "700",
-                                    font_family: "Consolas, 'Courier New', monospace",
-
-                                    "{display_key}"
-                                }
-
-                                button {
-                                    width: "22px",
-                                    height: "22px",
-                                    background: "transparent",
-                                    border: "1px solid {COLOR_BORDER}",
-                                    border_radius: "4px",
-                                    cursor: "pointer",
+                            if let Some(ref info) = info {
+                                div {
                                     display: "flex",
                                     align_items: "center",
-                                    justify_content: "center",
-                                    color: COLOR_TEXT_SECONDARY,
-                                    title: "复制路径",
-                                    onclick: {
-                                        let key = display_key.clone();
-                                        move |_| match copy_value_to_clipboard(&key) {
-                                            Ok(_) => {
-toast_manager.write().success("Key 路径已复制");
+                                    gap: "10px",
+                                    flex_wrap: "wrap",
+
+                                    span {
+                                        color: COLOR_ACCENT,
+                                        font_size: "15px",
+                                        font_weight: "700",
+                                        font_family: "Consolas, 'Courier New', monospace",
+
+                                        "{display_key}"
+                                    }
+
+                                    button {
+                                        width: "22px",
+                                        height: "22px",
+                                        background: "transparent",
+                                        border: "1px solid {COLOR_BORDER}",
+                                        border_radius: "4px",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        align_items: "center",
+                                        justify_content: "center",
+                                        color: COLOR_TEXT_SECONDARY,
+                                        title: "复制路径",
+                                        onclick: {
+                                            let key = display_key.clone();
+                                            move |_| match copy_value_to_clipboard(&key) {
+                                                Ok(_) => {
+    toast_manager.write().success("Key 路径已复制");
+                                                }
+                                                Err(error) => {
+    toast_manager.write().error(&format!("复制失败：{error}"));
+                                                }
                                             }
-                                            Err(error) => {
-toast_manager.write().error(&format!("复制失败：{error}"));
+                                        },
+
+                                        IconCopy { size: Some(12) }
+                                    }
+
+                                    if delete_key_confirm() {
+                                        div {
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "4px",
+
+                                            button {
+                                                padding: "3px 8px",
+                                                background: COLOR_ERROR,
+                                                color: COLOR_TEXT_CONTRAST,
+                                                border: "none",
+                                                border_radius: "4px",
+                                                cursor: "pointer",
+                                                font_size: "11px",
+                                                disabled: delete_key_processing(),
+                                                onclick: {
+                                                    let pool = connection_pool.clone();
+                                                    let key = display_key.clone();
+                                                    move |_| {
+                                                        let pool = pool.clone();
+                                                        let key = key.clone();
+                                                        spawn(async move {
+                                                            delete_key_processing.set(true);
+
+                                                            match pool.delete_key(&key).await {
+                                                                Ok(_) => {
+                                                                    delete_key_confirm.set(false);
+                                                                    toast_manager.write().success("Key 已删除");
+                                                                    selected_key.set(String::new());
+                                                                    on_refresh.call(());
+                                                                }
+                                                                Err(error) => {
+                                                                    toast_manager.write().error(&format!("删除失败：{error}"));
+                                                                }
+                                                            }
+
+                                                            delete_key_processing.set(false);
+                                                        });
+                                                    }
+                                                },
+
+                                                if delete_key_processing() { "..." } else { "确认" }
+                                            }
+
+                                            button {
+                                                padding: "3px 8px",
+                                                background: COLOR_BG_TERTIARY,
+                                                color: COLOR_TEXT,
+                                                border: "1px solid {COLOR_BORDER}",
+                                                border_radius: "4px",
+                                                cursor: "pointer",
+                                                font_size: "11px",
+                                                onclick: move |_| delete_key_confirm.set(false),
+
+                                                "取消"
                                             }
                                         }
-                                    },
+                                    } else {
+                                        button {
+                                            width: "22px",
+                                            height: "22px",
+                                            background: "transparent",
+                                            border: "1px solid rgba(255, 180, 171, 0.30)",
+                                            border_radius: "4px",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            align_items: "center",
+                                            justify_content: "center",
+                                            color: COLOR_ERROR,
+                                            title: "删除",
+                                            onclick: move |_| delete_key_confirm.set(true),
 
-                                    IconCopy { size: Some(12) }
-                                }
+                                            IconTrash { size: Some(12) }
+                                        }
+                                    }
 
-                                if delete_key_confirm() {
+                                    span {
+                                        padding: "4px 8px",
+                                        border_radius: "999px",
+                                        background: "rgba(255, 180, 166, 0.10)",
+                                        border: "1px solid rgba(255, 180, 166, 0.20)",
+                                        color: COLOR_PRIMARY,
+                                        font_size: "11px",
+                                        font_weight: "700",
+                                        text_transform: "uppercase",
+                                        letter_spacing: "0.12em",
+
+                                        "{info.key_type}"
+                                    }
+
+                                    {
+                                        let value_metric = value_metric_label(
+                                            &info.key_type,
+                                            &str_val,
+                                            &hash_val,
+                                            &list_val,
+                                            &set_val,
+                                            &zset_val,
+                                            &stream_val,
+                                        );
+                                        let memory_badge = format_memory_usage(memory_usage());
+
+                                        rsx! {
+                                            for badge in [value_metric, format!("内存: {memory_badge}")] {
+                                                span {
+                                                    padding: "4px 8px",
+                                                    border_radius: "6px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "11px",
+
+                                                    "{badge}"
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     div {
                                         display: "flex",
                                         align_items: "center",
                                         gap: "4px",
 
+                                        span {
+                                            color: COLOR_TEXT_SECONDARY,
+                                            font_size: "11px",
+
+                                            "TTL:"
+                                        }
+
+                                        input {
+                                            width: "60px",
+                                            padding: "2px 6px",
+                                            background: COLOR_BG_TERTIARY,
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "4px",
+                                            color: COLOR_TEXT,
+                                            font_size: "11px",
+                                            r#type: "number",
+                                            min: "0",
+                                            value: "{ttl_input}",
+                                            placeholder: "秒",
+                                            oninput: move |event| ttl_input.set(event.value()),
+                                        }
+
                                         button {
-                                            padding: "3px 8px",
-                                            background: COLOR_ERROR,
+                                            padding: "2px 6px",
+                                            background: COLOR_PRIMARY,
                                             color: COLOR_TEXT_CONTRAST,
                                             border: "none",
                                             border_radius: "4px",
                                             cursor: "pointer",
-                                            font_size: "11px",
-                                            disabled: delete_key_processing(),
+                                            font_size: "10px",
+                                            disabled: ttl_processing(),
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let ttl_text = ttl_input().trim().to_string();
+                                                    if ttl_text.is_empty() {
+                                                        toast_manager.write().error("请输入 TTL");
+                                                        return;
+                                                    }
+
+                                                    let ttl = match ttl_text.parse::<i64>() {
+                                                        Ok(ttl) if ttl > 0 => ttl,
+                                                        _ => {
+                                                            toast_manager.write().error("TTL 必须大于 0");
+                                                            return;
+                                                        }
+                                                    };
+
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    spawn(async move {
+                                                        ttl_processing.set(true);
+
+                                                        match pool.set_ttl(&key, ttl).await {
+                                                            Ok(_) => {
+                                                                toast_manager.write().success("TTL 已更新");
+                                                                if let Err(error) = load_key_data(
+                                                                    pool.clone(),
+                                                                    key.clone(),
+                                                                    key_info,
+                                                                    string_value,
+                                                                    hash_value,
+                                                                    list_value,
+                                                                    set_value,
+                                                                    zset_value,
+                                                                    stream_value,
+                                                                    is_binary,
+                                                                    binary_format,
+                                                                    serialization_data,
+                                                                    bitmap_info,
+                                                                    loading,
+                                                                ).await {
+                                                                    tracing::error!("{error}");
+                                                                } else {
+                                                                    on_refresh.call(());
+                                                                }
+                                                            }
+                                                            Err(error) => {
+                                                                toast_manager.write().error(&format!("TTL 更新失败：{error}"));
+                                                            }
+                                                        }
+
+                                                        ttl_processing.set(false);
+                                                    });
+                                                }
+                                            },
+
+                                            if ttl_processing() { "..." } else { "✓" }
+                                        }
+
+                                        button {
+                                            padding: "2px 6px",
+                                            background: "transparent",
+                                            color: COLOR_TEXT_SECONDARY,
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "4px",
+                                            cursor: "pointer",
+                                            font_size: "10px",
                                             onclick: {
                                                 let pool = connection_pool.clone();
                                                 let key = display_key.clone();
@@ -773,687 +989,378 @@ toast_manager.write().error(&format!("复制失败：{error}"));
                                                     let pool = pool.clone();
                                                     let key = key.clone();
                                                     spawn(async move {
-                                                        delete_key_processing.set(true);
-
-                                                        match pool.delete_key(&key).await {
+                                                        match pool.remove_ttl(&key).await {
                                                             Ok(_) => {
-                                                                delete_key_confirm.set(false);
-                                                                toast_manager.write().success("Key 已删除");
-                                                                selected_key.set(String::new());
-                                                                on_refresh.call(());
+                                                                toast_manager.write().success("已设为永久");
+                                                                ttl_input.set(String::new());
+                                                                if let Err(error) = load_key_data(
+                                                                    pool.clone(),
+                                                                    key.clone(),
+                                                                    key_info,
+                                                                    string_value,
+                                                                    hash_value,
+                                                                    list_value,
+                                                                    set_value,
+                                                                    zset_value,
+                                                                    stream_value,
+                                                                    is_binary,
+                                                                    binary_format,
+                                                                    serialization_data,
+                                                                    bitmap_info,
+                                                                    loading,
+                                                                ).await {
+                                                                    tracing::error!("{error}");
+                                                                } else {
+                                                                    on_refresh.call(());
+                                                                }
                                                             }
                                                             Err(error) => {
-                                                                toast_manager.write().error(&format!("删除失败：{error}"));
+                                                                toast_manager.write().error(&format!("设置失败：{error}"));
                                                             }
                                                         }
-
-                                                        delete_key_processing.set(false);
                                                     });
                                                 }
                                             },
 
-                                            if delete_key_processing() { "..." } else { "确认" }
+                                            "∞"
                                         }
-
-                                        button {
-                                            padding: "3px 8px",
-                                            background: COLOR_BG_TERTIARY,
-                                            color: COLOR_TEXT,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "4px",
-                                            cursor: "pointer",
-                                            font_size: "11px",
-                                            onclick: move |_| delete_key_confirm.set(false),
-
-                                            "取消"
-                                        }
-                                    }
-                                } else {
-                                    button {
-                                        width: "22px",
-                                        height: "22px",
-                                        background: "transparent",
-                                        border: "1px solid rgba(255, 180, 171, 0.30)",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        display: "flex",
-                                        align_items: "center",
-                                        justify_content: "center",
-                                        color: COLOR_ERROR,
-                                        title: "删除",
-                                        onclick: move |_| delete_key_confirm.set(true),
-
-                                        IconTrash { size: Some(12) }
                                     }
                                 }
-
+                            } else {
                                 span {
-                                    padding: "4px 8px",
-                                    border_radius: "999px",
-                                    background: "rgba(255, 180, 166, 0.10)",
-                                    border: "1px solid rgba(255, 180, 166, 0.20)",
-                                    color: COLOR_PRIMARY,
-                                    font_size: "11px",
-                                    font_weight: "700",
-                                    text_transform: "uppercase",
-                                    letter_spacing: "0.12em",
+                                    color: COLOR_TEXT_SECONDARY,
+                                    font_size: "13px",
 
-                                    "{info.key_type}"
+                                    "选择一个 Key 以查看和编辑详情"
                                 }
-
-                                {
-                                    let value_metric = value_metric_label(
-                                        &info.key_type,
-                                        &str_val,
-                                        &hash_val,
-                                        &list_val,
-                                        &set_val,
-                                        &zset_val,
-                                        &stream_val,
-                                    );
-                                    let memory_badge = format_memory_usage(memory_usage());
-
-                                    rsx! {
-                                        for badge in [value_metric, format!("内存: {memory_badge}")] {
-                                            span {
-                                                padding: "4px 8px",
-                                                border_radius: "6px",
-                                                background: COLOR_BG_TERTIARY,
-                                                color: COLOR_TEXT_SECONDARY,
-                                                font_size: "11px",
-
-                                                "{badge}"
-                                            }
-                                        }
-                                    }
-                                }
-
-                                div {
-                                    display: "flex",
-                                    align_items: "center",
-                                    gap: "4px",
-
-                                    span {
-                                        color: COLOR_TEXT_SECONDARY,
-                                        font_size: "11px",
-
-                                        "TTL:"
-                                    }
-
-                                    input {
-                                        width: "60px",
-                                        padding: "2px 6px",
-                                        background: COLOR_BG_TERTIARY,
-                                        border: "1px solid {COLOR_BORDER}",
-                                        border_radius: "4px",
-                                        color: COLOR_TEXT,
-                                        font_size: "11px",
-                                        r#type: "number",
-                                        min: "0",
-                                        value: "{ttl_input}",
-                                        placeholder: "秒",
-                                        oninput: move |event| ttl_input.set(event.value()),
-                                    }
-
-                                    button {
-                                        padding: "2px 6px",
-                                        background: COLOR_PRIMARY,
-                                        color: COLOR_TEXT_CONTRAST,
-                                        border: "none",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "10px",
-                                        disabled: ttl_processing(),
-                                        onclick: {
-                                            let pool = connection_pool.clone();
-                                            let key = display_key.clone();
-                                            move |_| {
-                                                let ttl_text = ttl_input().trim().to_string();
-                                                if ttl_text.is_empty() {
-                                                    toast_manager.write().error("请输入 TTL");
-                                                    return;
-                                                }
-
-                                                let ttl = match ttl_text.parse::<i64>() {
-                                                    Ok(ttl) if ttl > 0 => ttl,
-                                                    _ => {
-                                                        toast_manager.write().error("TTL 必须大于 0");
-                                                        return;
-                                                    }
-                                                };
-
-                                                let pool = pool.clone();
-                                                let key = key.clone();
-                                                spawn(async move {
-                                                    ttl_processing.set(true);
-
-                                                    match pool.set_ttl(&key, ttl).await {
-                                                        Ok(_) => {
-                                                            toast_manager.write().success("TTL 已更新");
-                                                            if let Err(error) = load_key_data(
-                                                                pool.clone(),
-                                                                key.clone(),
-                                                                key_info,
-                                                                string_value,
-                                                                hash_value,
-                                                                list_value,
-                                                                set_value,
-                                                                zset_value,
-                                                                stream_value,
-                                                                is_binary,
-                                                                binary_format,
-                                                                serialization_data,
-                                                                bitmap_info,
-                                                                loading,
-                                                            ).await {
-                                                                tracing::error!("{error}");
-                                                            } else {
-                                                                on_refresh.call(());
-                                                            }
-                                                        }
-                                                        Err(error) => {
-                                                            toast_manager.write().error(&format!("TTL 更新失败：{error}"));
-                                                        }
-                                                    }
-
-                                                    ttl_processing.set(false);
-                                                });
-                                            }
-                                        },
-
-                                        if ttl_processing() { "..." } else { "✓" }
-                                    }
-
-                                    button {
-                                        padding: "2px 6px",
-                                        background: "transparent",
-                                        color: COLOR_TEXT_SECONDARY,
-                                        border: "1px solid {COLOR_BORDER}",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "10px",
-                                        onclick: {
-                                            let pool = connection_pool.clone();
-                                            let key = display_key.clone();
-                                            move |_| {
-                                                let pool = pool.clone();
-                                                let key = key.clone();
-                                                spawn(async move {
-                                                    match pool.remove_ttl(&key).await {
-                                                        Ok(_) => {
-                                                            toast_manager.write().success("已设为永久");
-                                                            ttl_input.set(String::new());
-                                                            if let Err(error) = load_key_data(
-                                                                pool.clone(),
-                                                                key.clone(),
-                                                                key_info,
-                                                                string_value,
-                                                                hash_value,
-                                                                list_value,
-                                                                set_value,
-                                                                zset_value,
-                                                                stream_value,
-                                                                is_binary,
-                                                                binary_format,
-                                                                serialization_data,
-                                                                bitmap_info,
-                                                                loading,
-                                                            ).await {
-                                                                tracing::error!("{error}");
-                                                            } else {
-                                                                on_refresh.call(());
-                                                            }
-                                                        }
-                                                        Err(error) => {
-                                                            toast_manager.write().error(&format!("设置失败：{error}"));
-                                                        }
-                                                    }
-                                                });
-                                            }
-                                        },
-
-                                        "∞"
-                                    }
-                                }
-                            }
-                        } else {
-                            span {
-                                color: COLOR_TEXT_SECONDARY,
-                                font_size: "13px",
-
-                                "选择一个 Key 以查看和编辑详情"
                             }
                         }
                     }
                 }
-            }
 
-            div {
-                flex: "1",
-                overflow: "hidden",
-                padding: "18px",
+                div {
+                    flex: "1",
+                    overflow: "hidden",
+                    padding: "18px",
 
-                if is_loading {
-                    div {
-                        height: "100%",
-                        display: "flex",
-                        align_items: "center",
-                        justify_content: "center",
-                        color: COLOR_TEXT_SECONDARY,
-                        text_align: "center",
-                        border: "1px solid {COLOR_BORDER}",
-                        border_radius: "12px",
-                        background: COLOR_BG_SECONDARY,
-
-                        "正在加载 Key 内容..."
-                    }
-                } else if display_key.is_empty() {
-                    div {
-                        height: "100%",
-                        display: "flex",
-                        align_items: "center",
-                        justify_content: "center",
-                        color: COLOR_TEXT_SECONDARY,
-                        text_align: "center",
-                        border: "1px solid {COLOR_BORDER}",
-                        border_radius: "12px",
-                        background: COLOR_BG_SECONDARY,
-
-                        "尚未选择 Key"
-                    }
-                } else if let Some(info) = info.clone() {
-                    {
-                        let value_metric = value_metric_label(
-                            &info.key_type,
-                            &str_val,
-                            &hash_val,
-                            &list_val,
-                            &set_val,
-                            &zset_val,
-                            &stream_val,
-                        );
-                        let ttl_badge = format_ttl_label(info.ttl);
-                        let memory_badge = format_memory_usage(memory_usage());
-
-                        rsx! {
+                    if is_loading {
                         div {
                             height: "100%",
                             display: "flex",
-                            flex_wrap: "wrap",
-                            gap: "18px",
-                            align_items: "stretch",
+                            align_items: "center",
+                            justify_content: "center",
+                            color: COLOR_TEXT_SECONDARY,
+                            text_align: "center",
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "12px",
+                            background: COLOR_BG_SECONDARY,
 
+                            "正在加载 Key 内容..."
+                        }
+                    } else if display_key.is_empty() {
+                        div {
+                            height: "100%",
+                            display: "flex",
+                            align_items: "center",
+                            justify_content: "center",
+                            color: COLOR_TEXT_SECONDARY,
+                            text_align: "center",
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "12px",
+                            background: COLOR_BG_SECONDARY,
+
+                            "尚未选择 Key"
+                        }
+                    } else if let Some(info) = info.clone() {
+                        {
+                            let value_metric = value_metric_label(
+                                &info.key_type,
+                                &str_val,
+                                &hash_val,
+                                &list_val,
+                                &set_val,
+                                &zset_val,
+                                &stream_val,
+                            );
+                            let ttl_badge = format_ttl_label(info.ttl);
+                            let memory_badge = format_memory_usage(memory_usage());
+
+                            rsx! {
                             div {
-                                flex: "1 1 640px",
-                                min_width: "320px",
+                                height: "100%",
                                 display: "flex",
-                                flex_direction: "column",
-                                gap: "14px",
-overflow: "hidden",
+                                flex_wrap: "wrap",
+                                gap: "18px",
+                                align_items: "stretch",
 
                                 div {
-                                    flex: "1",
-                                    min_height: "0",
-                                    overflow: "auto",
-                                    padding: "16px",
-                                    border: "1px solid {COLOR_BORDER}",
-                                    border_radius: "12px",
-                                    background: COLOR_BG_SECONDARY,
+                                    flex: "1 1 640px",
+                                    min_width: "320px",
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    gap: "14px",
+    overflow: "hidden",
 
-match info.key_type {
-                                KeyType::String => {
-                                    let is_json = !is_binary() && is_json_content(&str_val);
-                                    let serialization_info = serialization_data();
-                                    let detected_format = serialization_info.as_ref().map(|(f, _)| *f);
-                                    let is_serialized = serialization_info.is_some();
+                                    div {
+                                        flex: "1",
+                                        min_height: "0",
+                                        overflow: "auto",
+                                        padding: "16px",
+                                        border: "1px solid {COLOR_BORDER}",
+                                        border_radius: "12px",
+                                        background: COLOR_BG_SECONDARY,
 
-                                    rsx! {
-                                        div {
-                                            if is_binary() {
-                                                div {
-                                                    display: "flex",
-                                                    gap: "8px",
-                                                    align_items: "center",
-                                                    margin_bottom: "12px",
-                                                    flex_wrap: "wrap",
+    match info.key_type {
+                                    KeyType::String => {
+                                        let is_json = !is_binary() && is_json_content(&str_val);
+                                        let serialization_info = serialization_data();
+                                        let detected_format = serialization_info.as_ref().map(|(f, _)| *f);
+                                        let is_serialized = serialization_info.is_some();
 
-                                                    if is_serialized {
-                                                        span {
-                                                            color: COLOR_SUCCESS,
-                                                            font_size: "12px",
-
-                                                            match detected_format {
-                                                                Some(SerializationFormat::Java) => "Java 序列化对象",
-                                                                Some(SerializationFormat::Php) => "PHP 序列化数据",
-                                                                Some(SerializationFormat::MsgPack) => "MessagePack 数据",
-                                                                Some(SerializationFormat::Pickle) => "Python Pickle 数据",
-                                                                Some(SerializationFormat::Kryo) => "Kryo 序列化数据",
-                                                                Some(SerializationFormat::Fst) => "FST 序列化数据",
-                                                                _ => "序列化数据",
-                                                            }
-                                                        }
-                                                    } else {
-                                                        span {
-                                                            color: COLOR_WARNING,
-                                                            font_size: "12px",
-
-                                                            "二进制数据"
-                                                        }
-                                                    }
-
-                                                    button {
-                                                        padding: "4px 8px",
-                                                        background: if binary_format() == BinaryFormat::Hex { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                        color: if binary_format() == BinaryFormat::Hex { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                        border: "none",
-                                                        border_radius: "4px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
-                                                        onclick: move |_| binary_format.set(BinaryFormat::Hex),
-
-                                                        "Hex"
-                                                    }
-
-                                                    button {
-                                                        padding: "4px 8px",
-                                                        background: if binary_format() == BinaryFormat::Base64 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                        color: if binary_format() == BinaryFormat::Base64 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                        border: "none",
-                                                        border_radius: "4px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
-                                                        onclick: move |_| binary_format.set(BinaryFormat::Base64),
-
-                                                        "Base64"
-                                                    }
-
-                                                    if detected_format == Some(SerializationFormat::Java) {
-                                                        button {
-                                                            padding: "4px 8px",
-                                                            background: if binary_format() == BinaryFormat::JavaSerialized { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                            color: if binary_format() == BinaryFormat::JavaSerialized { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                            border: "none",
-                                                            border_radius: "4px",
-                                                            cursor: "pointer",
-                                                            font_size: "12px",
-                                                            onclick: move |_| binary_format.set(BinaryFormat::JavaSerialized),
-
-                                                            "Java解析"
-                                                        }
-                                                    }
-
-                                                    if detected_format == Some(SerializationFormat::Php) {
-                                                        button {
-                                                            padding: "4px 8px",
-                                                            background: if binary_format() == BinaryFormat::Php { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                            color: if binary_format() == BinaryFormat::Php { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                            border: "none",
-                                                            border_radius: "4px",
-                                                            cursor: "pointer",
-                                                            font_size: "12px",
-                                                            onclick: move |_| binary_format.set(BinaryFormat::Php),
-
-                                                            "PHP解析"
-                                                        }
-                                                    }
-
-                                                    if detected_format == Some(SerializationFormat::MsgPack) {
-                                                        button {
-                                                            padding: "4px 8px",
-                                                            background: if binary_format() == BinaryFormat::MsgPack { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                            color: if binary_format() == BinaryFormat::MsgPack { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                            border: "none",
-                                                            border_radius: "4px",
-                                                            cursor: "pointer",
-                                                            font_size: "12px",
-                                                            onclick: move |_| binary_format.set(BinaryFormat::MsgPack),
-
-                                                            "MsgPack"
-                                                        }
-                                                    }
-
-                                                    if detected_format == Some(SerializationFormat::Pickle) {
-                                                        button {
-                                                            padding: "4px 8px",
-                                                            background: if binary_format() == BinaryFormat::Pickle { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                            color: if binary_format() == BinaryFormat::Pickle { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                            border: "none",
-                                                            border_radius: "4px",
-                                                            cursor: "pointer",
-                                                            font_size: "12px",
-                                                            onclick: move |_| binary_format.set(BinaryFormat::Pickle),
-
-                                                            "Pickle"
-                                                        }
-                                                    }
-
-                                                    if matches!(detected_format, Some(SerializationFormat::Kryo) | Some(SerializationFormat::Fst)) {
-                                                        button {
-                                                            padding: "4px 8px",
-                                                            background: if binary_format() == BinaryFormat::Kryo { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                            color: if binary_format() == BinaryFormat::Kryo { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                            border: "none",
-                                                            border_radius: "4px",
-                                                            cursor: "pointer",
-                                                            font_size: "12px",
-                                                            onclick: move |_| binary_format.set(BinaryFormat::Kryo),
-
-                                                            "Kryo"
-                                                        }
-                                                    }
-
-                                                    button {
-                                                        padding: "4px 8px",
-                                                        background: if binary_format() == BinaryFormat::Bitmap { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                        color: if binary_format() == BinaryFormat::Bitmap { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                        border: "none",
-                                                        border_radius: "4px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
-                                                        onclick: {
-                                                            let pool = connection_pool.clone();
-                                                            let key = display_key.clone();
-                                                            move |_| {
-                                                                let pool = pool.clone();
-                                                                let key = key.clone();
-                                                                spawn(async move {
-                                                                    match pool.get_bitmap_info(&key).await {
-                                                                        Ok(info) => {
-                                                                            bitmap_info.set(Some(info));
-                                                                            binary_format.set(BinaryFormat::Bitmap);
-                                                                        }
-                                                                        Err(e) => {
-                                                                            toast_manager.write().error(&format!("加载 Bitmap 失败: {}", e));
-                                                                        }
-                                                                    }
-                                                                });
-                                                            }
-                                                        },
-
-                                                        "Bitmap"
-                                                    }
-
-                                                    button {
-                                                        padding: "4px 10px",
-                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                        color: COLOR_SUCCESS,
-                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        font_size: "12px",
+                                        rsx! {
+                                            div {
+                                                if is_binary() {
+                                                    div {
                                                         display: "flex",
+                                                        gap: "8px",
                                                         align_items: "center",
-                                                        gap: "4px",
-                                                        title: "复制",
-                                                        onclick: move |_| {
-                                                            let current_format = binary_format();
-                                                            let serial_info = serialization_data();
-                                                            let current_str = string_value();
-                                                            let copy_text = match current_format {
-                                                                BinaryFormat::JavaSerialized
-                                                                | BinaryFormat::Php
-                                                                | BinaryFormat::MsgPack
-                                                                | BinaryFormat::Pickle
-                                                                | BinaryFormat::Kryo => {
-                                                                    if let Some((fmt, data)) = serial_info.as_ref() {
-                                                                        parse_to_json(data, *fmt).unwrap_or(current_str)
-                                                                    } else {
-                                                                        current_str
-                                                                    }
-                                                                }
-                                                                _ => current_str,
-                                                            };
-                                                            match Clipboard::new() {
-                                                                Ok(mut clipboard) => {
-                                                                    match clipboard.set_text(&copy_text) {
-                                                                        Ok(_) => {
-                                                                            toast_manager.write().success("复制成功");
-                                                                        }
-                                                                        Err(e) => {
-                                                                            toast_manager.write().error(&format!("复制失败：{}", e));
-                                                                        }
-                                                                    }
-                                                                }
-                                                                Err(e) => {
-                                                                    toast_manager.write().error(&format!("复制失败：{}", e));
+                                                        margin_bottom: "12px",
+                                                        flex_wrap: "wrap",
+
+                                                        if is_serialized {
+                                                            span {
+                                                                color: COLOR_SUCCESS,
+                                                                font_size: "12px",
+
+                                                                match detected_format {
+                                                                    Some(SerializationFormat::Java) => "Java 序列化对象",
+                                                                    Some(SerializationFormat::Php) => "PHP 序列化数据",
+                                                                    Some(SerializationFormat::MsgPack) => "MessagePack 数据",
+                                                                    Some(SerializationFormat::Pickle) => "Python Pickle 数据",
+                                                                    Some(SerializationFormat::Kryo) => "Kryo 序列化数据",
+                                                                    Some(SerializationFormat::Fst) => "FST 序列化数据",
+                                                                    _ => "序列化数据",
                                                                 }
                                                             }
-                                                        },
+                                                        } else {
+                                                            span {
+                                                                color: COLOR_WARNING,
+                                                                font_size: "12px",
 
-                                                        IconCopy { size: Some(14) }
-                                                        "复制"
+                                                                "二进制数据"
+                                                            }
+                                                        }
+
+                                                        button {
+                                                            padding: "4px 8px",
+                                                            background: if binary_format() == BinaryFormat::Hex { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if binary_format() == BinaryFormat::Hex { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                            border: "none",
+                                                            border_radius: "4px",
+                                                            cursor: "pointer",
+                                                            font_size: "12px",
+                                                            onclick: move |_| binary_format.set(BinaryFormat::Hex),
+
+                                                            "Hex"
+                                                        }
+
+                                                        button {
+                                                            padding: "4px 8px",
+                                                            background: if binary_format() == BinaryFormat::Base64 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if binary_format() == BinaryFormat::Base64 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                            border: "none",
+                                                            border_radius: "4px",
+                                                            cursor: "pointer",
+                                                            font_size: "12px",
+                                                            onclick: move |_| binary_format.set(BinaryFormat::Base64),
+
+                                                            "Base64"
+                                                        }
+
+                                                        if detected_format == Some(SerializationFormat::Java) {
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::JavaSerialized { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::JavaSerialized { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: "none",
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                onclick: move |_| binary_format.set(BinaryFormat::JavaSerialized),
+
+                                                                "Java解析"
+                                                            }
+                                                        }
+
+                                                        if detected_format == Some(SerializationFormat::Php) {
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Php { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Php { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: "none",
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Php),
+
+                                                                "PHP解析"
+                                                            }
+                                                        }
+
+                                                        if detected_format == Some(SerializationFormat::MsgPack) {
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::MsgPack { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::MsgPack { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: "none",
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                onclick: move |_| binary_format.set(BinaryFormat::MsgPack),
+
+                                                                "MsgPack"
+                                                            }
+                                                        }
+
+                                                        if detected_format == Some(SerializationFormat::Pickle) {
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Pickle { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Pickle { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: "none",
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Pickle),
+
+                                                                "Pickle"
+                                                            }
+                                                        }
+
+                                                        if matches!(detected_format, Some(SerializationFormat::Kryo) | Some(SerializationFormat::Fst)) {
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Kryo { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Kryo { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: "none",
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Kryo),
+
+                                                                "Kryo"
+                                                            }
+                                                        }
+
+                                                        button {
+                                                            padding: "4px 8px",
+                                                            background: if binary_format() == BinaryFormat::Bitmap { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if binary_format() == BinaryFormat::Bitmap { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                            border: "none",
+                                                            border_radius: "4px",
+                                                            cursor: "pointer",
+                                                            font_size: "12px",
+                                                            onclick: {
+                                                                let pool = connection_pool.clone();
+                                                                let key = display_key.clone();
+                                                                move |_| {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    spawn(async move {
+                                                                        match pool.get_bitmap_info(&key).await {
+                                                                            Ok(info) => {
+                                                                                bitmap_info.set(Some(info));
+                                                                                binary_format.set(BinaryFormat::Bitmap);
+                                                                            }
+                                                                            Err(e) => {
+                                                                                toast_manager.write().error(&format!("加载 Bitmap 失败: {}", e));
+                                                                            }
+                                                                        }
+                                                                    });
+                                                                }
+                                                            },
+
+                                                            "Bitmap"
+                                                        }
+
+                                                        button {
+                                                            padding: "4px 10px",
+                                                            background: "rgba(47, 133, 90, 0.16)",
+                                                            color: COLOR_SUCCESS,
+                                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                            border_radius: "6px",
+                                                            cursor: "pointer",
+                                                            font_size: "12px",
+                                                            display: "flex",
+                                                            align_items: "center",
+                                                            gap: "4px",
+                                                            title: "复制",
+                                                            onclick: move |_| {
+                                                                let current_format = binary_format();
+                                                                let serial_info = serialization_data();
+                                                                let current_str = string_value();
+                                                                let copy_text = match current_format {
+                                                                    BinaryFormat::JavaSerialized
+                                                                    | BinaryFormat::Php
+                                                                    | BinaryFormat::MsgPack
+                                                                    | BinaryFormat::Pickle
+                                                                    | BinaryFormat::Kryo => {
+                                                                        if let Some((fmt, data)) = serial_info.as_ref() {
+                                                                            parse_to_json(data, *fmt).unwrap_or(current_str)
+                                                                        } else {
+                                                                            current_str
+                                                                        }
+                                                                    }
+                                                                    _ => current_str,
+                                                                };
+                                                                match Clipboard::new() {
+                                                                    Ok(mut clipboard) => {
+                                                                        match clipboard.set_text(&copy_text) {
+                                                                            Ok(_) => {
+                                                                                toast_manager.write().success("复制成功");
+                                                                            }
+                                                                            Err(e) => {
+                                                                                toast_manager.write().error(&format!("复制失败：{}", e));
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    Err(e) => {
+                                                                        toast_manager.write().error(&format!("复制失败：{}", e));
+                                                                    }
+                                                                }
+                                                            },
+
+                                                            IconCopy { size: Some(14) }
+                                                            "复制"
+                                                        }
                                                     }
                                                 }
-                                            }
 
-                                            if is_binary() {
-                                                match binary_format() {
-                                                    BinaryFormat::JavaSerialized => {
-                                                        if let Some((SerializationFormat::Java, ref data)) = serialization_info {
-                                                            rsx! {
-                                                                JavaSerializedViewer {
-                                                                    data: data.clone(),
-                                                                }
-                                                            }
-                                                        } else {
-                                                            rsx! {
-                                                                div {
-                                                                    padding: "16px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    border_radius: "8px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-
-                                                                    "解析失败"
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    BinaryFormat::Php => {
-                                                        if let Some((SerializationFormat::Php, ref data)) = serialization_info {
-                                                            match parse_to_json(data, SerializationFormat::Php) {
-                                                                Ok(json_str) => rsx! {
-                                                                    JsonViewer {
-                                                                        value: json_str,
-                                                                        editable: false,
-                                                                        on_change: move |_| {},
+                                                if is_binary() {
+                                                    match binary_format() {
+                                                        BinaryFormat::JavaSerialized => {
+                                                            if let Some((SerializationFormat::Java, ref data)) = serialization_info {
+                                                                rsx! {
+                                                                    JavaSerializedViewer {
+                                                                        data: data.clone(),
                                                                     }
-                                                                },
-                                                                Err(e) => rsx! {
+                                                                }
+                                                            } else {
+                                                                rsx! {
                                                                     div {
                                                                         padding: "16px",
-                                                                        background: COLOR_ERROR_BG,
+                                                                        background: COLOR_BG_TERTIARY,
                                                                         border_radius: "8px",
-                                                                        color: COLOR_ERROR,
+                                                                        color: COLOR_TEXT_SECONDARY,
 
-                                                                        "PHP 解析错误: {e}"
+                                                                        "解析失败"
                                                                     }
-                                                                },
-                                                            }
-                                                        } else {
-                                                            rsx! {
-                                                                div {
-                                                                    padding: "16px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    border_radius: "8px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-
-                                                                    "解析失败"
                                                                 }
                                                             }
                                                         }
-                                                    }
-                                                    BinaryFormat::MsgPack => {
-                                                        if let Some((SerializationFormat::MsgPack, ref data)) = serialization_info {
-                                                            match parse_to_json(data, SerializationFormat::MsgPack) {
-                                                                Ok(json_str) => rsx! {
-                                                                    JsonViewer {
-                                                                        value: json_str,
-                                                                        editable: false,
-                                                                        on_change: move |_| {},
-                                                                    }
-                                                                },
-                                                                Err(e) => rsx! {
-                                                                    div {
-                                                                        padding: "16px",
-                                                                        background: COLOR_ERROR_BG,
-                                                                        border_radius: "8px",
-                                                                        color: COLOR_ERROR,
-
-                                                                        "MsgPack 解析错误: {e}"
-                                                                    }
-                                                                },
-                                                            }
-                                                        } else {
-                                                            rsx! {
-                                                                div {
-                                                                    padding: "16px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    border_radius: "8px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-
-                                                                    "解析失败"
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    BinaryFormat::Pickle => {
-                                                        if let Some((SerializationFormat::Pickle, ref data)) = serialization_info {
-                                                            match parse_to_json(data, SerializationFormat::Pickle) {
-                                                                Ok(json_str) => rsx! {
-                                                                    JsonViewer {
-                                                                        value: json_str,
-                                                                        editable: false,
-                                                                        on_change: move |_| {},
-                                                                    }
-                                                                },
-                                                                Err(e) => rsx! {
-                                                                    div {
-                                                                        padding: "16px",
-                                                                        background: COLOR_ERROR_BG,
-                                                                        border_radius: "8px",
-                                                                        color: COLOR_ERROR,
-
-                                                                        "Pickle 解析错误: {e}"
-                                                                    }
-                                                                },
-                                                            }
-                                                        } else {
-                                                            rsx! {
-                                                                div {
-                                                                    padding: "16px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    border_radius: "8px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-
-                                                                    "解析失败"
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    BinaryFormat::Kryo => {
-                                                        if let Some((ref format, ref data)) = serialization_info {
-                                                            if matches!(format, SerializationFormat::Kryo | SerializationFormat::Fst) {
-                                                                match parse_to_json(data, *format) {
+                                                        BinaryFormat::Php => {
+                                                            if let Some((SerializationFormat::Php, ref data)) = serialization_info {
+                                                                match parse_to_json(data, SerializationFormat::Php) {
                                                                     Ok(json_str) => rsx! {
                                                                         JsonViewer {
                                                                             value: json_str,
@@ -1468,7 +1375,7 @@ match info.key_type {
                                                                             border_radius: "8px",
                                                                             color: COLOR_ERROR,
 
-                                                                            "Kryo/FST 解析错误: {e}"
+                                                                            "PHP 解析错误: {e}"
                                                                         }
                                                                     },
                                                                 }
@@ -1480,452 +1387,390 @@ match info.key_type {
                                                                         border_radius: "8px",
                                                                         color: COLOR_TEXT_SECONDARY,
 
-                                                                        "非 Kryo/FST 数据"
+                                                                        "解析失败"
                                                                     }
                                                                 }
                                                             }
-                                                        } else {
-                                                            rsx! {
-                                                                div {
-                                                                    padding: "16px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    border_radius: "8px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-
-                                                                    "解析失败"
-                                                                }
-                                                            }
                                                         }
-                                                    }
-                                                    BinaryFormat::Bitmap => {
-                                                        if let Some(ref info) = bitmap_info() {
-                                                            rsx! {
-                                                                BitmapViewer {
-                                                                    info: info.clone(),
-                                                                    pool: connection_pool.clone(),
-                                                                    redis_key: display_key.clone(),
-                                                                    on_update: {
-                                                                        let pool = connection_pool.clone();
-                                                                        let key = display_key.clone();
-                                                                        move || {
-                                                                            let pool = pool.clone();
-                                                                            let key = key.clone();
-                                                                            spawn(async move {
-                                                                                if let Ok(new_info) = pool.get_bitmap_info(&key).await {
-                                                                                    bitmap_info.set(Some(new_info));
-                                                                                }
-                                                                            });
+                                                        BinaryFormat::MsgPack => {
+                                                            if let Some((SerializationFormat::MsgPack, ref data)) = serialization_info {
+                                                                match parse_to_json(data, SerializationFormat::MsgPack) {
+                                                                    Ok(json_str) => rsx! {
+                                                                        JsonViewer {
+                                                                            value: json_str,
+                                                                            editable: false,
+                                                                            on_change: move |_| {},
+                                                                        }
+                                                                    },
+                                                                    Err(e) => rsx! {
+                                                                        div {
+                                                                            padding: "16px",
+                                                                            background: COLOR_ERROR_BG,
+                                                                            border_radius: "8px",
+                                                                            color: COLOR_ERROR,
+
+                                                                            "MsgPack 解析错误: {e}"
                                                                         }
                                                                     },
                                                                 }
-                                                            }
-                                                        } else {
-                                                            rsx! {
-                                                                div {
-                                                                    padding: "16px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    border_radius: "8px",
-                                                                    color: COLOR_TEXT_SECONDARY,
+                                                            } else {
+                                                                rsx! {
+                                                                    div {
+                                                                        padding: "16px",
+                                                                        background: COLOR_BG_TERTIARY,
+                                                                        border_radius: "8px",
+                                                                        color: COLOR_TEXT_SECONDARY,
 
-                                                                    "点击 \"Bitmap\" 按钮加载可视化数据"
+                                                                        "解析失败"
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        BinaryFormat::Pickle => {
+                                                            if let Some((SerializationFormat::Pickle, ref data)) = serialization_info {
+                                                                match parse_to_json(data, SerializationFormat::Pickle) {
+                                                                    Ok(json_str) => rsx! {
+                                                                        JsonViewer {
+                                                                            value: json_str,
+                                                                            editable: false,
+                                                                            on_change: move |_| {},
+                                                                        }
+                                                                    },
+                                                                    Err(e) => rsx! {
+                                                                        div {
+                                                                            padding: "16px",
+                                                                            background: COLOR_ERROR_BG,
+                                                                            border_radius: "8px",
+                                                                            color: COLOR_ERROR,
+
+                                                                            "Pickle 解析错误: {e}"
+                                                                        }
+                                                                    },
+                                                                }
+                                                            } else {
+                                                                rsx! {
+                                                                    div {
+                                                                        padding: "16px",
+                                                                        background: COLOR_BG_TERTIARY,
+                                                                        border_radius: "8px",
+                                                                        color: COLOR_TEXT_SECONDARY,
+
+                                                                        "解析失败"
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        BinaryFormat::Kryo => {
+                                                            if let Some((ref format, ref data)) = serialization_info {
+                                                                if matches!(format, SerializationFormat::Kryo | SerializationFormat::Fst) {
+                                                                    match parse_to_json(data, *format) {
+                                                                        Ok(json_str) => rsx! {
+                                                                            JsonViewer {
+                                                                                value: json_str,
+                                                                                editable: false,
+                                                                                on_change: move |_| {},
+                                                                            }
+                                                                        },
+                                                                        Err(e) => rsx! {
+                                                                            div {
+                                                                                padding: "16px",
+                                                                                background: COLOR_ERROR_BG,
+                                                                                border_radius: "8px",
+                                                                                color: COLOR_ERROR,
+
+                                                                                "Kryo/FST 解析错误: {e}"
+                                                                            }
+                                                                        },
+                                                                    }
+                                                                } else {
+                                                                    rsx! {
+                                                                        div {
+                                                                            padding: "16px",
+                                                                            background: COLOR_BG_TERTIARY,
+                                                                            border_radius: "8px",
+                                                                            color: COLOR_TEXT_SECONDARY,
+
+                                                                            "非 Kryo/FST 数据"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                rsx! {
+                                                                    div {
+                                                                        padding: "16px",
+                                                                        background: COLOR_BG_TERTIARY,
+                                                                        border_radius: "8px",
+                                                                        color: COLOR_TEXT_SECONDARY,
+
+                                                                        "解析失败"
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        BinaryFormat::Bitmap => {
+                                                            if let Some(ref info) = bitmap_info() {
+                                                                rsx! {
+                                                                    BitmapViewer {
+                                                                        info: info.clone(),
+                                                                        pool: connection_pool.clone(),
+                                                                        redis_key: display_key.clone(),
+                                                                        on_update: {
+                                                                            let pool = connection_pool.clone();
+                                                                            let key = display_key.clone();
+                                                                            move || {
+                                                                                let pool = pool.clone();
+                                                                                let key = key.clone();
+                                                                                spawn(async move {
+                                                                                    if let Ok(new_info) = pool.get_bitmap_info(&key).await {
+                                                                                        bitmap_info.set(Some(new_info));
+                                                                                    }
+                                                                                });
+                                                                            }
+                                                                        },
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                rsx! {
+                                                                    div {
+                                                                        padding: "16px",
+                                                                        background: COLOR_BG_TERTIARY,
+                                                                        border_radius: "8px",
+                                                                        color: COLOR_TEXT_SECONDARY,
+
+                                                                        "点击 \"Bitmap\" 按钮加载可视化数据"
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        _ => {
+                                                            rsx! {
+                                                                EditableField {
+                                                                    label: String::new(),
+                                                                    value: str_val.clone(),
+                                                                    multiline: true,
+                                                                    editable: false,
+                                                                    on_change: move |_| {},
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                    _ => {
-                                                        rsx! {
-                                                            EditableField {
-                                                                label: String::new(),
-                                                                value: str_val.clone(),
-                                                                multiline: true,
-                                                                editable: false,
-                                                                on_change: move |_| {},
-                                                            }
+                                                } else if is_json {
+                                                JsonViewer {
+                                                    value: str_val.clone(),
+                                                    editable: true,
+                                                    on_change: {
+                                                        let pool = pool_for_edit.clone();
+                                                        let key_sig = key_for_edit.clone();
+                                                        move |new_val: String| {
+                                                            let pool = pool.clone();
+                                                            let key = key_sig.read().clone();
+                                                            let val = new_val.clone();
+                                                            spawn(async move {
+                                                                saving.set(true);
+                                                                if pool.set_string_value(&key, &val).await.is_ok() {
+                                                                    string_value.set(val);
+                                                                    on_refresh.call(());
+                                                                }
+                                                                saving.set(false);
+                                                            });
                                                         }
-                                                    }
+                                                    },
                                                 }
-                                            } else if is_json {
-                                            JsonViewer {
-                                                value: str_val.clone(),
-                                                editable: true,
-                                                on_change: {
-                                                    let pool = pool_for_edit.clone();
-                                                    let key_sig = key_for_edit.clone();
-                                                    move |new_val: String| {
-                                                        let pool = pool.clone();
-                                                        let key = key_sig.read().clone();
-                                                        let val = new_val.clone();
-                                                        spawn(async move {
-                                                            saving.set(true);
-                                                            if pool.set_string_value(&key, &val).await.is_ok() {
-                                                                string_value.set(val);
-                                                                on_refresh.call(());
-                                                            }
-                                                            saving.set(false);
-                                                        });
-                                                    }
-                                                },
-                                            }
-                                        } else {
-                                            EditableField {
-                                                label: "Value".to_string(),
-                                                value: str_val.clone(),
-                                                editable: !is_binary(),
-                                                multiline: true,
-                                                on_change: {
-                                                    let pool = pool_for_edit.clone();
-                                                    let key_sig = key_for_edit.clone();
-                                                    move |new_val: String| {
-                                                        let pool = pool.clone();
-                                                        let key = key_sig.read().clone();
-                                                        let val = new_val.clone();
-                                                        spawn(async move {
-                                                            saving.set(true);
-                                                            if pool.set_string_value(&key, &val).await.is_ok() {
-                                                                string_value.set(val);
-                                                                on_refresh.call(());
-                                                            }
-                                                            saving.set(false);
-                                                        });
-                                                    }
-                                                },
+                                            } else {
+                                                EditableField {
+                                                    label: "Value".to_string(),
+                                                    value: str_val.clone(),
+                                                    editable: !is_binary(),
+                                                    multiline: true,
+                                                    on_change: {
+                                                        let pool = pool_for_edit.clone();
+                                                        let key_sig = key_for_edit.clone();
+                                                        move |new_val: String| {
+                                                            let pool = pool.clone();
+                                                            let key = key_sig.read().clone();
+                                                            let val = new_val.clone();
+                                                            spawn(async move {
+                                                                saving.set(true);
+                                                                if pool.set_string_value(&key, &val).await.is_ok() {
+                                                                    string_value.set(val);
+                                                                    on_refresh.call(());
+                                                                }
+                                                                saving.set(false);
+                                                            });
+                                                        }
+                                                    },
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            KeyType::Hash => {
-                                rsx! {
-                                    div {
-                                        display: "flex",
-                                        justify_content: "space_between",
-                                        align_items: "center",
-                                        gap: "12px",
-                                        flex_wrap: "wrap",
-                                        margin_bottom: "12px",
-
+                                KeyType::Hash => {
+                                    rsx! {
                                         div {
                                             display: "flex",
-                                            gap: "8px",
+                                            justify_content: "space_between",
                                             align_items: "center",
+                                            gap: "12px",
                                             flex_wrap: "wrap",
+                                            margin_bottom: "12px",
 
-                                            input {
-                                                width: "280px",
-                                                max_width: "100%",
-                                                padding: "8px 10px",
-                                                background: COLOR_BG_TERTIARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "6px",
-                                                color: COLOR_TEXT,
-                                                value: "{search_value}",
-                                                placeholder: "搜索 key 或 value",
-                                                oninput: move |event| hash_search.set(event.value()),
+                                            div {
+                                                display: "flex",
+                                                gap: "8px",
+                                                align_items: "center",
+                                                flex_wrap: "wrap",
+
+                                                input {
+                                                    width: "280px",
+                                                    max_width: "100%",
+                                                    padding: "8px 10px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "6px",
+                                                    color: COLOR_TEXT,
+                                                    value: "{search_value}",
+                                                    placeholder: "搜索 key 或 value",
+                                                    oninput: move |event| hash_search.set(event.value()),
+                                                }
+
+                                                button {
+                                                    padding: "8px 12px",
+                                                    background: "#0e639c",
+                                                    color: COLOR_TEXT_CONTRAST,
+                                                    border: "none",
+                                                    border_radius: "6px",
+                                                    cursor: "pointer",
+                                                    disabled: active_hash_action.is_some(),
+                                                    onclick: move |_| {
+                                                        creating_hash_row.set(true);
+                                                        editing_hash_field.set(None);
+                                                        editing_hash_key.set(String::new());
+                                                        editing_hash_value.set(String::new());
+                                                        new_hash_key.set(String::new());
+                                                        new_hash_value.set(String::new());
+                                                        hash_status_message.set(String::new());
+                                                        hash_status_error.set(false);
+                                                    },
+
+                                                    "+ 新增行"
+                                                }
+
+                                                div {
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "Hash Fields ({filtered_entries.len()}/{hash_val.len()})"
+                                                }
+
+                                                if !status_message.is_empty() {
+                                                    div {
+                                                        color: "{status_color}",
+                                                        font_size: "12px",
+
+                                                        "{status_message}"
+                                                    }
+                                                }
                                             }
 
                                             button {
-                                                padding: "8px 12px",
-                                                background: "#0e639c",
-                                                color: COLOR_TEXT_CONTRAST,
-                                                border: "none",
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
                                                 border_radius: "6px",
                                                 cursor: "pointer",
-                                                disabled: active_hash_action.is_some(),
-                                                onclick: move |_| {
-                                                    creating_hash_row.set(true);
-                                                    editing_hash_field.set(None);
-                                                    editing_hash_key.set(String::new());
-                                                    editing_hash_value.set(String::new());
-                                                    new_hash_key.set(String::new());
-                                                    new_hash_value.set(String::new());
-                                                    hash_status_message.set(String::new());
-                                                    hash_status_error.set(false);
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
+                                                onclick: {
+                                                    let hash = hash_val.clone();
+                                                    move |_| {
+                                                        let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                hash_status_message.set("复制成功".to_string());
+                                                                hash_status_error.set(false);
+                                                            }
+                                                            Err(error) => {
+                                                                hash_status_message.set(format!("复制失败：{error}"));
+                                                                hash_status_error.set(true);
+                                                            }
+                                                        }
+                                                    }
                                                 },
 
-                                                "+ 新增行"
-                                            }
-
-                                            div {
-                                                color: COLOR_TEXT_SECONDARY,
-                                                font_size: "13px",
-
-                                                "Hash Fields ({filtered_entries.len()}/{hash_val.len()})"
-                                            }
-
-                                            if !status_message.is_empty() {
-                                                div {
-                                                    color: "{status_color}",
-                                                    font_size: "12px",
-
-                                                    "{status_message}"
-                                                }
+                                                IconCopy { size: Some(14) }
+                                                "复制"
                                             }
                                         }
 
-                                        button {
-                                            padding: "6px 10px",
-                                            background: "rgba(47, 133, 90, 0.16)",
-                                            color: COLOR_SUCCESS,
-                                            border: "1px solid rgba(104, 211, 145, 0.28)",
-                                            border_radius: "6px",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "4px",
-                                            title: "复制",
-                                            onclick: {
-                                                let hash = hash_val.clone();
-                                                move |_| {
-                                                    let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
-                                                    match copy_value_to_clipboard(&json) {
-                                                        Ok(_) => {
-                                                            hash_status_message.set("复制成功".to_string());
-                                                            hash_status_error.set(false);
-                                                        }
-                                                        Err(error) => {
-                                                            hash_status_message.set(format!("复制失败：{error}"));
-                                                            hash_status_error.set(true);
-                                                        }
-                                                    }
-                                                }
-                                            },
+                                        div {
+                                            overflow_x: "auto",
+                                            overflow_y: "auto",
+                                            max_height: "calc(100vh - 400px)",
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "8px",
+                                            background: COLOR_BG_SECONDARY,
 
-                                            IconCopy { size: Some(14) }
-                                            "复制"
-                                        }
-                                    }
+                                            table {
+                                                width: "100%",
+                                                border_collapse: "collapse",
 
-                                    div {
-                                        overflow_x: "auto",
-                                        overflow_y: "auto",
-                                        max_height: "calc(100vh - 400px)",
-                                        border: "1px solid {COLOR_BORDER}",
-                                        border_radius: "8px",
-                                        background: COLOR_BG_SECONDARY,
-
-                                        table {
-                                            width: "100%",
-                                            border_collapse: "collapse",
-
-                                            thead {
-                                                tr {
-                                                    background: COLOR_BG_TERTIARY,
-                                                    border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                    th {
-                                                        width: "72px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "ID"
-                                                    }
-
-                                                    th {
-                                                        width: "32%",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "key"
-                                                    }
-
-                                                    th {
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "value"
-                                                    }
-
-                                                    th {
-                                                        width: "156px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "action"
-                                                    }
-                                                }
-                                            }
-
-                                            tbody {
-                                                if creating_hash_row() {
+                                                thead {
                                                     tr {
-                                                        background: ROW_CREATE_BG,
+                                                        background: COLOR_BG_TERTIARY,
                                                         border_bottom: "1px solid {COLOR_BORDER}",
 
-                                                        td {
+                                                        th {
+                                                            width: "72px",
                                                             padding: "12px",
-                                                            color: COLOR_ACCENT,
-                                                            vertical_align: "top",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
 
-                                                            "+"
+                                                            "ID"
                                                         }
 
-                                                        td {
+                                                        th {
+                                                            width: "32%",
                                                             padding: "12px",
-                                                            vertical_align: "top",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
 
-                                                            input {
-                                                                width: "100%",
-                                                                padding: "8px 10px",
-                                                                background: COLOR_BG,
-                                                                border: "1px solid {COLOR_BORDER}",
-                                                                border_radius: "6px",
-                                                                color: COLOR_TEXT,
-                                                                value: "{new_hash_key}",
-                                                                placeholder: "输入 field key",
-                                                                oninput: move |event| new_hash_key.set(event.value()),
-                                                            }
+                                                            "key"
                                                         }
 
-                                                        td {
+                                                        th {
                                                             padding: "12px",
-                                                            vertical_align: "top",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
 
-                                                            textarea {
-                                                                width: "100%",
-                                                                min_height: "92px",
-                                                                padding: "8px 10px",
-                                                                background: COLOR_BG,
-                                                                border: "1px solid {COLOR_BORDER}",
-                                                                border_radius: "6px",
-                                                                color: COLOR_TEXT,
-                                                                font_family: "Consolas, 'Courier New', monospace",
-                                                                resize: "vertical",
-                                                                value: "{new_hash_value}",
-                                                                placeholder: "输入 field value",
-                                                                oninput: move |event| new_hash_value.set(event.value()),
-                                                            }
+                                                            "value"
                                                         }
 
-                                                        td {
+                                                        th {
+                                                            width: "156px",
                                                             padding: "12px",
-                                                            vertical_align: "top",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
 
-                                                            div {
-                                                                display: "flex",
-                                                                gap: "8px",
-                                                                align_items: "center",
-                                                                flex_wrap: "wrap",
-
-                                                                button {
-                                                                    padding: "6px 10px",
-                                                                    background: "#38a169",
-                                                                    color: COLOR_TEXT_CONTRAST,
-                                                                    border: "none",
-                                                                    border_radius: "6px",
-                                                                    cursor: "pointer",
-                                                                    disabled: active_hash_action.is_some(),
-                                                                    onclick: {
-                                                                        let pool = connection_pool.clone();
-                                                                        let key = display_key.clone();
-                                                                        let existing_hash = hash_val.clone();
-                                                                        move |_| {
-                                                                            let pool = pool.clone();
-                                                                            let key = key.clone();
-                                                                            let existing_hash = existing_hash.clone();
-                                                                            let field = new_hash_key().trim().to_string();
-                                                                            let value = new_hash_value();
-                                                                            spawn(async move {
-                                                                                if field.is_empty() {
-                                                                                    hash_status_message.set("新增失败：key 不能为空".to_string());
-                                                                                    hash_status_error.set(true);
-                                                                                    return;
-                                                                                }
-
-                                                                                if existing_hash.contains_key(&field) {
-                                                                                    hash_status_message.set("新增失败：key 已存在".to_string());
-                                                                                    hash_status_error.set(true);
-                                                                                    return;
-                                                                                }
-
-                                                                                hash_action.set(Some("create".to_string()));
-                                                                                hash_status_message.set(String::new());
-                                                                                hash_status_error.set(false);
-
-                                                                                match pool.hash_set_field(&key, &field, &value).await {
-                                                                                    Ok(_) => {
-                                                                                        creating_hash_row.set(false);
-                                                                                        new_hash_key.set(String::new());
-                                                                                        new_hash_value.set(String::new());
-                                                                                        hash_status_message.set("新增成功".to_string());
-                                                                                        hash_status_error.set(false);
-                                                                                        if let Err(error) = load_key_data(
-                                                                                            pool.clone(),
-                                                                                            key.clone(),
-                                                                                            key_info,
-                                                                                            string_value,
-                                                                                            hash_value,
-                                                                                            list_value,
-                                                                                            set_value,
-                                                                                            zset_value,
-                                                                                            stream_value,
-                                                                                            is_binary,
-                                                                                            binary_format,
-                                                                                            serialization_data,
-                                                                                            bitmap_info,
-                                                                                            loading,
-                                                                                        )
-                                                                                        .await
-                                                                                        {
-                                                                                            tracing::error!("{error}");
-                                                                                            hash_status_message.set(error);
-                                                                                            hash_status_error.set(true);
-                                                                                        } else {
-                                                                                            on_refresh.call(());
-                                                                                        }
-                                                                                    }
-                                                                                    Err(error) => {
-                                                                                        tracing::error!("Failed to create hash field: {}", error);
-                                                                                        hash_status_message.set(format!("新增失败：{error}"));
-                                                                                        hash_status_error.set(true);
-                                                                                    }
-                                                                                }
-
-                                                                                hash_action.set(None);
-                                                                            });
-                                                                        }
-                                                                    },
-
-                                                                    if active_hash_action.as_deref() == Some("create") { "保存中..." } else { "保存" }
-                                                                }
-
-                                                                button {
-                                                                    padding: "6px 10px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    color: COLOR_TEXT,
-                                                                    border: "none",
-                                                                    border_radius: "6px",
-                                                                    cursor: "pointer",
-                                                                    disabled: active_hash_action.is_some(),
-                                                                    onclick: move |_| {
-                                                                        creating_hash_row.set(false);
-                                                                        new_hash_key.set(String::new());
-                                                                        new_hash_value.set(String::new());
-                                                                    },
-
-                                                                    "取消"
-                                                                }
-                                                            }
+                                                            "action"
                                                         }
                                                     }
                                                 }
 
-                                                for (index, (field, value)) in filtered_entries.iter().enumerate() {
-                                                    if editing_field_name.as_deref() == Some(field.as_str()) {
+                                                tbody {
+                                                    if creating_hash_row() {
                                                         tr {
-                                                            key: "edit-{field}",
-                                                            background: ROW_EDIT_BG,
+                                                            background: ROW_CREATE_BG,
                                                             border_bottom: "1px solid {COLOR_BORDER}",
 
                                                             td {
@@ -1933,7 +1778,7 @@ match info.key_type {
                                                                 color: COLOR_ACCENT,
                                                                 vertical_align: "top",
 
-                                                                "{index + 1}"
+                                                                "+"
                                                             }
 
                                                             td {
@@ -1947,8 +1792,9 @@ match info.key_type {
                                                                     border: "1px solid {COLOR_BORDER}",
                                                                     border_radius: "6px",
                                                                     color: COLOR_TEXT,
-                                                                    value: "{editing_hash_key}",
-                                                                    oninput: move |event| editing_hash_key.set(event.value()),
+                                                                    value: "{new_hash_key}",
+                                                                    placeholder: "输入 field key",
+                                                                    oninput: move |event| new_hash_key.set(event.value()),
                                                                 }
                                                             }
 
@@ -1966,8 +1812,9 @@ match info.key_type {
                                                                     color: COLOR_TEXT,
                                                                     font_family: "Consolas, 'Courier New', monospace",
                                                                     resize: "vertical",
-                                                                    value: "{editing_hash_value}",
-                                                                    oninput: move |event| editing_hash_value.set(event.value()),
+                                                                    value: "{new_hash_value}",
+                                                                    placeholder: "输入 field value",
+                                                                    oninput: move |event| new_hash_value.set(event.value()),
                                                                 }
                                                             }
 
@@ -1992,47 +1839,36 @@ match info.key_type {
                                                                         onclick: {
                                                                             let pool = connection_pool.clone();
                                                                             let key = display_key.clone();
-                                                                            let original_field = field.clone();
                                                                             let existing_hash = hash_val.clone();
                                                                             move |_| {
                                                                                 let pool = pool.clone();
                                                                                 let key = key.clone();
-                                                                                let original_field = original_field.clone();
                                                                                 let existing_hash = existing_hash.clone();
-                                                                                let next_field = editing_hash_key().trim().to_string();
-                                                                                let next_value = editing_hash_value();
+                                                                                let field = new_hash_key().trim().to_string();
+                                                                                let value = new_hash_value();
                                                                                 spawn(async move {
-                                                                                    if next_field.is_empty() {
-                                                                                        hash_status_message.set("保存失败：key 不能为空".to_string());
+                                                                                    if field.is_empty() {
+                                                                                        hash_status_message.set("新增失败：key 不能为空".to_string());
                                                                                         hash_status_error.set(true);
                                                                                         return;
                                                                                     }
 
-                                                                                    if next_field != original_field && existing_hash.contains_key(&next_field) {
-                                                                                        hash_status_message.set("保存失败：目标 key 已存在".to_string());
+                                                                                    if existing_hash.contains_key(&field) {
+                                                                                        hash_status_message.set("新增失败：key 已存在".to_string());
                                                                                         hash_status_error.set(true);
                                                                                         return;
                                                                                     }
 
-                                                                                    hash_action.set(Some(format!("save:{}", original_field)));
+                                                                                    hash_action.set(Some("create".to_string()));
                                                                                     hash_status_message.set(String::new());
                                                                                     hash_status_error.set(false);
 
-                                                                                    let save_result = if next_field == original_field {
-                                                                                        pool.hash_set_field(&key, &next_field, &next_value).await
-                                                                                    } else {
-                                                                                        match pool.hash_set_field(&key, &next_field, &next_value).await {
-                                                                                            Ok(_) => pool.hash_delete_field(&key, &original_field).await.map(|_| ()),
-                                                                                            Err(error) => Err(error),
-                                                                                        }
-                                                                                    };
-
-                                                                                    match save_result {
+                                                                                    match pool.hash_set_field(&key, &field, &value).await {
                                                                                         Ok(_) => {
-                                                                                            editing_hash_field.set(None);
-                                                                                            editing_hash_key.set(String::new());
-                                                                                            editing_hash_value.set(String::new());
-                                                                                            hash_status_message.set("保存成功".to_string());
+                                                                                            creating_hash_row.set(false);
+                                                                                            new_hash_key.set(String::new());
+                                                                                            new_hash_value.set(String::new());
+                                                                                            hash_status_message.set("新增成功".to_string());
                                                                                             hash_status_error.set(false);
                                                                                             if let Err(error) = load_key_data(
                                                                                                 pool.clone(),
@@ -2060,8 +1896,8 @@ match info.key_type {
                                                                                             }
                                                                                         }
                                                                                         Err(error) => {
-                                                                                            tracing::error!("Failed to save hash field: {}", error);
-                                                                                            hash_status_message.set(format!("保存失败：{error}"));
+                                                                                            tracing::error!("Failed to create hash field: {}", error);
+                                                                                            hash_status_message.set(format!("新增失败：{error}"));
                                                                                             hash_status_error.set(true);
                                                                                         }
                                                                                     }
@@ -2071,7 +1907,7 @@ match info.key_type {
                                                                             }
                                                                         },
 
-                                                                        if active_hash_action.as_deref() == Some(format!("save:{field}").as_str()) { "保存中..." } else { "保存" }
+                                                                        if active_hash_action.as_deref() == Some("create") { "保存中..." } else { "保存" }
                                                                     }
 
                                                                     button {
@@ -2083,9 +1919,9 @@ match info.key_type {
                                                                         cursor: "pointer",
                                                                         disabled: active_hash_action.is_some(),
                                                                         onclick: move |_| {
-                                                                            editing_hash_field.set(None);
-                                                                            editing_hash_key.set(String::new());
-                                                                            editing_hash_value.set(String::new());
+                                                                            creating_hash_row.set(false);
+                                                                            new_hash_key.set(String::new());
+                                                                            new_hash_value.set(String::new());
                                                                         },
 
                                                                         "取消"
@@ -2093,166 +1929,1006 @@ match info.key_type {
                                                                 }
                                                             }
                                                         }
-                                                    } else {
-                                                        tr {
-                                                            key: "{field}",
-                                                            border_bottom: "1px solid {COLOR_BORDER}",
-                                                            background: COLOR_BG_SECONDARY,
+                                                    }
 
-                                                            td {
-                                                                padding: "12px",
-                                                                color: COLOR_TEXT_SECONDARY,
-                                                                vertical_align: "top",
+                                                    for (index, (field, value)) in filtered_entries.iter().enumerate() {
+                                                        if editing_field_name.as_deref() == Some(field.as_str()) {
+                                                            tr {
+                                                                key: "edit-{field}",
+                                                                background: ROW_EDIT_BG,
+                                                                border_bottom: "1px solid {COLOR_BORDER}",
 
-                                                                "{index + 1}"
-                                                            }
-
-                                                            td {
-                                                                padding: "12px",
-                                                                vertical_align: "top",
-
-                                                                div {
+                                                                td {
+                                                                    padding: "12px",
                                                                     color: COLOR_ACCENT,
-                                                                    font_size: "13px",
-                                                                    line_height: "1.5",
-                                                                    word_break: "break-all",
+                                                                    vertical_align: "top",
 
-                                                                    "{field}"
+                                                                    "{index + 1}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+                                                                    vertical_align: "top",
+
+                                                                    input {
+                                                                        width: "100%",
+                                                                        padding: "8px 10px",
+                                                                        background: COLOR_BG,
+                                                                        border: "1px solid {COLOR_BORDER}",
+                                                                        border_radius: "6px",
+                                                                        color: COLOR_TEXT,
+                                                                        value: "{editing_hash_key}",
+                                                                        oninput: move |event| editing_hash_key.set(event.value()),
+                                                                    }
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+                                                                    vertical_align: "top",
+
+                                                                    textarea {
+                                                                        width: "100%",
+                                                                        min_height: "92px",
+                                                                        padding: "8px 10px",
+                                                                        background: COLOR_BG,
+                                                                        border: "1px solid {COLOR_BORDER}",
+                                                                        border_radius: "6px",
+                                                                        color: COLOR_TEXT,
+                                                                        font_family: "Consolas, 'Courier New', monospace",
+                                                                        resize: "vertical",
+                                                                        value: "{editing_hash_value}",
+                                                                        oninput: move |event| editing_hash_value.set(event.value()),
+                                                                    }
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+                                                                    vertical_align: "top",
+
+                                                                    div {
+                                                                        display: "flex",
+                                                                        gap: "8px",
+                                                                        align_items: "center",
+                                                                        flex_wrap: "wrap",
+
+                                                                        button {
+                                                                            padding: "6px 10px",
+                                                                            background: "#38a169",
+                                                                            color: COLOR_TEXT_CONTRAST,
+                                                                            border: "none",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: active_hash_action.is_some(),
+                                                                            onclick: {
+                                                                                let pool = connection_pool.clone();
+                                                                                let key = display_key.clone();
+                                                                                let original_field = field.clone();
+                                                                                let existing_hash = hash_val.clone();
+                                                                                move |_| {
+                                                                                    let pool = pool.clone();
+                                                                                    let key = key.clone();
+                                                                                    let original_field = original_field.clone();
+                                                                                    let existing_hash = existing_hash.clone();
+                                                                                    let next_field = editing_hash_key().trim().to_string();
+                                                                                    let next_value = editing_hash_value();
+                                                                                    spawn(async move {
+                                                                                        if next_field.is_empty() {
+                                                                                            hash_status_message.set("保存失败：key 不能为空".to_string());
+                                                                                            hash_status_error.set(true);
+                                                                                            return;
+                                                                                        }
+
+                                                                                        if next_field != original_field && existing_hash.contains_key(&next_field) {
+                                                                                            hash_status_message.set("保存失败：目标 key 已存在".to_string());
+                                                                                            hash_status_error.set(true);
+                                                                                            return;
+                                                                                        }
+
+                                                                                        hash_action.set(Some(format!("save:{}", original_field)));
+                                                                                        hash_status_message.set(String::new());
+                                                                                        hash_status_error.set(false);
+
+                                                                                        let save_result = if next_field == original_field {
+                                                                                            pool.hash_set_field(&key, &next_field, &next_value).await
+                                                                                        } else {
+                                                                                            match pool.hash_set_field(&key, &next_field, &next_value).await {
+                                                                                                Ok(_) => pool.hash_delete_field(&key, &original_field).await.map(|_| ()),
+                                                                                                Err(error) => Err(error),
+                                                                                            }
+                                                                                        };
+
+                                                                                        match save_result {
+                                                                                            Ok(_) => {
+                                                                                                editing_hash_field.set(None);
+                                                                                                editing_hash_key.set(String::new());
+                                                                                                editing_hash_value.set(String::new());
+                                                                                                hash_status_message.set("保存成功".to_string());
+                                                                                                hash_status_error.set(false);
+                                                                                                if let Err(error) = load_key_data(
+                                                                                                    pool.clone(),
+                                                                                                    key.clone(),
+                                                                                                    key_info,
+                                                                                                    string_value,
+                                                                                                    hash_value,
+                                                                                                    list_value,
+                                                                                                    set_value,
+                                                                                                    zset_value,
+                                                                                                    stream_value,
+                                                                                                    is_binary,
+                                                                                                    binary_format,
+                                                                                                    serialization_data,
+                                                                                                    bitmap_info,
+                                                                                                    loading,
+                                                                                                )
+                                                                                                .await
+                                                                                                {
+                                                                                                    tracing::error!("{error}");
+                                                                                                    hash_status_message.set(error);
+                                                                                                    hash_status_error.set(true);
+                                                                                                } else {
+                                                                                                    on_refresh.call(());
+                                                                                                }
+                                                                                            }
+                                                                                            Err(error) => {
+                                                                                                tracing::error!("Failed to save hash field: {}", error);
+                                                                                                hash_status_message.set(format!("保存失败：{error}"));
+                                                                                                hash_status_error.set(true);
+                                                                                            }
+                                                                                        }
+
+                                                                                        hash_action.set(None);
+                                                                                    });
+                                                                                }
+                                                                            },
+
+                                                                            if active_hash_action.as_deref() == Some(format!("save:{field}").as_str()) { "保存中..." } else { "保存" }
+                                                                        }
+
+                                                                        button {
+                                                                            padding: "6px 10px",
+                                                                            background: COLOR_BG_TERTIARY,
+                                                                            color: COLOR_TEXT,
+                                                                            border: "none",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: active_hash_action.is_some(),
+                                                                            onclick: move |_| {
+                                                                                editing_hash_field.set(None);
+                                                                                editing_hash_key.set(String::new());
+                                                                                editing_hash_value.set(String::new());
+                                                                            },
+
+                                                                            "取消"
+                                                                        }
+                                                                    }
                                                                 }
                                                             }
+                                                        } else {
+                                                            tr {
+                                                                key: "{field}",
+                                                                border_bottom: "1px solid {COLOR_BORDER}",
+                                                                background: COLOR_BG_SECONDARY,
 
+                                                                td {
+                                                                    padding: "12px",
+                                                                    color: COLOR_TEXT_SECONDARY,
+                                                                    vertical_align: "top",
+
+                                                                    "{index + 1}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+                                                                    vertical_align: "top",
+
+                                                                    div {
+                                                                        color: COLOR_ACCENT,
+                                                                        font_size: "13px",
+                                                                        line_height: "1.5",
+                                                                        word_break: "break-all",
+
+                                                                        "{field}"
+                                                                    }
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+                                                                    vertical_align: "top",
+
+                                                                    div {
+                                                                        color: COLOR_TEXT,
+                                                                        font_size: "13px",
+                                                                        line_height: "1.6",
+                                                                        white_space: "pre-wrap",
+                                                                        word_break: "break-all",
+
+                                                                        "{value}"
+                                                                    }
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+                                                                    vertical_align: "top",
+
+                                                                    div {
+                                                                        display: "flex",
+                                                                        gap: "6px",
+                                                                        align_items: "center",
+                                                                        flex_wrap: "nowrap",
+
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(47, 133, 90, 0.16)",
+                                                                            color: "#68d391",
+                                                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: active_hash_action.is_some(),
+                                                                            title: "复制值",
+                                                                            aria_label: "复制值",
+                                                                            onclick: {
+                                                                                let value = value.clone();
+                                                                                move |_| {
+                                                                                    match copy_value_to_clipboard(&value) {
+                                                                                        Ok(_) => {
+                                                                                            hash_status_message.set("复制成功".to_string());
+                                                                                            hash_status_error.set(false);
+                                                                                        }
+                                                                                        Err(error) => {
+                                                                                            tracing::error!("Failed to copy hash value: {}", error);
+                                                                                            hash_status_message.set(format!("复制失败：{error}"));
+                                                                                            hash_status_error.set(true);
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+
+                                                                            IconCopy { size: Some(15) }
+                                                                        }
+
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(49, 130, 206, 0.18)",
+                                                                            color: "#63b3ed",
+                                                                            border: "1px solid rgba(99, 179, 237, 0.30)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: active_hash_action.is_some(),
+                                                                            title: "编辑 key-value",
+                                                                            aria_label: "编辑 key-value",
+                                                                            onclick: {
+                                                                                let field = field.clone();
+                                                                                let value = value.clone();
+                                                                                move |_| {
+                                                                                    creating_hash_row.set(false);
+                                                                                    new_hash_key.set(String::new());
+                                                                                    new_hash_value.set(String::new());
+                                                                                    editing_hash_field.set(Some(field.clone()));
+                                                                                    editing_hash_key.set(field.clone());
+                                                                                    editing_hash_value.set(value.clone());
+                                                                                    hash_status_message.set(String::new());
+                                                                                    hash_status_error.set(false);
+                                                                                }
+                                                                            },
+
+                                                                            IconEdit { size: Some(15) }
+                                                                        }
+
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(197, 48, 48, 0.18)",
+                                                                            color: "#f87171",
+                                                                            border: "1px solid rgba(248, 113, 113, 0.30)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: active_hash_action.is_some(),
+                                                                            onclick: {
+                                                                                let field = field.clone();
+                                                                                move |_| {
+                                                                                    deleting_hash_field.set(Some(HashDeleteTarget { field: field.clone() }));
+                                                                                }
+                                                                            },
+                                                                            title: "删除",
+                                                                            aria_label: "删除",
+
+                                                                            IconTrash { size: Some(15) }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    if filtered_entries.is_empty() && !creating_hash_row() {
+                                                        tr {
                                                             td {
-                                                                padding: "12px",
-                                                                vertical_align: "top",
+                                                                colspan: "4",
+                                                                padding: "20px 12px",
+                                                                color: COLOR_TEXT_SECONDARY,
+                                                                text_align: "center",
 
-                                                                div {
+                                                                if normalized_search.is_empty() {
+                                                                    "当前 hash 没有字段"
+                                                                } else {
+                                                                    "没有匹配的字段"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if let Some(target) = delete_target {
+                                            div {
+                                                position: "fixed",
+                                                top: "0",
+                                                left: "0",
+                                                right: "0",
+                                                bottom: "0",
+                                                background: "rgba(0, 0, 0, 0.7)",
+                                                display: "flex",
+                                                align_items: "center",
+                                                justify_content: "center",
+                                                z_index: "1000",
+
+                                                div {
+                                                    width: "420px",
+                                                    max_width: "calc(100vw - 32px)",
+                                                    background: COLOR_BG_SECONDARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "10px",
+                                                    padding: "20px",
+
+                                                    h3 {
+                                                        color: COLOR_TEXT,
+                                                        margin: "0 0 12px 0",
+                                                        font_size: "18px",
+
+                                                        "确认删除"
+                                                    }
+
+                                                    p {
+                                                        color: COLOR_TEXT_SOFT,
+                                                        margin: "0 0 18px 0",
+                                                        line_height: "1.6",
+                                                        word_break: "break-all",
+
+                                                        "确定删除 hash field '{target.field}' 吗？"
+                                                    }
+
+                                                    div {
+                                                        display: "flex",
+                                                        justify_content: "flex_end",
+                                                        gap: "8px",
+
+                                                        button {
+                                                            padding: "8px 12px",
+                                                            background: COLOR_BG_TERTIARY,
+                                                            color: COLOR_TEXT,
+                                                            border: "none",
+                                                            border_radius: "6px",
+                                                            cursor: "pointer",
+                                                            disabled: active_hash_action.is_some(),
+                                                            onclick: move |_| deleting_hash_field.set(None),
+
+                                                            "取消"
+                                                        }
+
+                                                        button {
+                                                            padding: "8px 12px",
+                                                            background: "#c53030",
+                                                            color: COLOR_TEXT_CONTRAST,
+                                                            border: "none",
+                                                            border_radius: "6px",
+                                                            cursor: "pointer",
+                                                            disabled: active_hash_action.is_some(),
+                                                            onclick: {
+                                                                let pool = connection_pool.clone();
+                                                                let key = display_key.clone();
+                                                                let field = target.field.clone();
+                                                                let delete_action = format!("delete:{}", target.field);
+                                                                move |_| {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    let field = field.clone();
+                                                                    let delete_action = delete_action.clone();
+                                                                    spawn(async move {
+                                                                        hash_action.set(Some(delete_action));
+                                                                        hash_status_message.set(String::new());
+                                                                        hash_status_error.set(false);
+
+                                                                        match pool.hash_delete_field(&key, &field).await {
+                                                                            Ok(_) => {
+                                                                                deleting_hash_field.set(None);
+                                                                                if editing_hash_field().as_deref() == Some(field.as_str()) {
+                                                                                    editing_hash_field.set(None);
+                                                                                    editing_hash_key.set(String::new());
+                                                                                    editing_hash_value.set(String::new());
+                                                                                }
+                                                                                hash_status_message.set("删除成功".to_string());
+                                                                                hash_status_error.set(false);
+        if let Err(error) = load_key_data(
+                                                                                                pool.clone(),
+                                                                                                key.clone(),
+                                                                                                key_info,
+                                                                                                string_value,
+                                                                                                hash_value,
+                                                                                                list_value,
+                                                                                                set_value,
+                                                                                                zset_value,
+                                                                                                stream_value,
+                                                                                                is_binary,
+                                                                                                binary_format,
+                                                                                                serialization_data,
+                                                                                                bitmap_info,
+                                                                                                loading,
+                                                                                            )
+                                                                                .await
+                                                                                {
+                                                                                    tracing::error!("{error}");
+                                                                                    hash_status_message.set(error);
+                                                                                    hash_status_error.set(true);
+                                                                                } else {
+                                                                                    on_refresh.call(());
+                                                                                }
+                                                                            }
+                                                                            Err(error) => {
+                                                                                tracing::error!("Failed to delete hash field: {}", error);
+                                                                                hash_status_message.set(format!("删除失败：{error}"));
+                                                                                hash_status_error.set(true);
+                                                                            }
+                                                                        }
+
+                                                                        hash_action.set(None);
+                                                                    });
+                                                                }
+                                                            },
+
+                                                            if active_hash_action.as_deref() == Some(format!("delete:{}", target.field).as_str()) {
+                                                                "删除中..."
+                                                            } else {
+                                                                "确认删除"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                KeyType::List => {
+                                    rsx! {
+                                        div {
+                                            display: "flex",
+                                            justify_content: "space_between",
+                                            align_items: "center",
+                                            gap: "12px",
+                                            margin_bottom: "12px",
+
+                                            div {
+                                                display: "flex",
+                                                gap: "8px",
+                                                align_items: "center",
+
+                                                input {
+                                                    width: "300px",
+                                                    padding: "8px 10px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "6px",
+                                                    color: COLOR_TEXT,
+                                                    value: "{new_list_value}",
+                                                    placeholder: "输入新元素值",
+                                                    oninput: move |event| new_list_value.set(event.value()),
+                                                }
+
+                                                button {
+                                                    padding: "8px 12px",
+                                                    background: "#38a169",
+                                                    color: COLOR_TEXT_CONTRAST,
+                                                    border: "none",
+                                                    border_radius: "6px",
+                                                    cursor: "pointer",
+                                                    disabled: list_action().is_some(),
+                                                    onclick: {
+                                                        let pool = connection_pool.clone();
+                                                        let key = display_key.clone();
+                                                        move |_| {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let value = new_list_value();
+                                                            spawn(async move {
+                                                                if value.trim().is_empty() {
+                                                                    list_status_message.set("值不能为空".to_string());
+                                                                    list_status_error.set(true);
+                                                                    return;
+                                                                }
+
+                                                                list_action.set(Some("push".to_string()));
+                                                                list_status_message.set(String::new());
+                                                                list_status_error.set(false);
+
+                                                                match pool.list_push(&key, &value, true).await {
+                                                                    Ok(_) => {
+                                                                        new_list_value.set(String::new());
+                                                                        list_status_message.set("添加成功".to_string());
+                                                                        list_status_error.set(false);
+                                                                        if let Err(error) = load_key_data(
+                                                                            pool.clone(),
+                                                                            key.clone(),
+                                                                            key_info,
+                                                                            string_value,
+                                                                            hash_value,
+                                                                            list_value,
+                                                                            set_value,
+                                                                            zset_value,
+                                                                            stream_value,
+                                                                            is_binary,
+                                                                            binary_format,
+                                                                            serialization_data,
+                                                                            bitmap_info,
+                                                                            loading,
+                                                                        ).await {
+                                                                            tracing::error!("{error}");
+                                                                        } else {
+                                                                            on_refresh.call(());
+                                                                        }
+                                                                    }
+                                                                    Err(error) => {
+                                                                        list_status_message.set(format!("添加失败：{error}"));
+                                                                        list_status_error.set(true);
+                                                                    }
+                                                                }
+                                                                list_action.set(None);
+                                                            });
+                                                        }
+                                                    },
+
+                                                    if list_action().as_deref() == Some("push") { "添加中..." } else { "LPUSH" }
+                                                }
+
+                                                button {
+                                                    padding: "8px 12px",
+                                                    background: "#0e639c",
+                                                    color: COLOR_TEXT_CONTRAST,
+                                                    border: "none",
+                                                    border_radius: "6px",
+                                                    cursor: "pointer",
+                                                    disabled: list_action().is_some(),
+                                                    onclick: {
+                                                        let pool = connection_pool.clone();
+                                                        let key = display_key.clone();
+                                                        move |_| {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let value = new_list_value();
+                                                            spawn(async move {
+                                                                if value.trim().is_empty() {
+                                                                    list_status_message.set("值不能为空".to_string());
+                                                                    list_status_error.set(true);
+                                                                    return;
+                                                                }
+
+                                                                list_action.set(Some("rpush".to_string()));
+                                                                match pool.list_push(&key, &value, false).await {
+                                                                    Ok(_) => {
+                                                                        new_list_value.set(String::new());
+                                                                        list_status_message.set("添加成功".to_string());
+                                                                        list_status_error.set(false);
+                                                                        if let Err(error) = load_key_data(
+                                                                            pool.clone(),
+                                                                            key.clone(),
+                                                                            key_info,
+                                                                            string_value,
+                                                                            hash_value,
+                                                                            list_value,
+                                                                            set_value,
+                                                                            zset_value,
+                                                                            stream_value,
+                                                                            is_binary,
+                                                                            binary_format,
+                                                                            serialization_data,
+                                                                            bitmap_info,
+                                                                            loading,
+                                                                        ).await {
+                                                                            tracing::error!("{error}");
+                                                                        } else {
+                                                                            on_refresh.call(());
+                                                                        }
+                                                                    }
+                                                                    Err(error) => {
+                                                                        list_status_message.set(format!("添加失败：{error}"));
+                                                                        list_status_error.set(true);
+                                                                    }
+                                                                }
+                                                                list_action.set(None);
+                                                            });
+                                                        }
+                                                    },
+
+                                                    "RPUSH"
+                                                }
+
+                                                div {
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "List Items ({list_val.len()})"
+                                                }
+                                            }
+
+                                            button {
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                border_radius: "6px",
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
+                                                onclick: {
+                                                    let list = list_val.clone();
+                                                    move |_| {
+                                                        let json = serde_json::to_string_pretty(&list).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                list_status_message.set("复制成功".to_string());
+                                                                list_status_error.set(false);
+                                                            }
+                                                            Err(error) => {
+                                                                list_status_message.set(format!("复制失败：{error}"));
+                                                                list_status_error.set(true);
+                                                            }
+                                                        }
+                                                    }
+                                                },
+
+                                                IconCopy { size: Some(14) }
+                                                "复制"
+                                            }
+                                        }
+
+                                        if !list_status_message.read().is_empty() {
+                                            div {
+                                                margin_bottom: "12px",
+                                                padding: "8px 12px",
+                                                background: if list_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
+                                                border_radius: "6px",
+                                                color: if list_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
+                                                font_size: "13px",
+
+                                                "{list_status_message}"
+                                            }
+                                        }
+
+                                        if list_val.len() > LARGE_KEY_THRESHOLD {
+                                            LargeKeyWarning {
+                                                key_type: "List".to_string(),
+                                                size: list_val.len(),
+                                                threshold: LARGE_KEY_THRESHOLD,
+                                            }
+                                        }
+
+                                        div {
+                                            overflow_x: "auto",
+                                            overflow_y: "auto",
+                                            max_height: "calc(100vh - 400px)",
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "8px",
+                                            background: COLOR_BG_SECONDARY,
+
+                                            table {
+                                                width: "100%",
+                                                border_collapse: "collapse",
+
+                                                thead {
+                                                    tr {
+                                                        background: COLOR_BG_TERTIARY,
+                                                        border_bottom: "1px solid {COLOR_BORDER}",
+
+                                                        th {
+                                                            width: "72px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
+
+                                                            "Index"
+                                                        }
+
+                                                        th {
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
+
+                                                            "Value"
+                                                        }
+
+                                                        th {
+                                                            width: "156px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
+
+                                                            "Action"
+                                                        }
+                                                    }
+                                                }
+
+                                                tbody {
+                                                    for (idx, value) in list_val.iter().enumerate() {
+                                                        if editing_list_index() == Some(idx) {
+                                                            tr {
+                                                                background: ROW_EDIT_BG,
+                                                                border_bottom: "1px solid {COLOR_BORDER}",
+
+                                                                td {
+                                                                    padding: "12px",
+                                                                    color: COLOR_ACCENT,
+
+                                                                    "{idx}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+
+                                                                    input {
+                                                                        width: "100%",
+                                                                        padding: "8px 10px",
+                                                                        background: COLOR_BG,
+                                                                        border: "1px solid {COLOR_BORDER}",
+                                                                        border_radius: "6px",
+                                                                        color: COLOR_TEXT,
+                                                                        value: "{editing_list_value}",
+                                                                        oninput: move |event| editing_list_value.set(event.value()),
+                                                                    }
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+
+                                                                    div {
+                                                                        display: "flex",
+                                                                        gap: "8px",
+
+                                                                        button {
+                                                                            padding: "6px 10px",
+                                                                            background: "#38a169",
+                                                                            color: COLOR_TEXT_CONTRAST,
+                                                                            border: "none",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: list_action().is_some(),
+                                                                            onclick: {
+                                                                                let pool = connection_pool.clone();
+                                                                                let key = display_key.clone();
+                                                                                let idx = idx as i64;
+                                                                                move |_| {
+                                                                                    let pool = pool.clone();
+                                                                                    let key = key.clone();
+                                                                                    let new_val = editing_list_value();
+                                                                                    spawn(async move {
+                                                                                        list_action.set(Some("set".to_string()));
+                                                                                        match pool.list_set(&key, idx, &new_val).await {
+                                                                                            Ok(_) => {
+                                                                                                editing_list_index.set(None);
+                                                                                                list_status_message.set("修改成功".to_string());
+                                                                                                list_status_error.set(false);
+                                                                                                if let Err(error) = load_key_data(
+                                                                                                    pool.clone(),
+                                                                                                    key.clone(),
+                                                                                                    key_info,
+                                                                                                    string_value,
+                                                                                                    hash_value,
+                                                                                                    list_value,
+                                                                                                    set_value,
+                                                                                                    zset_value,
+                                                                                                    stream_value,
+                                                                                                    is_binary,
+                                                                                                    binary_format,
+                                                                                                    serialization_data,
+                                                                                                    bitmap_info,
+                                                                                                    loading,
+                                                                                                ).await {
+                                                                                                    tracing::error!("{error}");
+                                                                                                } else {
+                                                                                                    on_refresh.call(());
+                                                                                                }
+                                                                                            }
+                                                                                            Err(error) => {
+                                                                                                list_status_message.set(format!("修改失败：{error}"));
+                                                                                                list_status_error.set(true);
+                                                                                            }
+                                                                                        }
+                                                                                        list_action.set(None);
+                                                                                    });
+                                                                                }
+                                                                            },
+
+                                                                            "保存"
+                                                                        }
+
+                                                                        button {
+                                                                            padding: "6px 10px",
+                                                                            background: COLOR_BG_TERTIARY,
+                                                                            color: COLOR_TEXT,
+                                                                            border: "none",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            onclick: move |_| {
+                                                                                editing_list_index.set(None);
+                                                                            },
+
+                                                                            "取消"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        } else {
+                                                            tr {
+                                                                key: "{idx}",
+                                                                border_bottom: "1px solid {COLOR_BORDER}",
+                                                                background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
+
+                                                                td {
+                                                                    padding: "12px",
+                                                                    color: COLOR_TEXT_SECONDARY,
+
+                                                                    "{idx}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
                                                                     color: COLOR_TEXT,
+                                                                    font_family: "Consolas, monospace",
                                                                     font_size: "13px",
-                                                                    line_height: "1.6",
-                                                                    white_space: "pre-wrap",
                                                                     word_break: "break-all",
 
                                                                     "{value}"
                                                                 }
-                                                            }
 
-                                                            td {
-                                                                padding: "12px",
-                                                                vertical_align: "top",
+                                                                td {
+                                                                    padding: "12px",
 
-                                                                div {
-                                                                    display: "flex",
-                                                                    gap: "6px",
-                                                                    align_items: "center",
-                                                                    flex_wrap: "nowrap",
-
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
+                                                                    div {
                                                                         display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                                        color: "#68d391",
-                                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: active_hash_action.is_some(),
-                                                                        title: "复制值",
-                                                                        aria_label: "复制值",
-                                                                        onclick: {
-                                                                            let value = value.clone();
-                                                                            move |_| {
-                                                                                match copy_value_to_clipboard(&value) {
-                                                                                    Ok(_) => {
-                                                                                        hash_status_message.set("复制成功".to_string());
-                                                                                        hash_status_error.set(false);
-                                                                                    }
-                                                                                    Err(error) => {
-                                                                                        tracing::error!("Failed to copy hash value: {}", error);
-                                                                                        hash_status_message.set(format!("复制失败：{error}"));
-                                                                                        hash_status_error.set(true);
+                                                                        gap: "6px",
+
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(47, 133, 90, 0.16)",
+                                                                            color: "#68d391",
+                                                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            title: "复制",
+                                                                            onclick: {
+                                                                                let value = value.clone();
+                                                                                move |_| {
+                                                                                    match copy_value_to_clipboard(&value) {
+                                                                                        Ok(_) => {
+                                                                                            list_status_message.set("复制成功".to_string());
+                                                                                            list_status_error.set(false);
+                                                                                        }
+                                                                                        Err(error) => {
+                                                                                            list_status_message.set(format!("复制失败：{error}"));
+                                                                                            list_status_error.set(true);
+                                                                                        }
                                                                                     }
                                                                                 }
-                                                                            }
-                                                                        },
+                                                                            },
 
-                                                                        IconCopy { size: Some(15) }
-                                                                    }
+                                                                            IconCopy { size: Some(15) }
+                                                                        }
 
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(49, 130, 206, 0.18)",
-                                                                        color: "#63b3ed",
-                                                                        border: "1px solid rgba(99, 179, 237, 0.30)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: active_hash_action.is_some(),
-                                                                        title: "编辑 key-value",
-                                                                        aria_label: "编辑 key-value",
-                                                                        onclick: {
-                                                                            let field = field.clone();
-                                                                            let value = value.clone();
-                                                                            move |_| {
-                                                                                creating_hash_row.set(false);
-                                                                                new_hash_key.set(String::new());
-                                                                                new_hash_value.set(String::new());
-                                                                                editing_hash_field.set(Some(field.clone()));
-                                                                                editing_hash_key.set(field.clone());
-                                                                                editing_hash_value.set(value.clone());
-                                                                                hash_status_message.set(String::new());
-                                                                                hash_status_error.set(false);
-                                                                            }
-                                                                        },
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(49, 130, 206, 0.18)",
+                                                                            color: "#63b3ed",
+                                                                            border: "1px solid rgba(99, 179, 237, 0.30)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            title: "编辑",
+                                                                            onclick: {
+                                                                                let value = value.clone();
+                                                                                move |_| {
+                                                                                    editing_list_index.set(Some(idx));
+                                                                                    editing_list_value.set(value.clone());
+                                                                                }
+                                                                            },
 
-                                                                        IconEdit { size: Some(15) }
-                                                                    }
+                                                                            IconEdit { size: Some(15) }
+                                                                        }
 
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(197, 48, 48, 0.18)",
-                                                                        color: "#f87171",
-                                                                        border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: active_hash_action.is_some(),
-                                                                        onclick: {
-                                                                            let field = field.clone();
-                                                                            move |_| {
-                                                                                deleting_hash_field.set(Some(HashDeleteTarget { field: field.clone() }));
-                                                                            }
-                                                                        },
-                                                                        title: "删除",
-                                                                        aria_label: "删除",
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(197, 48, 48, 0.18)",
+                                                                            color: "#f87171",
+                                                                            border: "1px solid rgba(248, 113, 113, 0.30)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            title: "删除",
+                                                                            onclick: {
+                                                                                let pool = connection_pool.clone();
+                                                                                let key = display_key.clone();
+                                                                                let value = value.clone();
+                                                                                move |_| {
+                                                                                    let pool = pool.clone();
+                                                                                    let key = key.clone();
+                                                                                    let value = value.clone();
+                                                                                    spawn(async move {
+                                                                                        list_action.set(Some("remove".to_string()));
+                                                                                        match pool.list_remove(&key, 1, &value).await {
+                                                                                            Ok(_) => {
+                                                                                                list_status_message.set("删除成功".to_string());
+                                                                                                list_status_error.set(false);
+                                                                                                if let Err(error) = load_key_data(
+                                                                                                    pool.clone(),
+                                                                                                    key.clone(),
+                                                                                                    key_info,
+                                                                                                    string_value,
+                                                                                                    hash_value,
+                                                                                                    list_value,
+                                                                                                    set_value,
+                                                                                                    zset_value,
+                                                                                                    stream_value,
+                                                                                                    is_binary,
+                                                                                                    binary_format,
+                                                                                                    serialization_data,
+                                                                                                    bitmap_info,
+                                                                                                    loading,
+                                                                                                ).await {
+                                                                                                    tracing::error!("{error}");
+                                                                                                } else {
+                                                                                                    on_refresh.call(());
+                                                                                                }
+                                                                                            }
+                                                                                            Err(error) => {
+                                                                                                list_status_message.set(format!("删除失败：{error}"));
+                                                                                                list_status_error.set(true);
+                                                                                            }
+                                                                                        }
+                                                                                        list_action.set(None);
+                                                                                    });
+                                                                                }
+                                                                            },
 
-                                                                        IconTrash { size: Some(15) }
+                                                                            IconTrash { size: Some(15) }
+                                                                        }
                                                                     }
                                                                 }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-
-                                                if filtered_entries.is_empty() && !creating_hash_row() {
-                                                    tr {
-                                                        td {
-                                                            colspan: "4",
-                                                            padding: "20px 12px",
-                                                            color: COLOR_TEXT_SECONDARY,
-                                                            text_align: "center",
-
-                                                            if normalized_search.is_empty() {
-                                                                "当前 hash 没有字段"
-                                                            } else {
-                                                                "没有匹配的字段"
                                                             }
                                                         }
                                                     }
@@ -2260,1175 +2936,510 @@ match info.key_type {
                                             }
                                         }
                                     }
-
-                                    if let Some(target) = delete_target {
+                                }
+                                KeyType::Set => {
+                                    rsx! {
                                         div {
-                                            position: "fixed",
-                                            top: "0",
-                                            left: "0",
-                                            right: "0",
-                                            bottom: "0",
-                                            background: "rgba(0, 0, 0, 0.7)",
                                             display: "flex",
+                                            justify_content: "space_between",
                                             align_items: "center",
-                                            justify_content: "center",
-                                            z_index: "1000",
+                                            gap: "12px",
+                                            margin_bottom: "12px",
 
                                             div {
-                                                width: "420px",
-                                                max_width: "calc(100vw - 32px)",
-                                                background: COLOR_BG_SECONDARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "10px",
-                                                padding: "20px",
+                                                display: "flex",
+                                                gap: "8px",
+                                                align_items: "center",
 
-                                                h3 {
+                                                input {
+                                                    width: "200px",
+                                                    padding: "8px 10px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "6px",
                                                     color: COLOR_TEXT,
-                                                    margin: "0 0 12px 0",
-                                                    font_size: "18px",
-
-                                                    "确认删除"
+                                                    value: "{set_search}",
+                                                    placeholder: "搜索成员",
+                                                    oninput: move |event| set_search.set(event.value()),
                                                 }
 
-                                                p {
-                                                    color: COLOR_TEXT_SOFT,
-                                                    margin: "0 0 18px 0",
-                                                    line_height: "1.6",
-                                                    word_break: "break-all",
+                                                input {
+                                                    width: "200px",
+                                                    padding: "8px 10px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "6px",
+                                                    color: COLOR_TEXT,
+                                                    value: "{new_set_member}",
+                                                    placeholder: "输入新成员",
+                                                    oninput: move |event| new_set_member.set(event.value()),
+                                                }
 
-                                                    "确定删除 hash field '{target.field}' 吗？"
+                                                button {
+                                                    padding: "8px 12px",
+                                                    background: "#38a169",
+                                                    color: COLOR_TEXT_CONTRAST,
+                                                    border: "none",
+                                                    border_radius: "6px",
+                                                    cursor: "pointer",
+                                                    disabled: set_action().is_some(),
+                                                    onclick: {
+                                                        let pool = connection_pool.clone();
+                                                        let key = display_key.clone();
+                                                        move |_| {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let member = new_set_member();
+                                                            spawn(async move {
+                                                                if member.trim().is_empty() {
+                                                                    set_status_message.set("成员不能为空".to_string());
+                                                                    set_status_error.set(true);
+                                                                    return;
+                                                                }
+
+                                                                set_action.set(Some("add".to_string()));
+                                                                set_status_message.set(String::new());
+                                                                set_status_error.set(false);
+
+                                                                match pool.set_add(&key, &member).await {
+                                                                    Ok(true) => {
+                                                                        new_set_member.set(String::new());
+                                                                        set_status_message.set("添加成功".to_string());
+                                                                        set_status_error.set(false);
+                                                                        if let Err(error) = load_key_data(
+                                                                            pool.clone(),
+                                                                            key.clone(),
+                                                                            key_info,
+                                                                            string_value,
+                                                                            hash_value,
+                                                                            list_value,
+                                                                            set_value,
+                                                                            zset_value,
+                                                                            stream_value,
+                                                                            is_binary,
+                                                                            binary_format,
+                                                                            serialization_data,
+                                                                            bitmap_info,
+                                                                            loading,
+                                                                        ).await {
+                                                                            tracing::error!("{error}");
+                                                                        } else {
+                                                                            on_refresh.call(());
+                                                                        }
+                                                                    }
+                                                                    Ok(false) => {
+                                                                        set_status_message.set("成员已存在".to_string());
+                                                                        set_status_error.set(true);
+                                                                    }
+                                                                    Err(error) => {
+                                                                        set_status_message.set(format!("添加失败：{error}"));
+                                                                        set_status_error.set(true);
+                                                                    }
+                                                                }
+                                                                set_action.set(None);
+                                                            });
+                                                        }
+                                                    },
+
+                                                    if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
                                                 }
 
                                                 div {
-                                                    display: "flex",
-                                                    justify_content: "flex_end",
-                                                    gap: "8px",
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
 
-                                                    button {
-                                                        padding: "8px 12px",
-                                                        background: COLOR_BG_TERTIARY,
-                                                        color: COLOR_TEXT,
-                                                        border: "none",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        disabled: active_hash_action.is_some(),
-                                                        onclick: move |_| deleting_hash_field.set(None),
-
-                                                        "取消"
-                                                    }
-
-                                                    button {
-                                                        padding: "8px 12px",
-                                                        background: "#c53030",
-                                                        color: COLOR_TEXT_CONTRAST,
-                                                        border: "none",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        disabled: active_hash_action.is_some(),
-                                                        onclick: {
-                                                            let pool = connection_pool.clone();
-                                                            let key = display_key.clone();
-                                                            let field = target.field.clone();
-                                                            let delete_action = format!("delete:{}", target.field);
-                                                            move |_| {
-                                                                let pool = pool.clone();
-                                                                let key = key.clone();
-                                                                let field = field.clone();
-                                                                let delete_action = delete_action.clone();
-                                                                spawn(async move {
-                                                                    hash_action.set(Some(delete_action));
-                                                                    hash_status_message.set(String::new());
-                                                                    hash_status_error.set(false);
-
-                                                                    match pool.hash_delete_field(&key, &field).await {
-                                                                        Ok(_) => {
-                                                                            deleting_hash_field.set(None);
-                                                                            if editing_hash_field().as_deref() == Some(field.as_str()) {
-                                                                                editing_hash_field.set(None);
-                                                                                editing_hash_key.set(String::new());
-                                                                                editing_hash_value.set(String::new());
-                                                                            }
-                                                                            hash_status_message.set("删除成功".to_string());
-                                                                            hash_status_error.set(false);
-    if let Err(error) = load_key_data(
-                                                                                            pool.clone(),
-                                                                                            key.clone(),
-                                                                                            key_info,
-                                                                                            string_value,
-                                                                                            hash_value,
-                                                                                            list_value,
-                                                                                            set_value,
-                                                                                            zset_value,
-                                                                                            stream_value,
-                                                                                            is_binary,
-                                                                                            binary_format,
-                                                                                            serialization_data,
-                                                                                            bitmap_info,
-                                                                                            loading,
-                                                                                        )
-                                                                            .await
-                                                                            {
-                                                                                tracing::error!("{error}");
-                                                                                hash_status_message.set(error);
-                                                                                hash_status_error.set(true);
-                                                                            } else {
-                                                                                on_refresh.call(());
-                                                                            }
-                                                                        }
-                                                                        Err(error) => {
-                                                                            tracing::error!("Failed to delete hash field: {}", error);
-                                                                            hash_status_message.set(format!("删除失败：{error}"));
-                                                                            hash_status_error.set(true);
-                                                                        }
-                                                                    }
-
-                                                                    hash_action.set(None);
-                                                                });
-                                                            }
-                                                        },
-
-                                                        if active_hash_action.as_deref() == Some(format!("delete:{}", target.field).as_str()) {
-                                                            "删除中..."
-                                                        } else {
-                                                            "确认删除"
-                                                        }
-                                                    }
+                                                    "Set Members ({filtered_set_members.len()}/{set_val.len()})"
                                                 }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            KeyType::List => {
-                                rsx! {
-                                    div {
-                                        display: "flex",
-                                        justify_content: "space_between",
-                                        align_items: "center",
-                                        gap: "12px",
-                                        margin_bottom: "12px",
-
-                                        div {
-                                            display: "flex",
-                                            gap: "8px",
-                                            align_items: "center",
-
-                                            input {
-                                                width: "300px",
-                                                padding: "8px 10px",
-                                                background: COLOR_BG_TERTIARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "6px",
-                                                color: COLOR_TEXT,
-                                                value: "{new_list_value}",
-                                                placeholder: "输入新元素值",
-                                                oninput: move |event| new_list_value.set(event.value()),
                                             }
 
                                             button {
-                                                padding: "8px 12px",
-                                                background: "#38a169",
-                                                color: COLOR_TEXT_CONTRAST,
-                                                border: "none",
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
                                                 border_radius: "6px",
                                                 cursor: "pointer",
-                                                disabled: list_action().is_some(),
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
                                                 onclick: {
-                                                    let pool = connection_pool.clone();
-                                                    let key = display_key.clone();
+                                                    let set = set_val.clone();
                                                     move |_| {
-                                                        let pool = pool.clone();
-                                                        let key = key.clone();
-                                                        let value = new_list_value();
-                                                        spawn(async move {
-                                                            if value.trim().is_empty() {
-                                                                list_status_message.set("值不能为空".to_string());
-                                                                list_status_error.set(true);
-                                                                return;
+                                                        let json = serde_json::to_string_pretty(&set).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                set_status_message.set("复制成功".to_string());
+                                                                set_status_error.set(false);
                                                             }
-
-                                                            list_action.set(Some("push".to_string()));
-                                                            list_status_message.set(String::new());
-                                                            list_status_error.set(false);
-
-                                                            match pool.list_push(&key, &value, true).await {
-                                                                Ok(_) => {
-                                                                    new_list_value.set(String::new());
-                                                                    list_status_message.set("添加成功".to_string());
-                                                                    list_status_error.set(false);
-                                                                    if let Err(error) = load_key_data(
-                                                                        pool.clone(),
-                                                                        key.clone(),
-                                                                        key_info,
-                                                                        string_value,
-                                                                        hash_value,
-                                                                        list_value,
-                                                                        set_value,
-                                                                        zset_value,
-                                                                        stream_value,
-                                                                        is_binary,
-                                                                        binary_format,
-                                                                        serialization_data,
-                                                                        bitmap_info,
-                                                                        loading,
-                                                                    ).await {
-                                                                        tracing::error!("{error}");
-                                                                    } else {
-                                                                        on_refresh.call(());
-                                                                    }
-                                                                }
-                                                                Err(error) => {
-                                                                    list_status_message.set(format!("添加失败：{error}"));
-                                                                    list_status_error.set(true);
-                                                                }
-                                                            }
-                                                            list_action.set(None);
-                                                        });
-                                                    }
-                                                },
-
-                                                if list_action().as_deref() == Some("push") { "添加中..." } else { "LPUSH" }
-                                            }
-
-                                            button {
-                                                padding: "8px 12px",
-                                                background: "#0e639c",
-                                                color: COLOR_TEXT_CONTRAST,
-                                                border: "none",
-                                                border_radius: "6px",
-                                                cursor: "pointer",
-                                                disabled: list_action().is_some(),
-                                                onclick: {
-                                                    let pool = connection_pool.clone();
-                                                    let key = display_key.clone();
-                                                    move |_| {
-                                                        let pool = pool.clone();
-                                                        let key = key.clone();
-                                                        let value = new_list_value();
-                                                        spawn(async move {
-                                                            if value.trim().is_empty() {
-                                                                list_status_message.set("值不能为空".to_string());
-                                                                list_status_error.set(true);
-                                                                return;
-                                                            }
-
-                                                            list_action.set(Some("rpush".to_string()));
-                                                            match pool.list_push(&key, &value, false).await {
-                                                                Ok(_) => {
-                                                                    new_list_value.set(String::new());
-                                                                    list_status_message.set("添加成功".to_string());
-                                                                    list_status_error.set(false);
-                                                                    if let Err(error) = load_key_data(
-                                                                        pool.clone(),
-                                                                        key.clone(),
-                                                                        key_info,
-                                                                        string_value,
-                                                                        hash_value,
-                                                                        list_value,
-                                                                        set_value,
-                                                                        zset_value,
-                                                                        stream_value,
-                                                                        is_binary,
-                                                                        binary_format,
-                                                                        serialization_data,
-                                                                        bitmap_info,
-                                                                        loading,
-                                                                    ).await {
-                                                                        tracing::error!("{error}");
-                                                                    } else {
-                                                                        on_refresh.call(());
-                                                                    }
-                                                                }
-                                                                Err(error) => {
-                                                                    list_status_message.set(format!("添加失败：{error}"));
-                                                                    list_status_error.set(true);
-                                                                }
-                                                            }
-                                                            list_action.set(None);
-                                                        });
-                                                    }
-                                                },
-
-                                                "RPUSH"
-                                            }
-
-                                            div {
-                                                color: COLOR_TEXT_SECONDARY,
-                                                font_size: "13px",
-
-                                                "List Items ({list_val.len()})"
-                                            }
-                                        }
-
-                                        button {
-                                            padding: "6px 10px",
-                                            background: "rgba(47, 133, 90, 0.16)",
-                                            color: COLOR_SUCCESS,
-                                            border: "1px solid rgba(104, 211, 145, 0.28)",
-                                            border_radius: "6px",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "4px",
-                                            title: "复制",
-                                            onclick: {
-                                                let list = list_val.clone();
-                                                move |_| {
-                                                    let json = serde_json::to_string_pretty(&list).unwrap_or_default();
-                                                    match copy_value_to_clipboard(&json) {
-                                                        Ok(_) => {
-                                                            list_status_message.set("复制成功".to_string());
-                                                            list_status_error.set(false);
-                                                        }
-                                                        Err(error) => {
-                                                            list_status_message.set(format!("复制失败：{error}"));
-                                                            list_status_error.set(true);
-                                                        }
-                                                    }
-                                                }
-                                            },
-
-                                            IconCopy { size: Some(14) }
-                                            "复制"
-                                        }
-                                    }
-
-                                    if !list_status_message.read().is_empty() {
-                                        div {
-                                            margin_bottom: "12px",
-                                            padding: "8px 12px",
-                                            background: if list_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
-                                            border_radius: "6px",
-                                            color: if list_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
-                                            font_size: "13px",
-
-                                            "{list_status_message}"
-                                        }
-                                    }
-
-                                    if list_val.len() > LARGE_KEY_THRESHOLD {
-                                        LargeKeyWarning {
-                                            key_type: "List".to_string(),
-                                            size: list_val.len(),
-                                            threshold: LARGE_KEY_THRESHOLD,
-                                        }
-                                    }
-
-                                    div {
-                                        overflow_x: "auto",
-                                        overflow_y: "auto",
-                                        max_height: "calc(100vh - 400px)",
-                                        border: "1px solid {COLOR_BORDER}",
-                                        border_radius: "8px",
-                                        background: COLOR_BG_SECONDARY,
-
-                                        table {
-                                            width: "100%",
-                                            border_collapse: "collapse",
-
-                                            thead {
-                                                tr {
-                                                    background: COLOR_BG_TERTIARY,
-                                                    border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                    th {
-                                                        width: "72px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "Index"
-                                                    }
-
-                                                    th {
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "Value"
-                                                    }
-
-                                                    th {
-                                                        width: "156px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "Action"
-                                                    }
-                                                }
-                                            }
-
-                                            tbody {
-                                                for (idx, value) in list_val.iter().enumerate() {
-                                                    if editing_list_index() == Some(idx) {
-                                                        tr {
-                                                            background: ROW_EDIT_BG,
-                                                            border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                            td {
-                                                                padding: "12px",
-                                                                color: COLOR_ACCENT,
-
-                                                                "{idx}"
-                                                            }
-
-                                                            td {
-                                                                padding: "12px",
-
-                                                                input {
-                                                                    width: "100%",
-                                                                    padding: "8px 10px",
-                                                                    background: COLOR_BG,
-                                                                    border: "1px solid {COLOR_BORDER}",
-                                                                    border_radius: "6px",
-                                                                    color: COLOR_TEXT,
-                                                                    value: "{editing_list_value}",
-                                                                    oninput: move |event| editing_list_value.set(event.value()),
-                                                                }
-                                                            }
-
-                                                            td {
-                                                                padding: "12px",
-
-                                                                div {
-                                                                    display: "flex",
-                                                                    gap: "8px",
-
-                                                                    button {
-                                                                        padding: "6px 10px",
-                                                                        background: "#38a169",
-                                                                        color: COLOR_TEXT_CONTRAST,
-                                                                        border: "none",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: list_action().is_some(),
-                                                                        onclick: {
-                                                                            let pool = connection_pool.clone();
-                                                                            let key = display_key.clone();
-                                                                            let idx = idx as i64;
-                                                                            move |_| {
-                                                                                let pool = pool.clone();
-                                                                                let key = key.clone();
-                                                                                let new_val = editing_list_value();
-                                                                                spawn(async move {
-                                                                                    list_action.set(Some("set".to_string()));
-                                                                                    match pool.list_set(&key, idx, &new_val).await {
-                                                                                        Ok(_) => {
-                                                                                            editing_list_index.set(None);
-                                                                                            list_status_message.set("修改成功".to_string());
-                                                                                            list_status_error.set(false);
-                                                                                            if let Err(error) = load_key_data(
-                                                                                                pool.clone(),
-                                                                                                key.clone(),
-                                                                                                key_info,
-                                                                                                string_value,
-                                                                                                hash_value,
-                                                                                                list_value,
-                                                                                                set_value,
-                                                                                                zset_value,
-                                                                                                stream_value,
-                                                                                                is_binary,
-                                                                                                binary_format,
-                                                                                                serialization_data,
-                                                                                                bitmap_info,
-                                                                                                loading,
-                                                                                            ).await {
-                                                                                                tracing::error!("{error}");
-                                                                                            } else {
-                                                                                                on_refresh.call(());
-                                                                                            }
-                                                                                        }
-                                                                                        Err(error) => {
-                                                                                            list_status_message.set(format!("修改失败：{error}"));
-                                                                                            list_status_error.set(true);
-                                                                                        }
-                                                                                    }
-                                                                                    list_action.set(None);
-                                                                                });
-                                                                            }
-                                                                        },
-
-                                                                        "保存"
-                                                                    }
-
-                                                                    button {
-                                                                        padding: "6px 10px",
-                                                                        background: COLOR_BG_TERTIARY,
-                                                                        color: COLOR_TEXT,
-                                                                        border: "none",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        onclick: move |_| {
-                                                                            editing_list_index.set(None);
-                                                                        },
-
-                                                                        "取消"
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    } else {
-                                                        tr {
-                                                            key: "{idx}",
-                                                            border_bottom: "1px solid {COLOR_BORDER}",
-                                                            background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
-
-                                                            td {
-                                                                padding: "12px",
-                                                                color: COLOR_TEXT_SECONDARY,
-
-                                                                "{idx}"
-                                                            }
-
-                                                            td {
-                                                                padding: "12px",
-                                                                color: COLOR_TEXT,
-                                                                font_family: "Consolas, monospace",
-                                                                font_size: "13px",
-                                                                word_break: "break-all",
-
-                                                                "{value}"
-                                                            }
-
-                                                            td {
-                                                                padding: "12px",
-
-                                                                div {
-                                                                    display: "flex",
-                                                                    gap: "6px",
-
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                                        color: "#68d391",
-                                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        title: "复制",
-                                                                        onclick: {
-                                                                            let value = value.clone();
-                                                                            move |_| {
-                                                                                match copy_value_to_clipboard(&value) {
-                                                                                    Ok(_) => {
-                                                                                        list_status_message.set("复制成功".to_string());
-                                                                                        list_status_error.set(false);
-                                                                                    }
-                                                                                    Err(error) => {
-                                                                                        list_status_message.set(format!("复制失败：{error}"));
-                                                                                        list_status_error.set(true);
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                        },
-
-                                                                        IconCopy { size: Some(15) }
-                                                                    }
-
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(49, 130, 206, 0.18)",
-                                                                        color: "#63b3ed",
-                                                                        border: "1px solid rgba(99, 179, 237, 0.30)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        title: "编辑",
-                                                                        onclick: {
-                                                                            let value = value.clone();
-                                                                            move |_| {
-                                                                                editing_list_index.set(Some(idx));
-                                                                                editing_list_value.set(value.clone());
-                                                                            }
-                                                                        },
-
-                                                                        IconEdit { size: Some(15) }
-                                                                    }
-
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(197, 48, 48, 0.18)",
-                                                                        color: "#f87171",
-                                                                        border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        title: "删除",
-                                                                        onclick: {
-                                                                            let pool = connection_pool.clone();
-                                                                            let key = display_key.clone();
-                                                                            let value = value.clone();
-                                                                            move |_| {
-                                                                                let pool = pool.clone();
-                                                                                let key = key.clone();
-                                                                                let value = value.clone();
-                                                                                spawn(async move {
-                                                                                    list_action.set(Some("remove".to_string()));
-                                                                                    match pool.list_remove(&key, 1, &value).await {
-                                                                                        Ok(_) => {
-                                                                                            list_status_message.set("删除成功".to_string());
-                                                                                            list_status_error.set(false);
-                                                                                            if let Err(error) = load_key_data(
-                                                                                                pool.clone(),
-                                                                                                key.clone(),
-                                                                                                key_info,
-                                                                                                string_value,
-                                                                                                hash_value,
-                                                                                                list_value,
-                                                                                                set_value,
-                                                                                                zset_value,
-                                                                                                stream_value,
-                                                                                                is_binary,
-                                                                                                binary_format,
-                                                                                                serialization_data,
-                                                                                                bitmap_info,
-                                                                                                loading,
-                                                                                            ).await {
-                                                                                                tracing::error!("{error}");
-                                                                                            } else {
-                                                                                                on_refresh.call(());
-                                                                                            }
-                                                                                        }
-                                                                                        Err(error) => {
-                                                                                            list_status_message.set(format!("删除失败：{error}"));
-                                                                                            list_status_error.set(true);
-                                                                                        }
-                                                                                    }
-                                                                                    list_action.set(None);
-                                                                                });
-                                                                            }
-                                                                        },
-
-                                                                        IconTrash { size: Some(15) }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            KeyType::Set => {
-                                rsx! {
-                                    div {
-                                        display: "flex",
-                                        justify_content: "space_between",
-                                        align_items: "center",
-                                        gap: "12px",
-                                        margin_bottom: "12px",
-
-                                        div {
-                                            display: "flex",
-                                            gap: "8px",
-                                            align_items: "center",
-
-                                            input {
-                                                width: "200px",
-                                                padding: "8px 10px",
-                                                background: COLOR_BG_TERTIARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "6px",
-                                                color: COLOR_TEXT,
-                                                value: "{set_search}",
-                                                placeholder: "搜索成员",
-                                                oninput: move |event| set_search.set(event.value()),
-                                            }
-
-                                            input {
-                                                width: "200px",
-                                                padding: "8px 10px",
-                                                background: COLOR_BG_TERTIARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "6px",
-                                                color: COLOR_TEXT,
-                                                value: "{new_set_member}",
-                                                placeholder: "输入新成员",
-                                                oninput: move |event| new_set_member.set(event.value()),
-                                            }
-
-                                            button {
-                                                padding: "8px 12px",
-                                                background: "#38a169",
-                                                color: COLOR_TEXT_CONTRAST,
-                                                border: "none",
-                                                border_radius: "6px",
-                                                cursor: "pointer",
-                                                disabled: set_action().is_some(),
-                                                onclick: {
-                                                    let pool = connection_pool.clone();
-                                                    let key = display_key.clone();
-                                                    move |_| {
-                                                        let pool = pool.clone();
-                                                        let key = key.clone();
-                                                        let member = new_set_member();
-                                                        spawn(async move {
-                                                            if member.trim().is_empty() {
-                                                                set_status_message.set("成员不能为空".to_string());
+                                                            Err(error) => {
+                                                                set_status_message.set(format!("复制失败：{error}"));
                                                                 set_status_error.set(true);
-                                                                return;
                                                             }
-
-                                                            set_action.set(Some("add".to_string()));
-                                                            set_status_message.set(String::new());
-                                                            set_status_error.set(false);
-
-                                                            match pool.set_add(&key, &member).await {
-                                                                Ok(true) => {
-                                                                    new_set_member.set(String::new());
-                                                                    set_status_message.set("添加成功".to_string());
-                                                                    set_status_error.set(false);
-                                                                    if let Err(error) = load_key_data(
-                                                                        pool.clone(),
-                                                                        key.clone(),
-                                                                        key_info,
-                                                                        string_value,
-                                                                        hash_value,
-                                                                        list_value,
-                                                                        set_value,
-                                                                        zset_value,
-                                                                        stream_value,
-                                                                        is_binary,
-                                                                        binary_format,
-                                                                        serialization_data,
-                                                                        bitmap_info,
-                                                                        loading,
-                                                                    ).await {
-                                                                        tracing::error!("{error}");
-                                                                    } else {
-                                                                        on_refresh.call(());
-                                                                    }
-                                                                }
-                                                                Ok(false) => {
-                                                                    set_status_message.set("成员已存在".to_string());
-                                                                    set_status_error.set(true);
-                                                                }
-                                                                Err(error) => {
-                                                                    set_status_message.set(format!("添加失败：{error}"));
-                                                                    set_status_error.set(true);
-                                                                }
-                                                            }
-                                                            set_action.set(None);
-                                                        });
+                                                        }
                                                     }
                                                 },
 
-                                                if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                                                IconCopy { size: Some(14) }
+                                                "复制"
                                             }
+                                        }
 
+                                        if !set_status_message.read().is_empty() {
                                             div {
-                                                color: COLOR_TEXT_SECONDARY,
+                                                margin_bottom: "12px",
+                                                padding: "8px 12px",
+                                                background: if set_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
+                                                border_radius: "6px",
+                                                color: if set_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
                                                 font_size: "13px",
 
-                                                "Set Members ({filtered_set_members.len()}/{set_val.len()})"
+                                                "{set_status_message}"
                                             }
                                         }
 
-                                        button {
-                                            padding: "6px 10px",
-                                            background: "rgba(47, 133, 90, 0.16)",
-                                            color: COLOR_SUCCESS,
-                                            border: "1px solid rgba(104, 211, 145, 0.28)",
-                                            border_radius: "6px",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "4px",
-                                            title: "复制",
-                                            onclick: {
-                                                let set = set_val.clone();
-                                                move |_| {
-                                                    let json = serde_json::to_string_pretty(&set).unwrap_or_default();
-                                                    match copy_value_to_clipboard(&json) {
-                                                        Ok(_) => {
-                                                            set_status_message.set("复制成功".to_string());
-                                                            set_status_error.set(false);
-                                                        }
-                                                        Err(error) => {
-                                                            set_status_message.set(format!("复制失败：{error}"));
-                                                            set_status_error.set(true);
-                                                        }
-                                                    }
-                                                }
-                                            },
-
-                                            IconCopy { size: Some(14) }
-                                            "复制"
+                                        if set_val.len() > LARGE_KEY_THRESHOLD {
+                                            LargeKeyWarning {
+                                                key_type: "Set".to_string(),
+                                                size: set_val.len(),
+                                                threshold: LARGE_KEY_THRESHOLD,
+                                            }
                                         }
-                                    }
 
-                                    if !set_status_message.read().is_empty() {
                                         div {
-                                            margin_bottom: "12px",
-                                            padding: "8px 12px",
-                                            background: if set_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
-                                            border_radius: "6px",
-                                            color: if set_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
-                                            font_size: "13px",
+                                            overflow_x: "auto",
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "8px",
+                                            background: COLOR_BG_SECONDARY,
+                                            max_height: "calc(100vh - 400px)",
+                                            overflow_y: "auto",
 
-                                            "{set_status_message}"
-                                        }
-                                    }
+                                            table {
+                                                width: "100%",
+                                                border_collapse: "collapse",
 
-                                    if set_val.len() > LARGE_KEY_THRESHOLD {
-                                        LargeKeyWarning {
-                                            key_type: "Set".to_string(),
-                                            size: set_val.len(),
-                                            threshold: LARGE_KEY_THRESHOLD,
-                                        }
-                                    }
+                                                thead {
+                                                    tr {
+                                                        background: COLOR_BG_TERTIARY,
+                                                        position: "sticky",
+                                                        top: "0",
 
-                                    div {
-                                        overflow_x: "auto",
-                                        border: "1px solid {COLOR_BORDER}",
-                                        border_radius: "8px",
-                                        background: COLOR_BG_SECONDARY,
-                                        max_height: "calc(100vh - 400px)",
-                                        overflow_y: "auto",
-
-                                        table {
-                                            width: "100%",
-                                            border_collapse: "collapse",
-
-                                            thead {
-                                                tr {
-                                                    background: COLOR_BG_TERTIARY,
-                                                    position: "sticky",
-                                                    top: "0",
-
-                                                    th {
-                                                        width: "72px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-                                                        border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                        "#"
-                                                    }
-
-                                                    th {
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-                                                        border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                        "Member"
-                                                    }
-
-                                                    th {
-                                                        width: "100px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-                                                        border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                        "Action"
-                                                    }
-                                                }
-                                            }
-
-                                            tbody {
-                                                for (idx, member) in filtered_set_members.iter().enumerate() {
-                                                    if editing_set_member() == Some(member.clone()) {
-                                                        tr {
-                                                            key: "edit-{member}",
-                                                            background: ROW_EDIT_BG,
+                                                        th {
+                                                            width: "72px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
                                                             border_bottom: "1px solid {COLOR_BORDER}",
 
-                                                            td {
-                                                                padding: "10px 12px",
-                                                                color: COLOR_TEXT_SECONDARY,
+                                                            "#"
+                                                        }
 
-                                                                "{idx + 1}"
+                                                        th {
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
+                                                            border_bottom: "1px solid {COLOR_BORDER}",
+
+                                                            "Member"
+                                                        }
+
+                                                        th {
+                                                            width: "100px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
+                                                            border_bottom: "1px solid {COLOR_BORDER}",
+
+                                                            "Action"
+                                                        }
+                                                    }
+                                                }
+
+                                                tbody {
+                                                    for (idx, member) in filtered_set_members.iter().enumerate() {
+                                                        if editing_set_member() == Some(member.clone()) {
+                                                            tr {
+                                                                key: "edit-{member}",
+                                                                background: ROW_EDIT_BG,
+                                                                border_bottom: "1px solid {COLOR_BORDER}",
+
+                                                                td {
+                                                                    padding: "10px 12px",
+                                                                    color: COLOR_TEXT_SECONDARY,
+
+                                                                    "{idx + 1}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "10px 12px",
+
+                                                                    input {
+                                                                        width: "100%",
+                                                                        padding: "8px 10px",
+                                                                        background: COLOR_BG,
+                                                                        border: "1px solid {COLOR_BORDER}",
+                                                                        border_radius: "6px",
+                                                                        color: COLOR_TEXT,
+                                                                        font_family: "Consolas, monospace",
+                                                                        font_size: "13px",
+                                                                        value: "{editing_set_member_value}",
+                                                                        oninput: move |event| editing_set_member_value.set(event.value()),
+                                                                    }
+                                                                }
+
+                                                                td {
+                                                                    padding: "10px 12px",
+
+                                                                    div {
+                                                                        display: "flex",
+                                                                        gap: "6px",
+
+                                                                        button {
+                                                                            padding: "6px 10px",
+                                                                            background: "#38a169",
+                                                                            color: COLOR_TEXT_CONTRAST,
+                                                                            border: "none",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: set_action().is_some(),
+                                                                            onclick: {
+                                                                                let pool = connection_pool.clone();
+                                                                                let key = display_key.clone();
+                                                                                let old_member = member.clone();
+                                                                                move |_| {
+                                                                                    let pool = pool.clone();
+                                                                                    let key = key.clone();
+                                                                                    let old_member = old_member.clone();
+                                                                                    let new_member = editing_set_member_value();
+                                                                                    spawn(async move {
+                                                                                        if new_member.trim().is_empty() {
+                                                                                            set_status_message.set("成员不能为空".to_string());
+                                                                                            set_status_error.set(true);
+                                                                                            return;
+                                                                                        }
+
+                                                                                        set_action.set(Some(format!("edit:{}", old_member)));
+                                                                                        set_status_message.set(String::new());
+                                                                                        set_status_error.set(false);
+
+                                                                                        let edit_result = if new_member == old_member {
+                                                                                            Ok(())
+                                                                                        } else {
+                                                                                            match pool.set_remove(&key, &old_member).await {
+                                                                                                Ok(_) => pool.set_add(&key, &new_member).await.map(|_| ()),
+                                                                                                Err(e) => Err(e),
+                                                                                            }
+                                                                                        };
+
+                                                                                        match edit_result {
+                                                                                            Ok(_) => {
+                                                                                                editing_set_member.set(None);
+                                                                                                editing_set_member_value.set(String::new());
+                                                                                                set_status_message.set("修改成功".to_string());
+                                                                                                set_status_error.set(false);
+                                                                                                if let Err(error) = load_key_data(
+                                                                                                    pool.clone(),
+                                                                                                    key.clone(),
+                                                                                                    key_info,
+                                                                                                    string_value,
+                                                                                                    hash_value,
+                                                                                                    list_value,
+                                                                                                    set_value,
+                                                                                                    zset_value,
+                                                                                                    stream_value,
+                                                                                                    is_binary,
+                                                                                                    binary_format,
+                                                                                                    serialization_data,
+                                                                                                    bitmap_info,
+                                                                                                    loading,
+                                                                                                ).await {
+                                                                                                    tracing::error!("{error}");
+                                                                                                } else {
+                                                                                                    on_refresh.call(());
+                                                                                                }
+                                                                                            }
+                                                                                            Err(error) => {
+                                                                                                set_status_message.set(format!("修改失败：{error}"));
+                                                                                                set_status_error.set(true);
+                                                                                            }
+                                                                                        }
+
+                                                                                        set_action.set(None);
+                                                                                    });
+                                                                                }
+                                                                            },
+
+                                                                            if set_action().as_deref() == Some(format!("edit:{}", member).as_str()) { "保存中..." } else { "保存" }
+                                                                        }
+
+                                                                        button {
+                                                                            padding: "6px 10px",
+                                                                            background: COLOR_BG_TERTIARY,
+                                                                            color: COLOR_TEXT,
+                                                                            border: "none",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            onclick: move |_| {
+                                                                                editing_set_member.set(None);
+                                                                                editing_set_member_value.set(String::new());
+                                                                            },
+
+                                                                            "取消"
+                                                                        }
+                                                                    }
+                                                                }
                                                             }
+                                                        } else {
+                                                            tr {
+                                                                key: "{member}",
+                                                                border_bottom: "1px solid {COLOR_BORDER}",
+                                                                background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
 
-                                                            td {
-                                                                padding: "10px 12px",
+                                                                td {
+                                                                    padding: "10px 12px",
+                                                                    color: COLOR_TEXT_SECONDARY,
 
-                                                                input {
-                                                                    width: "100%",
-                                                                    padding: "8px 10px",
-                                                                    background: COLOR_BG,
-                                                                    border: "1px solid {COLOR_BORDER}",
-                                                                    border_radius: "6px",
+                                                                    "{idx + 1}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "10px 12px",
                                                                     color: COLOR_TEXT,
                                                                     font_family: "Consolas, monospace",
                                                                     font_size: "13px",
-                                                                    value: "{editing_set_member_value}",
-                                                                    oninput: move |event| editing_set_member_value.set(event.value()),
+                                                                    word_break: "break-all",
+
+                                                                    "{member}"
                                                                 }
-                                                            }
 
-                                                            td {
-                                                                padding: "10px 12px",
+                                                                td {
+                                                                    padding: "10px 12px",
 
-                                                                div {
-                                                                    display: "flex",
-                                                                    gap: "6px",
+                                                                    div {
+                                                                        display: "flex",
+                                                                        gap: "6px",
 
-                                                                    button {
-                                                                        padding: "6px 10px",
-                                                                        background: "#38a169",
-                                                                        color: COLOR_TEXT_CONTRAST,
-                                                                        border: "none",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: set_action().is_some(),
-                                                                        onclick: {
-                                                                            let pool = connection_pool.clone();
-                                                                            let key = display_key.clone();
-                                                                            let old_member = member.clone();
-                                                                            move |_| {
-                                                                                let pool = pool.clone();
-                                                                                let key = key.clone();
-                                                                                let old_member = old_member.clone();
-                                                                                let new_member = editing_set_member_value();
-                                                                                spawn(async move {
-                                                                                    if new_member.trim().is_empty() {
-                                                                                        set_status_message.set("成员不能为空".to_string());
-                                                                                        set_status_error.set(true);
-                                                                                        return;
-                                                                                    }
-
-                                                                                    set_action.set(Some(format!("edit:{}", old_member)));
-                                                                                    set_status_message.set(String::new());
-                                                                                    set_status_error.set(false);
-
-                                                                                    let edit_result = if new_member == old_member {
-                                                                                        Ok(())
-                                                                                    } else {
-                                                                                        match pool.set_remove(&key, &old_member).await {
-                                                                                            Ok(_) => pool.set_add(&key, &new_member).await.map(|_| ()),
-                                                                                            Err(e) => Err(e),
-                                                                                        }
-                                                                                    };
-
-                                                                                    match edit_result {
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(47, 133, 90, 0.16)",
+                                                                            color: "#68d391",
+                                                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            title: "复制",
+                                                                            onclick: {
+                                                                                let member = member.clone();
+                                                                                move |_| {
+                                                                                    match copy_value_to_clipboard(&member) {
                                                                                         Ok(_) => {
-                                                                                            editing_set_member.set(None);
-                                                                                            editing_set_member_value.set(String::new());
-                                                                                            set_status_message.set("修改成功".to_string());
+                                                                                            set_status_message.set("复制成功".to_string());
                                                                                             set_status_error.set(false);
-                                                                                            if let Err(error) = load_key_data(
-                                                                                                pool.clone(),
-                                                                                                key.clone(),
-                                                                                                key_info,
-                                                                                                string_value,
-                                                                                                hash_value,
-                                                                                                list_value,
-                                                                                                set_value,
-                                                                                                zset_value,
-                                                                                                stream_value,
-                                                                                                is_binary,
-                                                                                                binary_format,
-                                                                                                serialization_data,
-                                                                                                bitmap_info,
-                                                                                                loading,
-                                                                                            ).await {
-                                                                                                tracing::error!("{error}");
-                                                                                            } else {
-                                                                                                on_refresh.call(());
-                                                                                            }
                                                                                         }
                                                                                         Err(error) => {
-                                                                                            set_status_message.set(format!("修改失败：{error}"));
+                                                                                            set_status_message.set(format!("复制失败：{error}"));
                                                                                             set_status_error.set(true);
                                                                                         }
-                                                                                    }
-
-                                                                                    set_action.set(None);
-                                                                                });
-                                                                            }
-                                                                        },
-
-                                                                        if set_action().as_deref() == Some(format!("edit:{}", member).as_str()) { "保存中..." } else { "保存" }
-                                                                    }
-
-                                                                    button {
-                                                                        padding: "6px 10px",
-                                                                        background: COLOR_BG_TERTIARY,
-                                                                        color: COLOR_TEXT,
-                                                                        border: "none",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        onclick: move |_| {
-                                                                            editing_set_member.set(None);
-                                                                            editing_set_member_value.set(String::new());
-                                                                        },
-
-                                                                        "取消"
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    } else {
-                                                        tr {
-                                                            key: "{member}",
-                                                            border_bottom: "1px solid {COLOR_BORDER}",
-                                                            background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
-
-                                                            td {
-                                                                padding: "10px 12px",
-                                                                color: COLOR_TEXT_SECONDARY,
-
-                                                                "{idx + 1}"
-                                                            }
-
-                                                            td {
-                                                                padding: "10px 12px",
-                                                                color: COLOR_TEXT,
-                                                                font_family: "Consolas, monospace",
-                                                                font_size: "13px",
-                                                                word_break: "break-all",
-
-                                                                "{member}"
-                                                            }
-
-                                                            td {
-                                                                padding: "10px 12px",
-
-                                                                div {
-                                                                    display: "flex",
-                                                                    gap: "6px",
-
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                                        color: "#68d391",
-                                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        title: "复制",
-                                                                        onclick: {
-                                                                            let member = member.clone();
-                                                                            move |_| {
-                                                                                match copy_value_to_clipboard(&member) {
-                                                                                    Ok(_) => {
-                                                                                        set_status_message.set("复制成功".to_string());
-                                                                                        set_status_error.set(false);
-                                                                                    }
-                                                                                    Err(error) => {
-                                                                                        set_status_message.set(format!("复制失败：{error}"));
-                                                                                        set_status_error.set(true);
                                                                                     }
                                                                                 }
-                                                                            }
-                                                                        },
+                                                                            },
 
-                                                                        IconCopy { size: Some(15) }
-                                                                    }
+                                                                            IconCopy { size: Some(15) }
+                                                                        }
 
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(49, 130, 206, 0.18)",
-                                                                        color: "#63b3ed",
-                                                                        border: "1px solid rgba(99, 179, 237, 0.30)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: set_action().is_some(),
-                                                                        title: "编辑",
-                                                                        onclick: {
-                                                                            let member = member.clone();
-                                                                            move |_| {
-                                                                                editing_set_member.set(Some(member.clone()));
-                                                                                editing_set_member_value.set(member.clone());
-                                                                            }
-                                                                        },
-
-                                                                        IconEdit { size: Some(15) }
-                                                                    }
-
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(197, 48, 48, 0.18)",
-                                                                        color: "#f87171",
-                                                                        border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: set_action().is_some(),
-                                                                        title: "删除",
-                                                                        onclick: {
-                                                                            let pool = connection_pool.clone();
-                                                                            let key = display_key.clone();
-                                                                            let member = member.clone();
-                                                                            move |_| {
-                                                                                let pool = pool.clone();
-                                                                                let key = key.clone();
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(49, 130, 206, 0.18)",
+                                                                            color: "#63b3ed",
+                                                                            border: "1px solid rgba(99, 179, 237, 0.30)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: set_action().is_some(),
+                                                                            title: "编辑",
+                                                                            onclick: {
                                                                                 let member = member.clone();
-                                                                                spawn(async move {
-                                                                                    set_action.set(Some(format!("delete:{}", member)));
-                                                                                    match pool.set_remove(&key, &member).await {
-                                                                                        Ok(_) => {
-                                                                                            set_status_message.set("删除成功".to_string());
-                                                                                            set_status_error.set(false);
-                                                                                            if let Err(error) = load_key_data(
-                                                                                                pool.clone(),
-                                                                                                key.clone(),
-                                                                                                key_info,
-                                                                                                string_value,
-                                                                                                hash_value,
-                                                                                                list_value,
-                                                                                                set_value,
-                                                                                                zset_value,
-                                                                                                stream_value,
-                                                                                                is_binary,
-                                                                                                binary_format,
-                                                                                                serialization_data,
-                                                                                                bitmap_info,
-                                                                                                loading,
-                                                                                            ).await {
-                                                                                                tracing::error!("{error}");
-                                                                                            } else {
-                                                                                                on_refresh.call(());
+                                                                                move |_| {
+                                                                                    editing_set_member.set(Some(member.clone()));
+                                                                                    editing_set_member_value.set(member.clone());
+                                                                                }
+                                                                            },
+
+                                                                            IconEdit { size: Some(15) }
+                                                                        }
+
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(197, 48, 48, 0.18)",
+                                                                            color: "#f87171",
+                                                                            border: "1px solid rgba(248, 113, 113, 0.30)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: set_action().is_some(),
+                                                                            title: "删除",
+                                                                            onclick: {
+                                                                                let pool = connection_pool.clone();
+                                                                                let key = display_key.clone();
+                                                                                let member = member.clone();
+                                                                                move |_| {
+                                                                                    let pool = pool.clone();
+                                                                                    let key = key.clone();
+                                                                                    let member = member.clone();
+                                                                                    spawn(async move {
+                                                                                        set_action.set(Some(format!("delete:{}", member)));
+                                                                                        match pool.set_remove(&key, &member).await {
+                                                                                            Ok(_) => {
+                                                                                                set_status_message.set("删除成功".to_string());
+                                                                                                set_status_error.set(false);
+                                                                                                if let Err(error) = load_key_data(
+                                                                                                    pool.clone(),
+                                                                                                    key.clone(),
+                                                                                                    key_info,
+                                                                                                    string_value,
+                                                                                                    hash_value,
+                                                                                                    list_value,
+                                                                                                    set_value,
+                                                                                                    zset_value,
+                                                                                                    stream_value,
+                                                                                                    is_binary,
+                                                                                                    binary_format,
+                                                                                                    serialization_data,
+                                                                                                    bitmap_info,
+                                                                                                    loading,
+                                                                                                ).await {
+                                                                                                    tracing::error!("{error}");
+                                                                                                } else {
+                                                                                                    on_refresh.call(());
+                                                                                                }
+                                                                                            }
+                                                                                            Err(error) => {
+                                                                                                set_status_message.set(format!("删除失败：{error}"));
+                                                                                                set_status_error.set(true);
                                                                                             }
                                                                                         }
-                                                                                        Err(error) => {
-                                                                                            set_status_message.set(format!("删除失败：{error}"));
-                                                                                            set_status_error.set(true);
-                                                                                        }
-                                                                                    }
-                                                                                    set_action.set(None);
-                                                                                });
-                                                                            }
-                                                                        },
+                                                                                        set_action.set(None);
+                                                                                    });
+                                                                                }
+                                                                            },
 
-                                                                        IconTrash { size: Some(15) }
+                                                                            IconTrash { size: Some(15) }
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -3439,415 +3450,715 @@ match info.key_type {
                                         }
                                     }
                                 }
-                            }
-                            KeyType::ZSet => {
-                                rsx! {
-                                    div {
-                                        display: "flex",
-                                        justify_content: "space_between",
-                                        align_items: "center",
-                                        gap: "12px",
-                                        margin_bottom: "12px",
-                                        flex_wrap: "wrap",
-
+                                KeyType::ZSet => {
+                                    rsx! {
                                         div {
                                             display: "flex",
-                                            gap: "8px",
+                                            justify_content: "space_between",
                                             align_items: "center",
+                                            gap: "12px",
+                                            margin_bottom: "12px",
                                             flex_wrap: "wrap",
 
-                                            input {
-                                                width: "160px",
-                                                padding: "8px 10px",
-                                                background: COLOR_BG_TERTIARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "6px",
-                                                color: COLOR_TEXT,
-                                                value: "{zset_search}",
-                                                placeholder: "搜索成员",
-                                                oninput: move |event| zset_search.set(event.value()),
-                                            }
+                                            div {
+                                                display: "flex",
+                                                gap: "8px",
+                                                align_items: "center",
+                                                flex_wrap: "wrap",
 
-                                            input {
-                                                width: "80px",
-                                                padding: "8px 10px",
-                                                background: COLOR_BG_TERTIARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "6px",
-                                                color: COLOR_TEXT,
-                                                value: "{new_zset_score}",
-                                                placeholder: "Score",
-                                                oninput: move |event| new_zset_score.set(event.value()),
-                                            }
+                                                input {
+                                                    width: "160px",
+                                                    padding: "8px 10px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "6px",
+                                                    color: COLOR_TEXT,
+                                                    value: "{zset_search}",
+                                                    placeholder: "搜索成员",
+                                                    oninput: move |event| zset_search.set(event.value()),
+                                                }
 
-                                            input {
-                                                width: "200px",
-                                                padding: "8px 10px",
-                                                background: COLOR_BG_TERTIARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "6px",
-                                                color: COLOR_TEXT,
-                                                value: "{new_zset_member}",
-                                                placeholder: "输入新成员",
-                                                oninput: move |event| new_zset_member.set(event.value()),
-                                            }
+                                                input {
+                                                    width: "80px",
+                                                    padding: "8px 10px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "6px",
+                                                    color: COLOR_TEXT,
+                                                    value: "{new_zset_score}",
+                                                    placeholder: "Score",
+                                                    oninput: move |event| new_zset_score.set(event.value()),
+                                                }
 
-                                            button {
-                                                padding: "8px 12px",
-                                                background: "#38a169",
-                                                color: COLOR_TEXT_CONTRAST,
-                                                border: "none",
-                                                border_radius: "6px",
-                                                cursor: "pointer",
-                                                disabled: zset_action().is_some(),
-                                                onclick: {
-                                                    let pool = connection_pool.clone();
-                                                    let key = display_key.clone();
-                                                    move |_| {
-                                                        let pool = pool.clone();
-                                                        let key = key.clone();
-                                                        let member = new_zset_member();
-                                                        let score_str = new_zset_score();
-                                                        spawn(async move {
-                                                            if member.trim().is_empty() {
-                                                                zset_status_message.set("成员不能为空".to_string());
-                                                                zset_status_error.set(true);
-                                                                return;
-                                                            }
+                                                input {
+                                                    width: "200px",
+                                                    padding: "8px 10px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "6px",
+                                                    color: COLOR_TEXT,
+                                                    value: "{new_zset_member}",
+                                                    placeholder: "输入新成员",
+                                                    oninput: move |event| new_zset_member.set(event.value()),
+                                                }
 
-                                                            let score: f64 = match score_str.parse() {
-                                                                Ok(s) => s,
-                                                                Err(_) => {
-                                                                    zset_status_message.set("Score 必须是有效数字".to_string());
+                                                button {
+                                                    padding: "8px 12px",
+                                                    background: "#38a169",
+                                                    color: COLOR_TEXT_CONTRAST,
+                                                    border: "none",
+                                                    border_radius: "6px",
+                                                    cursor: "pointer",
+                                                    disabled: zset_action().is_some(),
+                                                    onclick: {
+                                                        let pool = connection_pool.clone();
+                                                        let key = display_key.clone();
+                                                        move |_| {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let member = new_zset_member();
+                                                            let score_str = new_zset_score();
+                                                            spawn(async move {
+                                                                if member.trim().is_empty() {
+                                                                    zset_status_message.set("成员不能为空".to_string());
                                                                     zset_status_error.set(true);
                                                                     return;
                                                                 }
-                                                            };
 
-                                                            zset_action.set(Some("add".to_string()));
-                                                            zset_status_message.set(String::new());
-                                                            zset_status_error.set(false);
+                                                                let score: f64 = match score_str.parse() {
+                                                                    Ok(s) => s,
+                                                                    Err(_) => {
+                                                                        zset_status_message.set("Score 必须是有效数字".to_string());
+                                                                        zset_status_error.set(true);
+                                                                        return;
+                                                                    }
+                                                                };
 
-                                                            match pool.zset_add(&key, &member, score).await {
-                                                                Ok(_) => {
-                                                                    new_zset_member.set(String::new());
-                                                                    new_zset_score.set(String::new());
-                                                                    zset_status_message.set("添加成功".to_string());
-                                                                    zset_status_error.set(false);
-                                                                    if let Err(error) = load_key_data(
-                                                                        pool.clone(),
-                                                                        key.clone(),
-                                                                        key_info,
-                                                                        string_value,
-                                                                        hash_value,
-                                                                        list_value,
-                                                                        set_value,
-                                                                        zset_value,
-                                                                        stream_value,
-                                                                        is_binary,
-                                                                        binary_format,
-                                                                        serialization_data,
-                                                                        bitmap_info,
-                                                                        loading,
-                                                                    ).await {
-                                                                        tracing::error!("{error}");
-                                                                    } else {
-                                                                        on_refresh.call(());
+                                                                zset_action.set(Some("add".to_string()));
+                                                                zset_status_message.set(String::new());
+                                                                zset_status_error.set(false);
+
+                                                                match pool.zset_add(&key, &member, score).await {
+                                                                    Ok(_) => {
+                                                                        new_zset_member.set(String::new());
+                                                                        new_zset_score.set(String::new());
+                                                                        zset_status_message.set("添加成功".to_string());
+                                                                        zset_status_error.set(false);
+                                                                        if let Err(error) = load_key_data(
+                                                                            pool.clone(),
+                                                                            key.clone(),
+                                                                            key_info,
+                                                                            string_value,
+                                                                            hash_value,
+                                                                            list_value,
+                                                                            set_value,
+                                                                            zset_value,
+                                                                            stream_value,
+                                                                            is_binary,
+                                                                            binary_format,
+                                                                            serialization_data,
+                                                                            bitmap_info,
+                                                                            loading,
+                                                                        ).await {
+                                                                            tracing::error!("{error}");
+                                                                        } else {
+                                                                            on_refresh.call(());
+                                                                        }
+                                                                    }
+                                                                    Err(error) => {
+                                                                        zset_status_message.set(format!("添加失败：{error}"));
+                                                                        zset_status_error.set(true);
                                                                     }
                                                                 }
-                                                                Err(error) => {
-                                                                    zset_status_message.set(format!("添加失败：{error}"));
-                                                                    zset_status_error.set(true);
-                                                                }
+                                                                zset_action.set(None);
+                                                            });
+                                                        }
+                                                    },
+
+                                                    if zset_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                                                }
+
+                                                div {
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "ZSet Members ({filtered_zset_members.len()}/{zset_val.len()})"
+                                                }
+                                            }
+
+                                            button {
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                border_radius: "6px",
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
+                                                onclick: {
+                                                    let zset = zset_val.clone();
+                                                    move |_| {
+                                                        let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                zset_status_message.set("复制成功".to_string());
+                                                                zset_status_error.set(false);
                                                             }
-                                                            zset_action.set(None);
-                                                        });
+                                                            Err(error) => {
+                                                                zset_status_message.set(format!("复制失败：{error}"));
+                                                                zset_status_error.set(true);
+                                                            }
+                                                        }
                                                     }
                                                 },
 
-                                                if zset_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                                                IconCopy { size: Some(14) }
+                                                "复制"
                                             }
+                                        }
 
+                                        if !zset_status_message.read().is_empty() {
                                             div {
-                                                color: COLOR_TEXT_SECONDARY,
+                                                margin_bottom: "12px",
+                                                padding: "8px 12px",
+                                                background: if zset_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
+                                                border_radius: "6px",
+                                                color: if zset_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
                                                 font_size: "13px",
 
-                                                "ZSet Members ({filtered_zset_members.len()}/{zset_val.len()})"
+                                                "{zset_status_message}"
                                             }
                                         }
 
-                                        button {
-                                            padding: "6px 10px",
-                                            background: "rgba(47, 133, 90, 0.16)",
-                                            color: COLOR_SUCCESS,
-                                            border: "1px solid rgba(104, 211, 145, 0.28)",
-                                            border_radius: "6px",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "4px",
-                                            title: "复制",
-                                            onclick: {
-                                                let zset = zset_val.clone();
-                                                move |_| {
-                                                    let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
-                                                    match copy_value_to_clipboard(&json) {
-                                                        Ok(_) => {
-                                                            zset_status_message.set("复制成功".to_string());
-                                                            zset_status_error.set(false);
-                                                        }
-                                                        Err(error) => {
-                                                            zset_status_message.set(format!("复制失败：{error}"));
-                                                            zset_status_error.set(true);
-                                                        }
-                                                    }
-                                                }
-                                            },
-
-                                            IconCopy { size: Some(14) }
-                                            "复制"
+                                        if zset_val.len() > LARGE_KEY_THRESHOLD {
+                                            LargeKeyWarning {
+                                                key_type: "ZSet".to_string(),
+                                                size: zset_val.len(),
+                                                threshold: LARGE_KEY_THRESHOLD,
+                                            }
                                         }
-                                    }
 
-                                    if !zset_status_message.read().is_empty() {
                                         div {
-                                            margin_bottom: "12px",
-                                            padding: "8px 12px",
-                                            background: if zset_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
-                                            border_radius: "6px",
-                                            color: if zset_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
-                                            font_size: "13px",
+                                            overflow_x: "auto",
+                                            overflow_y: "auto",
+                                            max_height: "calc(100vh - 400px)",
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "8px",
+                                            background: COLOR_BG_SECONDARY,
 
-                                            "{zset_status_message}"
-                                        }
-                                    }
+                                            table {
+                                                width: "100%",
+                                                border_collapse: "collapse",
 
-                                    if zset_val.len() > LARGE_KEY_THRESHOLD {
-                                        LargeKeyWarning {
-                                            key_type: "ZSet".to_string(),
-                                            size: zset_val.len(),
-                                            threshold: LARGE_KEY_THRESHOLD,
-                                        }
-                                    }
+                                                thead {
+                                                    tr {
+                                                        background: COLOR_BG_TERTIARY,
+                                                        border_bottom: "1px solid {COLOR_BORDER}",
 
-                                    div {
-                                        overflow_x: "auto",
-                                        overflow_y: "auto",
-                                        max_height: "calc(100vh - 400px)",
-                                        border: "1px solid {COLOR_BORDER}",
-                                        border_radius: "8px",
-                                        background: COLOR_BG_SECONDARY,
+                                                        th {
+                                                            width: "72px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
 
-                                        table {
-                                            width: "100%",
-                                            border_collapse: "collapse",
+                                                            "#"
+                                                        }
 
-                                            thead {
-                                                tr {
-                                                    background: COLOR_BG_TERTIARY,
-                                                    border_bottom: "1px solid {COLOR_BORDER}",
+                                                        th {
+                                                            width: "100px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
 
-                                                    th {
-                                                        width: "72px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
+                                                            "Score"
+                                                        }
 
-                                                        "#"
-                                                    }
+                                                        th {
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
 
-                                                    th {
-                                                        width: "100px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
+                                                            "Member"
+                                                        }
 
-                                                        "Score"
-                                                    }
+                                                        th {
+                                                            width: "100px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
 
-                                                    th {
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "Member"
-                                                    }
-
-                                                    th {
-                                                        width: "100px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "Action"
+                                                            "Action"
+                                                        }
                                                     }
                                                 }
-                                            }
 
-                                            tbody {
-                                                for (idx, (member, score)) in filtered_zset_members.iter().enumerate() {
-                                                    if editing_zset_member() == Some(member.clone()) {
-                                                        tr {
-                                                            background: ROW_EDIT_BG,
-                                                            border_bottom: "1px solid {COLOR_BORDER}",
+                                                tbody {
+                                                    for (idx, (member, score)) in filtered_zset_members.iter().enumerate() {
+                                                        if editing_zset_member() == Some(member.clone()) {
+                                                            tr {
+                                                                background: ROW_EDIT_BG,
+                                                                border_bottom: "1px solid {COLOR_BORDER}",
 
-                                                            td {
-                                                                padding: "12px",
-                                                                color: COLOR_TEXT_SECONDARY,
+                                                                td {
+                                                                    padding: "12px",
+                                                                    color: COLOR_TEXT_SECONDARY,
 
-                                                                "{idx + 1}"
-                                                            }
-
-                                                            td {
-                                                                padding: "12px",
-
-                                                                input {
-                                                                    width: "80px",
-                                                                    padding: "8px 10px",
-                                                                    background: COLOR_BG,
-                                                                    border: "1px solid {COLOR_BORDER}",
-                                                                    border_radius: "6px",
-                                                                    color: COLOR_TEXT,
-                                                                    value: "{editing_zset_score}",
-                                                                    oninput: move |event| editing_zset_score.set(event.value()),
+                                                                    "{idx + 1}"
                                                                 }
-                                                            }
 
-                                                            td {
-                                                                padding: "12px",
-                                                                color: COLOR_ACCENT,
+                                                                td {
+                                                                    padding: "12px",
 
-                                                                "{member}"
-                                                            }
-
-                                                            td {
-                                                                padding: "12px",
-
-                                                                div {
-                                                                    display: "flex",
-                                                                    gap: "8px",
-
-                                                                    button {
-                                                                        padding: "6px 10px",
-                                                                        background: "#38a169",
-                                                                        color: COLOR_TEXT_CONTRAST,
-                                                                        border: "none",
+                                                                    input {
+                                                                        width: "80px",
+                                                                        padding: "8px 10px",
+                                                                        background: COLOR_BG,
+                                                                        border: "1px solid {COLOR_BORDER}",
                                                                         border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: zset_action().is_some(),
-                                                                        onclick: {
-                                                                            let pool = connection_pool.clone();
-                                                                            let key = display_key.clone();
-                                                                            let member = member.clone();
-                                                                            move |_| {
-                                                                                let pool = pool.clone();
-                                                                                let key = key.clone();
-                                                                                let member = member.clone();
-                                                                                let score_str = editing_zset_score();
-                                                                                spawn(async move {
-                                                                                    let score: f64 = match score_str.parse() {
-                                                                                        Ok(s) => s,
-                                                                                        Err(_) => {
-                                                                                            zset_status_message.set("Score 必须是有效数字".to_string());
-                                                                                            zset_status_error.set(true);
-                                                                                            return;
-                                                                                        }
-                                                                                    };
+                                                                        color: COLOR_TEXT,
+                                                                        value: "{editing_zset_score}",
+                                                                        oninput: move |event| editing_zset_score.set(event.value()),
+                                                                    }
+                                                                }
 
-                                                                                    zset_action.set(Some("update".to_string()));
-                                                                                    match pool.zset_add(&key, &member, score).await {
-                                                                                        Ok(_) => {
-                                                                                            editing_zset_member.set(None);
-                                                                                            zset_status_message.set("修改成功".to_string());
-                                                                                            zset_status_error.set(false);
-                                                                                            if let Err(error) = load_key_data(
-                                                                                                pool.clone(),
-                                                                                                key.clone(),
-                                                                                                key_info,
-                                                                                                string_value,
-                                                                                                hash_value,
-                                                                                                list_value,
-                                                                                                set_value,
-                                                                                                zset_value,
-                                                                                                stream_value,
-                                                                                                is_binary,
-                                                                                                binary_format,
-                                                                                                serialization_data,
-                                                                                                bitmap_info,
-                                                                                                loading,
-                                                                                            ).await {
-                                                                                                tracing::error!("{error}");
-                                                                                            } else {
-                                                                                                on_refresh.call(());
+                                                                td {
+                                                                    padding: "12px",
+                                                                    color: COLOR_ACCENT,
+
+                                                                    "{member}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "12px",
+
+                                                                    div {
+                                                                        display: "flex",
+                                                                        gap: "8px",
+
+                                                                        button {
+                                                                            padding: "6px 10px",
+                                                                            background: "#38a169",
+                                                                            color: COLOR_TEXT_CONTRAST,
+                                                                            border: "none",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: zset_action().is_some(),
+                                                                            onclick: {
+                                                                                let pool = connection_pool.clone();
+                                                                                let key = display_key.clone();
+                                                                                let member = member.clone();
+                                                                                move |_| {
+                                                                                    let pool = pool.clone();
+                                                                                    let key = key.clone();
+                                                                                    let member = member.clone();
+                                                                                    let score_str = editing_zset_score();
+                                                                                    spawn(async move {
+                                                                                        let score: f64 = match score_str.parse() {
+                                                                                            Ok(s) => s,
+                                                                                            Err(_) => {
+                                                                                                zset_status_message.set("Score 必须是有效数字".to_string());
+                                                                                                zset_status_error.set(true);
+                                                                                                return;
+                                                                                            }
+                                                                                        };
+
+                                                                                        zset_action.set(Some("update".to_string()));
+                                                                                        match pool.zset_add(&key, &member, score).await {
+                                                                                            Ok(_) => {
+                                                                                                editing_zset_member.set(None);
+                                                                                                zset_status_message.set("修改成功".to_string());
+                                                                                                zset_status_error.set(false);
+                                                                                                if let Err(error) = load_key_data(
+                                                                                                    pool.clone(),
+                                                                                                    key.clone(),
+                                                                                                    key_info,
+                                                                                                    string_value,
+                                                                                                    hash_value,
+                                                                                                    list_value,
+                                                                                                    set_value,
+                                                                                                    zset_value,
+                                                                                                    stream_value,
+                                                                                                    is_binary,
+                                                                                                    binary_format,
+                                                                                                    serialization_data,
+                                                                                                    bitmap_info,
+                                                                                                    loading,
+                                                                                                ).await {
+                                                                                                    tracing::error!("{error}");
+                                                                                                } else {
+                                                                                                    on_refresh.call(());
+                                                                                                }
+                                                                                            }
+                                                                                            Err(error) => {
+                                                                                                zset_status_message.set(format!("修改失败：{error}"));
+                                                                                                zset_status_error.set(true);
                                                                                             }
                                                                                         }
+                                                                                        zset_action.set(None);
+                                                                                    });
+                                                                                }
+                                                                            },
+
+                                                                            "保存"
+                                                                        }
+
+                                                                        button {
+                                                                            padding: "6px 10px",
+                                                                            background: COLOR_BG_TERTIARY,
+                                                                            color: COLOR_TEXT,
+                                                                            border: "none",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            onclick: move |_| {
+                                                                                editing_zset_member.set(None);
+                                                                            },
+
+                                                                            "取消"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        } else {
+                                                            tr {
+                                                                key: "{member}",
+                                                                border_bottom: "1px solid {COLOR_BORDER}",
+                                                                background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
+
+                                                                td {
+                                                                    padding: "10px 12px",
+                                                                    color: COLOR_TEXT_SECONDARY,
+
+                                                                    "{idx + 1}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "10px 12px",
+                                                                    color: COLOR_WARNING,
+                                                                    font_family: "Consolas, monospace",
+                                                                    font_size: "13px",
+
+                                                                    "{score}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "10px 12px",
+                                                                    color: COLOR_TEXT,
+                                                                    font_family: "Consolas, monospace",
+                                                                    font_size: "13px",
+                                                                    word_break: "break-all",
+
+                                                                    "{member}"
+                                                                }
+
+                                                                td {
+                                                                    padding: "10px 12px",
+
+                                                                    div {
+                                                                        display: "flex",
+                                                                        gap: "6px",
+
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(47, 133, 90, 0.16)",
+                                                                            color: "#68d391",
+                                                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            title: "复制",
+                                                                            onclick: {
+                                                                                let member = member.clone();
+                                                                                move |_| {
+                                                                                    match copy_value_to_clipboard(&member) {
+                                                                                        Ok(_) => {
+                                                                                            zset_status_message.set("复制成功".to_string());
+                                                                                            zset_status_error.set(false);
+                                                                                        }
                                                                                         Err(error) => {
-                                                                                            zset_status_message.set(format!("修改失败：{error}"));
+                                                                                            zset_status_message.set(format!("复制失败：{error}"));
                                                                                             zset_status_error.set(true);
                                                                                         }
                                                                                     }
-                                                                                    zset_action.set(None);
-                                                                                });
-                                                                            }
-                                                                        },
+                                                                                }
+                                                                            },
 
-                                                                        "保存"
-                                                                    }
+                                                                            IconCopy { size: Some(15) }
+                                                                        }
 
-                                                                    button {
-                                                                        padding: "6px 10px",
-                                                                        background: COLOR_BG_TERTIARY,
-                                                                        color: COLOR_TEXT,
-                                                                        border: "none",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        onclick: move |_| {
-                                                                            editing_zset_member.set(None);
-                                                                        },
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(49, 130, 206, 0.18)",
+                                                                            color: "#63b3ed",
+                                                                            border: "1px solid rgba(99, 179, 237, 0.30)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            title: "修改 Score",
+                                                                            onclick: {
+                                                                                let member = member.clone();
+                                                                                let score = *score;
+                                                                                move |_| {
+                                                                                    editing_zset_member.set(Some(member.clone()));
+                                                                                    editing_zset_score.set(score.to_string());
+                                                                                }
+                                                                            },
 
-                                                                        "取消"
+                                                                            IconEdit { size: Some(15) }
+                                                                        }
+
+                                                                        button {
+                                                                            width: "32px",
+                                                                            height: "32px",
+                                                                            display: "flex",
+                                                                            align_items: "center",
+                                                                            justify_content: "center",
+                                                                            background: "rgba(197, 48, 48, 0.18)",
+                                                                            color: "#f87171",
+                                                                            border: "1px solid rgba(248, 113, 113, 0.30)",
+                                                                            border_radius: "6px",
+                                                                            cursor: "pointer",
+                                                                            disabled: zset_action().is_some(),
+                                                                            title: "删除",
+                                                                            onclick: {
+                                                                                let pool = connection_pool.clone();
+                                                                                let key = display_key.clone();
+                                                                                let member = member.clone();
+                                                                                move |_| {
+                                                                                    let pool = pool.clone();
+                                                                                    let key = key.clone();
+                                                                                    let member = member.clone();
+                                                                                    spawn(async move {
+                                                                                        zset_action.set(Some(format!("delete:{}", member)));
+                                                                                        match pool.zset_remove(&key, &member).await {
+                                                                                            Ok(_) => {
+                                                                                                zset_status_message.set("删除成功".to_string());
+                                                                                                zset_status_error.set(false);
+                                                                                                if let Err(error) = load_key_data(
+                                                                                                    pool.clone(),
+                                                                                                    key.clone(),
+                                                                                                    key_info,
+                                                                                                    string_value,
+                                                                                                    hash_value,
+                                                                                                    list_value,
+                                                                                                    set_value,
+                                                                                                    zset_value,
+                                                                                                    stream_value,
+                                                                                                    is_binary,
+                                                                                                    binary_format,
+                                                                                                    serialization_data,
+                                                                                                    bitmap_info,
+                                                                                                    loading,
+                                                                                                ).await {
+                                                                                                    tracing::error!("{error}");
+                                                                                                } else {
+                                                                                                    on_refresh.call(());
+                                                                                                }
+                                                                                            }
+                                                                                            Err(error) => {
+                                                                                                zset_status_message.set(format!("删除失败：{error}"));
+                                                                                                zset_status_error.set(true);
+                                                                                            }
+                                                                                        }
+                                                                                        zset_action.set(None);
+                                                                                    });
+                                                                                }
+                                                                            },
+
+                                                                            IconTrash { size: Some(15) }
+                                                                        }
                                                                     }
                                                                 }
                                                             }
                                                         }
-                                                    } else {
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                KeyType::Stream => {
+                                    let stream_val = stream_value.read().clone();
+                                    let filtered_entries: Vec<_> = if stream_search.read().is_empty() {
+                                        stream_val.clone()
+                                    } else {
+                                        stream_val.iter().filter(|(id, fields)| {
+                                            id.to_lowercase().contains(&stream_search.read().to_lowercase()) ||
+                                            fields.iter().any(|(k, v)| {
+                                                k.to_lowercase().contains(&stream_search.read().to_lowercase()) ||
+                                                v.to_lowercase().contains(&stream_search.read().to_lowercase())
+                                            })
+                                        }).cloned().collect()
+                                    };
+
+                                    rsx! {
+                                        div {
+                                            display: "flex",
+                                            justify_content: "space_between",
+                                            align_items: "center",
+                                            gap: "12px",
+                                            margin_bottom: "12px",
+                                            flex_wrap: "wrap",
+
+                                            div {
+                                                display: "flex",
+                                                gap: "8px",
+                                                align_items: "center",
+                                                flex_wrap: "wrap",
+
+                                                input {
+                                                    width: "200px",
+                                                    padding: "8px 10px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border: "1px solid {COLOR_BORDER}",
+                                                    border_radius: "6px",
+                                                    color: COLOR_TEXT,
+                                                    value: "{stream_search}",
+                                                    placeholder: "搜索 ID 或字段",
+                                                    oninput: move |event| stream_search.set(event.value()),
+                                                }
+
+                                                if stream_search.read().is_empty() {
+                                                    div {
+                                                        color: COLOR_TEXT_SECONDARY,
+                                                        font_size: "13px",
+
+                                                        "Stream Entries ({stream_val.len()})"
+                                                    }
+                                                } else {
+                                                    div {
+                                                        color: COLOR_TEXT_SECONDARY,
+                                                        font_size: "13px",
+
+                                                        "Stream Entries ({filtered_entries.len()}/{stream_val.len()})"
+                                                    }
+                                                }
+                                            }
+
+                                            button {
+                                                padding: "6px 10px",
+                                                background: "rgba(47, 133, 90, 0.16)",
+                                                color: COLOR_SUCCESS,
+                                                border: "1px solid rgba(104, 211, 145, 0.28)",
+                                                border_radius: "6px",
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                align_items: "center",
+                                                gap: "4px",
+                                                title: "复制",
+                                                onclick: {
+                                                    let stream = stream_val.clone();
+                                                    move |_| {
+                                                        let json = serde_json::to_string_pretty(&stream).unwrap_or_default();
+                                                        match copy_value_to_clipboard(&json) {
+                                                            Ok(_) => {
+                                                                stream_status_message.set("复制成功".to_string());
+                                                                stream_status_error.set(false);
+                                                            }
+                                                            Err(error) => {
+                                                                stream_status_message.set(format!("复制失败：{error}"));
+                                                                stream_status_error.set(true);
+                                                            }
+                                                        }
+                                                    }
+                                                },
+
+                                                IconCopy { size: Some(14) }
+                                                "复制"
+                                            }
+                                        }
+
+                                        if !stream_status_message.read().is_empty() {
+                                            div {
+                                                margin_bottom: "12px",
+                                                padding: "8px 12px",
+                                                background: if stream_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
+                                                border_radius: "6px",
+                                                color: if stream_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
+                                                font_size: "13px",
+
+                                                "{stream_status_message}"
+                                            }
+                                        }
+
+                                        div {
+                                            overflow_x: "auto",
+                                            overflow_y: "auto",
+                                            max_height: "calc(100vh - 350px)",
+                                            border: "1px solid {COLOR_BORDER}",
+                                            border_radius: "8px",
+                                            background: COLOR_BG_SECONDARY,
+
+                                            table {
+                                                width: "100%",
+                                                border_collapse: "collapse",
+
+                                                thead {
+                                                    tr {
+                                                        background: COLOR_BG_TERTIARY,
+                                                        border_bottom: "1px solid {COLOR_BORDER}",
+
+                                                        th {
+                                                            width: "200px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
+
+                                                            "Entry ID"
+                                                        }
+
+                                                        th {
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "left",
+
+                                                            "Fields"
+                                                        }
+
+                                                        th {
+                                                            width: "60px",
+                                                            padding: "12px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "12px",
+                                                            font_weight: "600",
+                                                            text_align: "center",
+
+                                                            ""
+                                                        }
+                                                    }
+                                                }
+
+                                                tbody {
+                                                    for (entry_id, fields) in filtered_entries.iter() {
                                                         tr {
-                                                            key: "{member}",
                                                             border_bottom: "1px solid {COLOR_BORDER}",
-                                                            background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
-
-                                                            td {
-                                                                padding: "10px 12px",
-                                                                color: COLOR_TEXT_SECONDARY,
-
-                                                                "{idx + 1}"
-                                                            }
-
-                                                            td {
-                                                                padding: "10px 12px",
-                                                                color: COLOR_WARNING,
-                                                                font_family: "Consolas, monospace",
-                                                                font_size: "13px",
-
-                                                                "{score}"
-                                                            }
 
                                                             td {
                                                                 padding: "10px 12px",
                                                                 color: COLOR_TEXT,
+                                                                font_size: "12px",
                                                                 font_family: "Consolas, monospace",
-                                                                font_size: "13px",
-                                                                word_break: "break-all",
 
-                                                                "{member}"
+                                                                "{entry_id}"
                                                             }
 
                                                             td {
@@ -3855,125 +4166,190 @@ match info.key_type {
 
                                                                 div {
                                                                     display: "flex",
-                                                                    gap: "6px",
+                                                                    flex_wrap: "wrap",
+                                                                    gap: "8px",
 
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                                        color: "#68d391",
-                                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        title: "复制",
-                                                                        onclick: {
-                                                                            let member = member.clone();
-                                                                            move |_| {
-                                                                                match copy_value_to_clipboard(&member) {
-                                                                                    Ok(_) => {
-                                                                                        zset_status_message.set("复制成功".to_string());
-                                                                                        zset_status_error.set(false);
-                                                                                    }
-                                                                                    Err(error) => {
-                                                                                        zset_status_message.set(format!("复制失败：{error}"));
-                                                                                        zset_status_error.set(true);
-                                                                                    }
+                                                                    for (field_key, field_value) in fields.iter() {
+                                                                        div {
+                                                                            padding: "4px 8px",
+                                                                            background: COLOR_BG_TERTIARY,
+                                                                            border_radius: "4px",
+                                                                            font_size: "11px",
+
+                                                                            span {
+                                                                                color: "#818cf8",
+                                                                                font_family: "Consolas, monospace",
+
+                                                                                "{field_key}:"
+                                                                            }
+                                                                            span {
+                                                                                color: COLOR_TEXT,
+                                                                                margin_left: "4px",
+
+                                                                                "{field_value}"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            td {
+                                                                padding: "10px 12px",
+                                                                text_align: "center",
+
+                                                                button {
+                                                                    padding: "4px 8px",
+                                                                    background: "transparent",
+                                                                    color: COLOR_ERROR,
+                                                                    border: "none",
+                                                                    border_radius: "4px",
+                                                                    cursor: "pointer",
+                                                                    opacity: 0.7,
+                                                                    onclick: {
+                                                                        let entry_id = entry_id.clone();
+                                                                        move |_| {
+                                                                            deleting_stream_entry.set(Some(entry_id.clone()));
+                                                                        }
+                                                                    },
+
+                                                                    IconTrash { size: Some(15) }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    if filtered_entries.is_empty() {
+                                                        tr {
+                                                            td {
+                                                                colspan: 3,
+                                                                padding: "32px",
+                                                                text_align: "center",
+                                                                color: COLOR_TEXT_SECONDARY,
+
+                                                                if stream_search.read().is_empty() {
+                                                                    "暂无数据"
+                                                                } else {
+                                                                    "未找到匹配的条目"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if let Some(entry_id) = deleting_stream_entry.read().clone() {
+                                            div {
+                                                position: "fixed",
+                                                top: "0",
+                                                left: "0",
+                                                right: "0",
+                                                bottom: "0",
+                                                background: "rgba(0, 0, 0, 0.5)",
+                                                display: "flex",
+                                                align_items: "center",
+                                                justify_content: "center",
+                                                z_index: "1000",
+
+                                                div {
+                                                    padding: "24px",
+                                                    background: COLOR_BG_SECONDARY,
+                                                    border_radius: "12px",
+                                                    max_width: "400px",
+                                                    width: "90%",
+
+                                                    h3 {
+                                                        margin_bottom: "16px",
+                                                        color: COLOR_TEXT,
+                                                        font_size: "16px",
+                                                        font_weight: "600",
+
+                                                        "删除 Stream Entry"
+                                                    }
+
+                                                    p {
+                                                        margin_bottom: "24px",
+                                                        color: COLOR_TEXT_SECONDARY,
+                                                        font_size: "14px",
+
+                                                        "确定要删除 entry \"{entry_id}\" 吗？"
+                                                    }
+
+                                                    div {
+                                                        display: "flex",
+                                                        gap: "12px",
+                                                        justify_content: "flex_end",
+
+                                                        button {
+                                                            padding: "8px 16px",
+                                                            background: COLOR_BG_TERTIARY,
+                                                            color: COLOR_TEXT,
+                                                            border: "1px solid {COLOR_BORDER}",
+                                                            border_radius: "6px",
+                                                            cursor: "pointer",
+                                                            onclick: move |_| {
+                                                                deleting_stream_entry.set(None);
+                                                            },
+
+                                                            "取消"
+                                                        }
+
+                                                        button {
+                                                            padding: "8px 16px",
+                                                            background: COLOR_ERROR,
+                                                            color: COLOR_TEXT_CONTRAST,
+                                                            border: "none",
+                                                            border_radius: "6px",
+                                                            cursor: "pointer",
+                                                            onclick: {
+                                                                let pool = connection_pool.clone();
+                                                                let key = display_key.clone();
+                                                                let entry_id = entry_id.clone();
+                                                                move |_| {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    let entry_id = entry_id.clone();
+                                                                    spawn(async move {
+                                                                        match pool.stream_delete(&key, &entry_id).await {
+                                                                            Ok(true) => {
+                                                                                stream_status_message.set("删除成功".to_string());
+                                                                                stream_status_error.set(false);
+                                                                                deleting_stream_entry.set(None);
+                                                                                if let Err(error) = load_key_data(
+                                                                                    pool.clone(),
+                                                                                    key.clone(),
+                                                                                    key_info,
+                                                                                    string_value,
+                                                                                    hash_value,
+                                                                                    list_value,
+                                                                                    set_value,
+                                                                                    zset_value,
+                                                                                    stream_value,
+                                                                                    is_binary,
+                                                                                    binary_format,
+                                                                                    serialization_data,
+                                                                                    bitmap_info,
+                                                                                    loading,
+                                                                                ).await {
+                                                                                    tracing::error!("{error}");
+                                                                                } else {
+                                                                                    on_refresh.call(());
                                                                                 }
                                                                             }
-                                                                        },
-
-                                                                        IconCopy { size: Some(15) }
-                                                                    }
-
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(49, 130, 206, 0.18)",
-                                                                        color: "#63b3ed",
-                                                                        border: "1px solid rgba(99, 179, 237, 0.30)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        title: "修改 Score",
-                                                                        onclick: {
-                                                                            let member = member.clone();
-                                                                            let score = *score;
-                                                                            move |_| {
-                                                                                editing_zset_member.set(Some(member.clone()));
-                                                                                editing_zset_score.set(score.to_string());
+                                                                            Ok(false) => {
+                                                                                stream_status_message.set("Entry 不存在".to_string());
+                                                                                stream_status_error.set(true);
                                                                             }
-                                                                        },
-
-                                                                        IconEdit { size: Some(15) }
-                                                                    }
-
-                                                                    button {
-                                                                        width: "32px",
-                                                                        height: "32px",
-                                                                        display: "flex",
-                                                                        align_items: "center",
-                                                                        justify_content: "center",
-                                                                        background: "rgba(197, 48, 48, 0.18)",
-                                                                        color: "#f87171",
-                                                                        border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                        border_radius: "6px",
-                                                                        cursor: "pointer",
-                                                                        disabled: zset_action().is_some(),
-                                                                        title: "删除",
-                                                                        onclick: {
-                                                                            let pool = connection_pool.clone();
-                                                                            let key = display_key.clone();
-                                                                            let member = member.clone();
-                                                                            move |_| {
-                                                                                let pool = pool.clone();
-                                                                                let key = key.clone();
-                                                                                let member = member.clone();
-                                                                                spawn(async move {
-                                                                                    zset_action.set(Some(format!("delete:{}", member)));
-                                                                                    match pool.zset_remove(&key, &member).await {
-                                                                                        Ok(_) => {
-                                                                                            zset_status_message.set("删除成功".to_string());
-                                                                                            zset_status_error.set(false);
-                                                                                            if let Err(error) = load_key_data(
-                                                                                                pool.clone(),
-                                                                                                key.clone(),
-                                                                                                key_info,
-                                                                                                string_value,
-                                                                                                hash_value,
-                                                                                                list_value,
-                                                                                                set_value,
-                                                                                                zset_value,
-                                                                                                stream_value,
-                                                                                                is_binary,
-                                                                                                binary_format,
-                                                                                                serialization_data,
-                                                                                                bitmap_info,
-                                                                                                loading,
-                                                                                            ).await {
-                                                                                                tracing::error!("{error}");
-                                                                                            } else {
-                                                                                                on_refresh.call(());
-                                                                                            }
-                                                                                        }
-                                                                                        Err(error) => {
-                                                                                            zset_status_message.set(format!("删除失败：{error}"));
-                                                                                            zset_status_error.set(true);
-                                                                                        }
-                                                                                    }
-                                                                                    zset_action.set(None);
-                                                                                });
+                                                                            Err(error) => {
+                                                                                stream_status_message.set(format!("删除失败：{error}"));
+                                                                                stream_status_error.set(true);
                                                                             }
-                                                                        },
-
-                                                                        IconTrash { size: Some(15) }
-                                                                    }
+                                                                        }
+                                                                    });
                                                                 }
-                                                            }
+                                                            },
+
+                                                            "删除"
                                                         }
                                                     }
                                                 }
@@ -3981,378 +4357,13 @@ match info.key_type {
                                         }
                                     }
                                 }
-                            }
-                            KeyType::Stream => {
-                                let stream_val = stream_value.read().clone();
-                                let filtered_entries: Vec<_> = if stream_search.read().is_empty() {
-                                    stream_val.clone()
-                                } else {
-                                    stream_val.iter().filter(|(id, fields)| {
-                                        id.to_lowercase().contains(&stream_search.read().to_lowercase()) ||
-                                        fields.iter().any(|(k, v)| {
-                                            k.to_lowercase().contains(&stream_search.read().to_lowercase()) ||
-                                            v.to_lowercase().contains(&stream_search.read().to_lowercase())
-                                        })
-                                    }).cloned().collect()
-                                };
-
-                                rsx! {
-                                    div {
-                                        display: "flex",
-                                        justify_content: "space_between",
-                                        align_items: "center",
-                                        gap: "12px",
-                                        margin_bottom: "12px",
-                                        flex_wrap: "wrap",
-
-                                        div {
-                                            display: "flex",
-                                            gap: "8px",
-                                            align_items: "center",
-                                            flex_wrap: "wrap",
-
-                                            input {
-                                                width: "200px",
-                                                padding: "8px 10px",
-                                                background: COLOR_BG_TERTIARY,
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "6px",
-                                                color: COLOR_TEXT,
-                                                value: "{stream_search}",
-                                                placeholder: "搜索 ID 或字段",
-                                                oninput: move |event| stream_search.set(event.value()),
-                                            }
-
-                                            if stream_search.read().is_empty() {
-                                                div {
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    font_size: "13px",
-
-                                                    "Stream Entries ({stream_val.len()})"
-                                                }
-                                            } else {
-                                                div {
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    font_size: "13px",
-
-                                                    "Stream Entries ({filtered_entries.len()}/{stream_val.len()})"
-                                                }
-                                            }
-                                        }
-
-                                        button {
-                                            padding: "6px 10px",
-                                            background: "rgba(47, 133, 90, 0.16)",
-                                            color: COLOR_SUCCESS,
-                                            border: "1px solid rgba(104, 211, 145, 0.28)",
-                                            border_radius: "6px",
-                                            cursor: "pointer",
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "4px",
-                                            title: "复制",
-                                            onclick: {
-                                                let stream = stream_val.clone();
-                                                move |_| {
-                                                    let json = serde_json::to_string_pretty(&stream).unwrap_or_default();
-                                                    match copy_value_to_clipboard(&json) {
-                                                        Ok(_) => {
-                                                            stream_status_message.set("复制成功".to_string());
-                                                            stream_status_error.set(false);
-                                                        }
-                                                        Err(error) => {
-                                                            stream_status_message.set(format!("复制失败：{error}"));
-                                                            stream_status_error.set(true);
-                                                        }
-                                                    }
-                                                }
-                                            },
-
-                                            IconCopy { size: Some(14) }
-                                            "复制"
-                                        }
-                                    }
-
-                                    if !stream_status_message.read().is_empty() {
-                                        div {
-                                            margin_bottom: "12px",
-                                            padding: "8px 12px",
-                                            background: if stream_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
-                                            border_radius: "6px",
-                                            color: if stream_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
-                                            font_size: "13px",
-
-                                            "{stream_status_message}"
-                                        }
-                                    }
-
-                                    div {
-                                        overflow_x: "auto",
-                                        overflow_y: "auto",
-                                        max_height: "calc(100vh - 350px)",
-                                        border: "1px solid {COLOR_BORDER}",
-                                        border_radius: "8px",
-                                        background: COLOR_BG_SECONDARY,
-
-                                        table {
-                                            width: "100%",
-                                            border_collapse: "collapse",
-
-                                            thead {
-                                                tr {
-                                                    background: COLOR_BG_TERTIARY,
-                                                    border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                    th {
-                                                        width: "200px",
-                                                        padding: "12px",
+                                _ => {
+                                                rsx! {
+                                                    div {
                                                         color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
 
-                                                        "Entry ID"
+                                                        "暂不支持该类型的编辑"
                                                     }
-
-                                                    th {
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "left",
-
-                                                        "Fields"
-                                                    }
-
-                                                    th {
-                                                        width: "60px",
-                                                        padding: "12px",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "12px",
-                                                        font_weight: "600",
-                                                        text_align: "center",
-
-                                                        ""
-                                                    }
-                                                }
-                                            }
-
-                                            tbody {
-                                                for (entry_id, fields) in filtered_entries.iter() {
-                                                    tr {
-                                                        border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                        td {
-                                                            padding: "10px 12px",
-                                                            color: COLOR_TEXT,
-                                                            font_size: "12px",
-                                                            font_family: "Consolas, monospace",
-
-                                                            "{entry_id}"
-                                                        }
-
-                                                        td {
-                                                            padding: "10px 12px",
-
-                                                            div {
-                                                                display: "flex",
-                                                                flex_wrap: "wrap",
-                                                                gap: "8px",
-
-                                                                for (field_key, field_value) in fields.iter() {
-                                                                    div {
-                                                                        padding: "4px 8px",
-                                                                        background: COLOR_BG_TERTIARY,
-                                                                        border_radius: "4px",
-                                                                        font_size: "11px",
-
-                                                                        span {
-                                                                            color: "#818cf8",
-                                                                            font_family: "Consolas, monospace",
-
-                                                                            "{field_key}:"
-                                                                        }
-                                                                        span {
-                                                                            color: COLOR_TEXT,
-                                                                            margin_left: "4px",
-
-                                                                            "{field_value}"
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-
-                                                        td {
-                                                            padding: "10px 12px",
-                                                            text_align: "center",
-
-                                                            button {
-                                                                padding: "4px 8px",
-                                                                background: "transparent",
-                                                                color: COLOR_ERROR,
-                                                                border: "none",
-                                                                border_radius: "4px",
-                                                                cursor: "pointer",
-                                                                opacity: 0.7,
-                                                                onclick: {
-                                                                    let entry_id = entry_id.clone();
-                                                                    move |_| {
-                                                                        deleting_stream_entry.set(Some(entry_id.clone()));
-                                                                    }
-                                                                },
-
-                                                                IconTrash { size: Some(15) }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-
-                                                if filtered_entries.is_empty() {
-                                                    tr {
-                                                        td {
-                                                            colspan: 3,
-                                                            padding: "32px",
-                                                            text_align: "center",
-                                                            color: COLOR_TEXT_SECONDARY,
-
-                                                            if stream_search.read().is_empty() {
-                                                                "暂无数据"
-                                                            } else {
-                                                                "未找到匹配的条目"
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if let Some(entry_id) = deleting_stream_entry.read().clone() {
-                                        div {
-                                            position: "fixed",
-                                            top: "0",
-                                            left: "0",
-                                            right: "0",
-                                            bottom: "0",
-                                            background: "rgba(0, 0, 0, 0.5)",
-                                            display: "flex",
-                                            align_items: "center",
-                                            justify_content: "center",
-                                            z_index: "1000",
-
-                                            div {
-                                                padding: "24px",
-                                                background: COLOR_BG_SECONDARY,
-                                                border_radius: "12px",
-                                                max_width: "400px",
-                                                width: "90%",
-
-                                                h3 {
-                                                    margin_bottom: "16px",
-                                                    color: COLOR_TEXT,
-                                                    font_size: "16px",
-                                                    font_weight: "600",
-
-                                                    "删除 Stream Entry"
-                                                }
-
-                                                p {
-                                                    margin_bottom: "24px",
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    font_size: "14px",
-
-                                                    "确定要删除 entry \"{entry_id}\" 吗？"
-                                                }
-
-                                                div {
-                                                    display: "flex",
-                                                    gap: "12px",
-                                                    justify_content: "flex_end",
-
-                                                    button {
-                                                        padding: "8px 16px",
-                                                        background: COLOR_BG_TERTIARY,
-                                                        color: COLOR_TEXT,
-                                                        border: "1px solid {COLOR_BORDER}",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        onclick: move |_| {
-                                                            deleting_stream_entry.set(None);
-                                                        },
-
-                                                        "取消"
-                                                    }
-
-                                                    button {
-                                                        padding: "8px 16px",
-                                                        background: COLOR_ERROR,
-                                                        color: COLOR_TEXT_CONTRAST,
-                                                        border: "none",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        onclick: {
-                                                            let pool = connection_pool.clone();
-                                                            let key = display_key.clone();
-                                                            let entry_id = entry_id.clone();
-                                                            move |_| {
-                                                                let pool = pool.clone();
-                                                                let key = key.clone();
-                                                                let entry_id = entry_id.clone();
-                                                                spawn(async move {
-                                                                    match pool.stream_delete(&key, &entry_id).await {
-                                                                        Ok(true) => {
-                                                                            stream_status_message.set("删除成功".to_string());
-                                                                            stream_status_error.set(false);
-                                                                            deleting_stream_entry.set(None);
-                                                                            if let Err(error) = load_key_data(
-                                                                                pool.clone(),
-                                                                                key.clone(),
-                                                                                key_info,
-                                                                                string_value,
-                                                                                hash_value,
-                                                                                list_value,
-                                                                                set_value,
-                                                                                zset_value,
-                                                                                stream_value,
-                                                                                is_binary,
-                                                                                binary_format,
-                                                                                serialization_data,
-                                                                                bitmap_info,
-                                                                                loading,
-                                                                            ).await {
-                                                                                tracing::error!("{error}");
-                                                                            } else {
-                                                                                on_refresh.call(());
-                                                                            }
-                                                                        }
-                                                                        Ok(false) => {
-                                                                            stream_status_message.set("Entry 不存在".to_string());
-                                                                            stream_status_error.set(true);
-                                                                        }
-                                                                        Err(error) => {
-                                                                            stream_status_message.set(format!("删除失败：{error}"));
-                                                                            stream_status_error.set(true);
-                                                                        }
-                                                                    }
-                                                                });
-                                                            }
-                                                        },
-
-                                                        "删除"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                            rsx! {
-                                                div {
-                                                    color: COLOR_TEXT_SECONDARY,
-
-                                                    "暂不支持该类型的编辑"
                                                 }
                                             }
                                         }
@@ -4360,26 +4371,25 @@ match info.key_type {
                                 }
                             }
                         }
-                    }
-                    }
-                } else {
-                    div {
-                        height: "100%",
-                        display: "flex",
-                        align_items: "center",
-                        justify_content: "center",
-                        color: COLOR_TEXT_SECONDARY,
-                        text_align: "center",
-                        border: "1px solid {COLOR_BORDER}",
-                        border_radius: "12px",
-                        background: COLOR_BG_SECONDARY,
+                        }
+                    } else {
+                        div {
+                            height: "100%",
+                            display: "flex",
+                            align_items: "center",
+                            justify_content: "center",
+                            color: COLOR_TEXT_SECONDARY,
+                            text_align: "center",
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "12px",
+                            background: COLOR_BG_SECONDARY,
 
-                        "未能加载 Key 数据"
+                            "未能加载 Key 数据"
+                        }
                     }
                 }
             }
         }
-    }
 }
 
 #[component]

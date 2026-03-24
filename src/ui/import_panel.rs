@@ -1,5 +1,8 @@
 use crate::connection::ConnectionPool;
-use crate::theme::{COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_SUCCESS};
+use crate::theme::{
+    COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_SUCCESS,
+    COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+};
 use dioxus::prelude::*;
 
 #[component]
@@ -44,7 +47,8 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
     };
 
     let load_sample = move |_| {
-        import_data.set(r#"[
+        import_data.set(
+            r#"[
   {
     "key": "user:1",
     "type": "string",
@@ -79,7 +83,9 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
     "scored_members": [["player1", "100"], ["player2", "200"], ["player3", "150"]],
     "ttl": null
   }
-]"#.to_string());
+]"#
+            .to_string(),
+        );
     };
 
     rsx! {
