@@ -17,6 +17,26 @@ pub struct SSHConfig {
     pub password: Option<String>,
     pub private_key_path: Option<String>,
     pub passphrase: Option<String>,
+    #[serde(default)]
+    pub encrypted_password: Option<EncryptedField>,
+    #[serde(default)]
+    pub encrypted_passphrase: Option<EncryptedField>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct EncryptedField {
+    pub ciphertext: String,
+    pub iv: String,
+}
+
+impl EncryptedField {
+    pub fn new(ciphertext: String, iv: String) -> Self {
+        Self { ciphertext, iv }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ciphertext.is_empty()
+    }
 }
 
 impl Default for SSHConfig {
@@ -28,6 +48,8 @@ impl Default for SSHConfig {
             password: None,
             private_key_path: None,
             passphrase: None,
+            encrypted_password: None,
+            encrypted_passphrase: None,
         }
     }
 }
@@ -116,6 +138,16 @@ pub struct ConnectionConfig {
     pub cluster: Option<ClusterConfig>,
     #[serde(default, skip_serializing)]
     pub use_ssl: bool,
+    #[serde(default)]
+    pub encrypted_password: Option<EncryptedField>,
+    #[serde(default)]
+    pub auto_reconnect: bool,
+    #[serde(default = "default_heartbeat_interval")]
+    pub heartbeat_interval_secs: u64,
+}
+
+fn default_heartbeat_interval() -> u64 {
+    30
 }
 
 impl Default for ConnectionConfig {
@@ -135,6 +167,9 @@ impl Default for ConnectionConfig {
             sentinel: None,
             cluster: None,
             use_ssl: false,
+            encrypted_password: None,
+            auto_reconnect: true,
+            heartbeat_interval_secs: 30,
         }
     }
 }

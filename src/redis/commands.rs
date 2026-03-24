@@ -1,4 +1,5 @@
 use super::{KeyInfo, KeyType};
+use super::cluster::{ClusterInfo, ClusterNode, SentinelInfo, parse_cluster_info, parse_cluster_nodes, parse_sentinel_masters};
 use crate::connection::{ConnectionError, ConnectionPool, Result};
 use crate::ui::add_key_dialog::{HashField, ListValue, SetValue, StreamEntry, ZSetMember};
 use std::collections::HashMap;
@@ -996,6 +997,191 @@ pub struct ImportKeyData {
     pub scored_members: Option<Vec<(String, String)>>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ExportKeyData {
+    pub key: String,
+    #[serde(rename = "type")]
+    pub key_type: String,
+    pub ttl: Option<i64>,
+    pub value: Option<String>,
+    pub fields: Option<HashMap<String, String>>,
+    pub elements: Option<Vec<String>>,
+    pub members: Option<Vec<String>>,
+    pub scored_members: Option<Vec<(String, f64)>>,
+}
+
+pub enum ExportFormat {
+    Json,
+    Commands,
+}
+
+impl ConnectionPool {
+    pub async fn export_keys(&self, keys: &[String], format: ExportFormat) -> Result<String> {
+        let mut exported_keys = Vec::new();
+
+        for key in keys {
+            if let Ok(key_info) = self.get_key_info(key).await {
+                let ttl = key_info.ttl;
+
+                let export_data = match key_info.key_type {
+                    KeyType::String => {
+                        let value = self.get_string_value(key).await.ok();
+                        ExportKeyData {
+                            key: key.clone(),
+                            key_type: "string".to_string(),
+                            ttl,
+                            value,
+                            fields: None,
+                            elements: None,
+                            members: None,
+                            scored_members: None,
+                        }
+                    }
+                    KeyType::Hash => {
+                        let fields = self.get_hash_all(key).await.ok();
+                        ExportKeyData {
+                            key: key.clone(),
+                            key_type: "hash".to_string(),
+                            ttl,
+                            value: None,
+                            fields,
+                            elements: None,
+                            members: None,
+                            scored_members: None,
+                        }
+                    }
+                    KeyType::List => {
+                        let elements = self.get_list_range(key, 0, -1).await.ok();
+                        ExportKeyData {
+                            key: key.clone(),
+                            key_type: "list".to_string(),
+                            ttl,
+                            value: None,
+                            fields: None,
+                            elements,
+                            members: None,
+                            scored_members: None,
+                        }
+                    }
+                    KeyType::Set => {
+                        let members = self.get_set_members(key).await.ok();
+                        ExportKeyData {
+                            key: key.clone(),
+                            key_type: "set".to_string(),
+                            ttl,
+                            value: None,
+                            fields: None,
+                            elements: None,
+                            members,
+                            scored_members: None,
+                        }
+                    }
+                    KeyType::ZSet => {
+                        let scored_members = self.get_zset_range(key, 0, -1).await.ok();
+                        ExportKeyData {
+                            key: key.clone(),
+                            key_type: "zset".to_string(),
+                            ttl,
+                            value: None,
+                            fields: None,
+                            elements: None,
+                            members: None,
+                            scored_members,
+                        }
+                    }
+                    KeyType::Stream => {
+                        ExportKeyData {
+                            key: key.clone(),
+                            key_type: "stream".to_string(),
+                            ttl,
+                            value: None,
+                            fields: None,
+                            elements: None,
+                            members: None,
+                            scored_members: None,
+                        }
+                    }
+                    KeyType::None => continue,
+                };
+
+                exported_keys.push(export_data);
+            }
+        }
+
+        match format {
+            ExportFormat::Json => {
+                serde_json::to_string_pretty(&exported_keys)
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+            }
+            ExportFormat::Commands => {
+                let mut commands = String::new();
+                for data in exported_keys {
+                    let key = &data.key;
+                    
+                    match data.key_type.as_str() {
+                        "string" => {
+                            if let Some(v) = &data.value {
+                                commands.push_str(&format!("SET {} {}\n", key, escape_value(v)));
+                            }
+                        }
+                        "hash" => {
+                            if let Some(fields) = &data.fields {
+                                for (field, value) in fields {
+                                    commands.push_str(&format!("HSET {} {} {}\n", key, field, escape_value(value)));
+                                }
+                            }
+                        }
+                        "list" => {
+                            if let Some(elements) = &data.elements {
+                                if !elements.is_empty() {
+                                    let values: Vec<&str> = elements.iter().map(|s| s.as_str()).collect();
+                                    commands.push_str(&format!("RPUSH {} {}\n", key, values.join(" ")));
+                                }
+                            }
+                        }
+                        "set" => {
+                            if let Some(members) = &data.members {
+                                if !members.is_empty() {
+                                    let values: Vec<&str> = members.iter().map(|s| s.as_str()).collect();
+                                    commands.push_str(&format!("SADD {} {}\n", key, values.join(" ")));
+                                }
+                            }
+                        }
+                        "zset" => {
+                            if let Some(scored_members) = &data.scored_members {
+                                for (member, score) in scored_members {
+                                    commands.push_str(&format!("ZADD {} {} {}\n", key, score, member));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    if let Some(ttl) = data.ttl {
+                        if ttl > 0 {
+                            commands.push_str(&format!("EXPIRE {} {}\n", key, ttl));
+                        }
+                    }
+                }
+                Ok(commands)
+            }
+        }
+    }
+
+    pub async fn export_all_keys(&self, pattern: &str, format: ExportFormat) -> Result<String> {
+        let keys = self.scan_keys(pattern, 1000).await?;
+        self.export_keys(&keys, format).await
+    }
+}
+
+fn escape_value(value: &str) -> String {
+    if value.contains(' ') || value.contains('\n') || value.contains('"') {
+        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+    } else {
+        value.to_string()
+    }
+}
+
 impl ConnectionPool {
     pub async fn eval_script(&self, script: &str, keys: &[String], args: &[String]) -> Result<redis::Value> {
         let mut connection = self.connection.lock().await;
@@ -1063,6 +1249,101 @@ impl ConnectionPool {
 
         if let Some(ref mut conn) = *connection {
             conn.execute_cmd::<()>(&mut redis::cmd("SCRIPT").arg("FLUSH")).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+}
+
+impl ConnectionPool {
+    pub async fn get_cluster_nodes(&self) -> Result<Vec<ClusterNode>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let output: String = conn.execute_cmd(&mut redis::cmd("CLUSTER").arg("NODES")).await?;
+            Ok(parse_cluster_nodes(&output))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_cluster_info(&self) -> Result<ClusterInfo> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let output: String = conn.execute_cmd(&mut redis::cmd("CLUSTER").arg("INFO")).await?;
+            Ok(parse_cluster_info(&output))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_cluster_slots(&self) -> Result<Vec<redis::Value>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(&mut redis::cmd("CLUSTER").arg("SLOTS")).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_sentinel_masters(&self) -> Result<Vec<SentinelInfo>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let output: String = conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("MASTERS")).await?;
+            Ok(parse_sentinel_masters(&output))
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_sentinel_master(&self, name: &str) -> Result<HashMap<String, String>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("MASTER").arg(name)).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_sentinel_replicas(&self, name: &str) -> Result<Vec<HashMap<String, String>>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("REPLICAS").arg(name)).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_sentinel_sentinels(&self, name: &str) -> Result<Vec<HashMap<String, String>>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(&mut redis::cmd("SENTINEL").arg("SENTINELS").arg(name)).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn sentinel_get_master_addr_by_name(&self, name: &str) -> Result<Option<(String, u16)>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: Vec<String> = conn
+                .execute_cmd(&mut redis::cmd("SENTINEL").arg("GET-MASTER-ADDR-BY-NAME").arg(name))
+                .await?;
+            
+            if result.len() >= 2 {
+                let host = result[0].clone();
+                let port: u16 = result[1].parse().unwrap_or(6379);
+                Ok(Some((host, port)))
+            } else {
+                Ok(None)
+            }
         } else {
             Err(ConnectionError::Closed)
         }

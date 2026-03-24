@@ -1,5 +1,6 @@
 mod config;
 mod connection;
+mod crypto;
 mod redis;
 mod serialization;
 mod theme;

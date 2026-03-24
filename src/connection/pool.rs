@@ -3,9 +3,14 @@ use redis::aio::ConnectionManager;
 use redis::cluster::ClusterClient;
 use redis::cluster_async::ClusterConnection;
 use std::fmt;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
+
+const HEARTBEAT_INTERVAL_SECS: u64 = 30;
+const MAX_CONSECUTIVE_FAILURES: u32 = 3;
+const RECONNECT_DELAY_SECS: u64 = 1;
 
 pub enum RedisConnection {
     Single(ConnectionManager),
@@ -448,5 +453,124 @@ impl ConnectionPool {
         }
 
         Ok(())
+    }
+
+    pub async fn check_connection_health(&self) -> bool {
+        match self.ping().await {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+
+    pub async fn ensure_connection(&self) -> Result<()> {
+        if self.check_connection_health().await {
+            return Ok(());
+        }
+
+        tracing::warn!("Connection health check failed, attempting reconnect");
+        self.reconnect().await
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HealthStatus {
+    pub is_healthy: bool,
+    pub last_check: Option<Instant>,
+    pub consecutive_failures: u32,
+    pub last_error: Option<String>,
+}
+
+impl Default for HealthStatus {
+    fn default() -> Self {
+        Self {
+            is_healthy: true,
+            last_check: None,
+            consecutive_failures: 0,
+            last_error: None,
+        }
+    }
+}
+
+pub struct ConnectionHealthMonitor {
+    pool: ConnectionPool,
+    status: Arc<Mutex<HealthStatus>>,
+    running: Arc<AtomicBool>,
+}
+
+impl ConnectionHealthMonitor {
+    pub fn new(pool: ConnectionPool) -> Self {
+        Self {
+            pool,
+            status: Arc::new(Mutex::new(HealthStatus::default())),
+            running: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub async fn start(&self) {
+        if self.running.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        let pool = self.pool.clone();
+        let status = self.status.clone();
+        let running = self.running.clone();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
+
+            while running.load(Ordering::Relaxed) {
+                interval.tick().await;
+
+                let is_healthy = pool.check_connection_health().await;
+
+                let mut status_guard = status.lock().await;
+                status_guard.last_check = Some(Instant::now());
+
+                if is_healthy {
+                    status_guard.is_healthy = true;
+                    status_guard.consecutive_failures = 0;
+                    status_guard.last_error = None;
+                    tracing::debug!("Connection health check passed");
+                } else {
+                    status_guard.consecutive_failures += 1;
+                    status_guard.is_healthy = false;
+
+                    if status_guard.consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
+                        tracing::warn!(
+                            "Connection failed {} times, attempting reconnect",
+                            status_guard.consecutive_failures
+                        );
+
+                        drop(status_guard);
+
+                        if let Err(e) = pool.reconnect().await {
+                            let mut status_guard = status.lock().await;
+                            status_guard.last_error = Some(e.to_string());
+                            tracing::error!("Reconnect failed: {}", e);
+
+                            tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS)).await;
+                        } else {
+                            let mut status_guard = status.lock().await;
+                            status_guard.is_healthy = true;
+                            status_guard.consecutive_failures = 0;
+                            status_guard.last_error = None;
+                            tracing::info!("Reconnect successful");
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
+
+    pub async fn get_status(&self) -> HealthStatus {
+        self.status.lock().await.clone()
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::Relaxed)
     }
 }

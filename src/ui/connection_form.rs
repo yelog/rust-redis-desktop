@@ -553,6 +553,8 @@ pub fn ConnectionForm(
                                     password: if ssh_password.read().is_empty() { None } else { Some(ssh_password()) },
                                     private_key_path: if ssh_key_path.read().is_empty() { None } else { Some(ssh_key_path()) },
                                     passphrase: None,
+                                    encrypted_password: None,
+                                    encrypted_passphrase: None,
                                 });
                             }
 
