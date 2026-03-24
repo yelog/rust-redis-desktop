@@ -6,14 +6,16 @@ use crate::theme::{
     COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
 };
 use crate::ui::{
-    ClientsPanel, ConnectionForm, DeleteConnectionConfirmDialog, FlushConfirmDialog, ImportPanel,
-    KeyBrowser, LeftRail, MonitorPanel, PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog,
-    SlowLogPanel, Terminal, ToastContainer, ToastManager,
+    ClientsPanel, ConnectionExportDialog, ConnectionForm, ConnectionImportDialog,
+    DeleteConnectionConfirmDialog, FlushConfirmDialog, ImportPanel, KeyBrowser, LeftRail,
+    MonitorPanel, PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog, SlowLogPanel,
+    Terminal, ToastContainer, ToastManager,
 };
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -625,6 +627,8 @@ pub fn App() -> Element {
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
     let mut show_import_dialog = use_signal(|| None::<Uuid>);
     let mut show_delete_connection_dialog = use_signal(|| None::<(Uuid, String)>);
+    let mut show_export_connections_dialog = use_signal(|| false);
+    let mut show_import_connections_dialog = use_signal(|| false);
     let mut current_db = use_signal(|| 0u8);
     let theme_preference = use_signal(|| load_initial_settings().theme_preference);
     let mut system_theme_dark = use_signal(system_theme_is_dark);
@@ -645,8 +649,10 @@ pub fn App() -> Element {
     use_effect(move || {
         if let Some(storage) = config_storage.read().as_ref() {
             if let Ok(saved) = storage.load_connections() {
-                let conns: Vec<(Uuid, String)> = saved.iter().map(|c| (c.id, c.name.clone())).collect();
-                let readonly: HashMap<Uuid, bool> = saved.iter().map(|c| (c.id, c.readonly)).collect();
+                let conns: Vec<(Uuid, String)> =
+                    saved.iter().map(|c| (c.id, c.name.clone())).collect();
+                let readonly: HashMap<Uuid, bool> =
+                    saved.iter().map(|c| (c.id, c.readonly)).collect();
                 connections.set(conns);
                 readonly_connections.set(readonly);
             }
@@ -983,6 +989,8 @@ await new Promise(() => {});
                                 on_import_connection: move |id: Uuid| {
                                     show_import_dialog.set(Some(id));
                                 },
+                                on_export_connections: move |_| show_export_connections_dialog.set(true),
+                                on_import_connections: move |_| show_import_connections_dialog.set(true),
                                 on_open_settings: move |_| show_settings.set(true),
                             }
 
@@ -1476,6 +1484,47 @@ await new Promise(() => {});
                             }
                         }
                     }
+
+        if show_export_connections_dialog() {
+                        if let Some(storage) = config_storage.read().as_ref() {
+                            ConnectionExportDialog {
+                                config_storage: Arc::new(storage.clone()),
+                                colors,
+                                on_close: move |_| show_export_connections_dialog.set(false),
+                            }
+                        }
+                    }
+
+        if show_import_connections_dialog() {
+            if let Some(storage) = config_storage.read().as_ref() {
+                {
+                    let config_storage_arc = Arc::new(storage.clone());
+                    rsx! {
+                        ConnectionImportDialog {
+                            config_storage: config_storage_arc.clone(),
+                            colors,
+                            on_import: {
+                                let mut connections = connections.clone();
+                                let mut readonly_connections = readonly_connections.clone();
+                                let mut toast_manager = toast_manager.clone();
+                                let config_storage_inner = config_storage_arc.clone();
+                                move |_count: usize| {
+                                    show_import_connections_dialog.set(false);
+                                    if let Ok(saved) = config_storage_inner.load_connections() {
+                                        let conns: Vec<(Uuid, String)> = saved.iter().map(|c| (c.id, c.name.clone())).collect();
+                                        let readonly: HashMap<Uuid, bool> = saved.iter().map(|c| (c.id, c.readonly)).collect();
+                                        connections.set(conns);
+                                        readonly_connections.set(readonly);
+                                    }
+                                    toast_manager.write().success("Connections imported");
+                                }
+                            },
+                            on_close: move |_| show_import_connections_dialog.set(false),
+                        }
+                    }
+                }
+            }
+        }
 
                     ToastContainer { manager: toast_manager }
                 }

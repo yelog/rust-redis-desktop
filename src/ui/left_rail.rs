@@ -6,7 +6,8 @@ use crate::theme::{
     COLOR_WARNING,
 };
 use crate::ui::icons::{
-    IconAlert, IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconUpload, IconX,
+    IconAlert, IconDownload, IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconUpload,
+    IconX,
 };
 use crate::ui::status_indicator::StatusIndicatorWithLabel;
 use dioxus::prelude::*;
@@ -38,6 +39,8 @@ pub fn LeftRail(
     on_close_connection: EventHandler<Uuid>,
     on_flush_connection: EventHandler<Uuid>,
     on_import_connection: EventHandler<Uuid>,
+    on_export_connections: EventHandler<()>,
+    on_import_connections: EventHandler<()>,
     on_open_settings: EventHandler<()>,
 ) -> Element {
     let has_connections = !connections.is_empty();
@@ -269,6 +272,50 @@ pub fn LeftRail(
 
                     IconPlus { size: Some(14) }
                     "新建连接"
+                }
+
+                div {
+                    display: "flex",
+                    gap: "8px",
+                    margin_top: "8px",
+
+                    button {
+                        flex: "1",
+                        padding: "8px 10px",
+                        background: COLOR_SURFACE_HIGH,
+                        color: COLOR_TEXT,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "6px",
+                        cursor: "pointer",
+                        font_size: "12px",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        gap: "6px",
+                        onclick: move |_| on_export_connections.call(()),
+
+                        IconDownload { size: Some(12) }
+                        "导出"
+                    }
+
+                    button {
+                        flex: "1",
+                        padding: "8px 10px",
+                        background: COLOR_SURFACE_HIGH,
+                        color: COLOR_TEXT,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "6px",
+                        cursor: "pointer",
+                        font_size: "12px",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        gap: "6px",
+                        onclick: move |_| on_import_connections.call(()),
+
+                        IconUpload { size: Some(12) }
+                        "导入"
+                    }
                 }
             }
 

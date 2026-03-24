@@ -82,7 +82,7 @@ struct ConfigFile {
     command_history: CommandHistory,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ConfigStorage {
     config_path: PathBuf,
 }

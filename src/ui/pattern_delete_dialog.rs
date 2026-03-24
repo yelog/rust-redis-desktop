@@ -59,7 +59,10 @@ pub fn PatternDeleteDialog(
 
                 match result {
                     Ok(count) => {
-                        let keys = pool.scan_keys(&pattern_for_scan, 1000).await.unwrap_or_default();
+                        let keys = pool
+                            .scan_keys(&pattern_for_scan, 1000)
+                            .await
+                            .unwrap_or_default();
                         all_keys = keys;
                         total_found.set(count);
                         scan_complete.set(true);
