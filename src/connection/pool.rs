@@ -6,11 +6,12 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 
 const HEARTBEAT_INTERVAL_SECS: u64 = 30;
 const MAX_CONSECUTIVE_FAILURES: u32 = 3;
 const RECONNECT_DELAY_SECS: u64 = 1;
+const DEFAULT_POOL_SIZE: usize = 5;
 
 pub enum RedisConnection {
     Single(ConnectionManager),
@@ -253,6 +254,8 @@ pub struct ConnectionPool {
     pub(crate) connection: Arc<Mutex<Option<RedisConnection>>>,
     pub(crate) selected_db: Arc<AtomicU8>,
     ssh_tunnel: Arc<Mutex<Option<SSHTunnel>>>,
+    pool_semaphore: Arc<Semaphore>,
+    pool_size: usize,
 }
 
 impl fmt::Debug for ConnectionPool {
@@ -260,6 +263,7 @@ impl fmt::Debug for ConnectionPool {
         f.debug_struct("ConnectionPool")
             .field("config", &self.config)
             .field("selected_db", &self.selected_db)
+            .field("pool_size", &self.pool_size)
             .finish()
     }
 }
@@ -277,22 +281,38 @@ impl Clone for ConnectionPool {
             connection: Arc::clone(&self.connection),
             selected_db: Arc::clone(&self.selected_db),
             ssh_tunnel: Arc::clone(&self.ssh_tunnel),
+            pool_semaphore: Arc::clone(&self.pool_semaphore),
+            pool_size: self.pool_size,
         }
     }
 }
 
 impl ConnectionPool {
     pub async fn new(config: ConnectionConfig) -> Result<Self> {
+        Self::with_pool_size(config, DEFAULT_POOL_SIZE).await
+    }
+
+    pub async fn with_pool_size(config: ConnectionConfig, pool_size: usize) -> Result<Self> {
         let pool = Self {
             selected_db: Arc::new(AtomicU8::new(config.db)),
             config,
             connection: Arc::new(Mutex::new(None)),
             ssh_tunnel: Arc::new(Mutex::new(None)),
+            pool_semaphore: Arc::new(Semaphore::new(pool_size)),
+            pool_size,
         };
 
         pool.connect().await?;
 
         Ok(pool)
+    }
+
+    pub fn pool_size(&self) -> usize {
+        self.pool_size
+    }
+
+    pub async fn available_connections(&self) -> usize {
+        self.pool_semaphore.available_permits()
     }
 
     async fn connect(&self) -> Result<()> {

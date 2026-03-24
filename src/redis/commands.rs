@@ -1,8 +1,18 @@
 use super::{KeyInfo, KeyType};
-use super::cluster::{ClusterInfo, ClusterNode, SentinelInfo, parse_cluster_info, parse_cluster_nodes, parse_sentinel_masters};
-use crate::connection::{ConnectionError, ConnectionPool, Result};
+use super::cluster::{parse_cluster_info, parse_cluster_nodes, parse_sentinel_masters, ClusterInfo, ClusterNode, SentinelInfo};
+use crate::connection::{ConnectionError, ConnectionPool, RedisConnection, Result};
 use crate::ui::add_key_dialog::{HashField, ListValue, SetValue, StreamEntry, ZSetMember};
 use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+pub enum LargeKeyData {
+    String { value: String },
+    Hash { items: Vec<(String, String)>, cursor: u64, total: u64 },
+    List { items: Vec<String>, total: u64 },
+    Set { items: Vec<String>, cursor: u64, total: u64 },
+    ZSet { items: Vec<(String, f64)>, cursor: u64, total: u64 },
+    Stream { entries: Vec<(String, Vec<(String, String)>)> },
+}
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ServerInfo {
@@ -161,10 +171,36 @@ impl ConnectionPool {
 
         if let Some(ref mut conn) = *connection {
             let mut result = HashMap::new();
+            
+            const BATCH_SIZE: usize = 100;
+            
+            for chunk in keys.chunks(BATCH_SIZE) {
+                let types: Vec<String> = match conn {
+                    RedisConnection::Single(ref mut c) => {
+                        let mut pipe = redis::pipe();
+                        for key in chunk {
+                            pipe.cmd("TYPE").arg(key);
+                        }
+                        pipe.query_async(c).await
+                            .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?
+                    }
+                    RedisConnection::Cluster(ref mut c) => {
+                        let mut types = Vec::with_capacity(chunk.len());
+                        for key in chunk {
+                            let type_str: String = redis::cmd("TYPE")
+                                .arg(key)
+                                .query_async(c)
+                                .await
+                                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+                            types.push(type_str);
+                        }
+                        types
+                    }
+                };
 
-            for key in keys {
-                let type_str: String = conn.execute_cmd(&mut redis::cmd("TYPE").arg(key)).await?;
-                result.insert(key.clone(), KeyType::from(type_str));
+                for (key, type_str) in chunk.iter().zip(types.iter()) {
+                    result.insert(key.clone(), KeyType::from(type_str.clone()));
+                }
             }
 
             Ok(result)
@@ -777,6 +813,55 @@ impl ConnectionPool {
             conn.scard(key).await
         } else {
             Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_list_page(
+        &self,
+        key: &str,
+        offset: i64,
+        count: i64,
+    ) -> Result<Vec<String>> {
+        self.get_list_range(key, offset, offset + count - 1).await
+    }
+
+    pub async fn get_large_key_data(
+        &self,
+        key: &str,
+        key_type: KeyType,
+        offset: usize,
+        count: usize,
+    ) -> Result<LargeKeyData> {
+        match key_type {
+            KeyType::List => {
+                let items = self.get_list_page(key, offset as i64, count as i64).await?;
+                let total = self.list_len(key).await?;
+                Ok(LargeKeyData::List { items, total })
+            }
+            KeyType::Set => {
+                let (cursor, items) = self.get_set_page(key, offset as u64, count).await?;
+                let total = self.set_len(key).await?;
+                Ok(LargeKeyData::Set { items, cursor, total })
+            }
+            KeyType::ZSet => {
+                let (cursor, items) = self.get_zset_page(key, offset as u64, count).await?;
+                let total = self.zset_card(key).await?;
+                Ok(LargeKeyData::ZSet { items, cursor, total })
+            }
+            KeyType::Hash => {
+                let (cursor, items) = self.get_hash_page(key, offset as u64, count).await?;
+                let total = self.hash_len(key).await?;
+                Ok(LargeKeyData::Hash { items, cursor, total })
+            }
+            KeyType::String => {
+                let value = self.get_string_value(key).await?;
+                Ok(LargeKeyData::String { value })
+            }
+            KeyType::Stream => {
+                let entries = self.stream_range(key, "-", "+").await?;
+                Ok(LargeKeyData::Stream { entries })
+            }
+            KeyType::None => Err(ConnectionError::ConnectionFailed("Key not found".to_string())),
         }
     }
 
