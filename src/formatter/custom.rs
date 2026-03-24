@@ -120,31 +120,17 @@ pub fn get_builtin_formatters() -> Vec<FormatterConfig> {
 }
 
 pub fn apply_formatter_chain(input: &[u8], formatters: &[FormatterType]) -> TransformResult {
-    let mut current_data = input.to_vec();
-    let mut is_binary = false;
+    let mut current = input.to_vec();
 
     for formatter in formatters {
-        let result = crate::formatter::apply_preset_formatter(
-            formatter,
-            if is_binary {
-                &current_data
-            } else {
-                if let Ok(s) = std::str::from_utf8(&current_data) {
-                    s.as_bytes()
-                } else {
-                    &current_data
-                }
-            },
-        );
+        let result = crate::formatter::apply_preset_formatter(formatter, &current);
 
         match result {
             TransformResult::Text(t) => {
-                current_data = t.into_bytes();
-                is_binary = false;
+                current = t.into_bytes();
             }
             TransformResult::Binary(b) => {
-                current_data = b;
-                is_binary = true;
+                current = b;
             }
             TransformResult::Error(e) => {
                 return TransformResult::Error(format!(
@@ -156,13 +142,9 @@ pub fn apply_formatter_chain(input: &[u8], formatters: &[FormatterType]) -> Tran
         }
     }
 
-    if is_binary {
-        if let Ok(s) = String::from_utf8(current_data) {
-            TransformResult::Text(s)
-        } else {
-            TransformResult::Binary(current_data)
-        }
+    if let Ok(s) = String::from_utf8(current) {
+        TransformResult::Text(s)
     } else {
-        TransformResult::Text(String::from_utf8_lossy(&current_data).to_string())
+        TransformResult::Error("Result is not valid UTF-8".to_string())
     }
 }

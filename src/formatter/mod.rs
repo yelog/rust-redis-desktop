@@ -2,7 +2,7 @@ pub mod custom;
 pub mod preset;
 
 pub use custom::{CustomFormatter, FormatterConfig, FormatterRegistry};
-pub use preset::{PresetFormatter, apply_preset_formatter};
+pub use preset::apply_preset_formatter;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FormatterType {
@@ -86,7 +86,11 @@ impl TransformResult {
             TransformResult::Text(s) => s.clone(),
             TransformResult::Binary(data) => {
                 let hex: String = data.iter().map(|b| format!("{:02x}", b)).collect();
-                format!("Binary({} bytes): {}", data.len(), hex.chars().take(100).collect::<String>())
+                format!(
+                    "Binary({} bytes): {}",
+                    data.len(),
+                    hex.chars().take(100).collect::<String>()
+                )
             }
             TransformResult::Error(e) => format!("Error: {}", e),
         }

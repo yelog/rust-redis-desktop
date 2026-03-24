@@ -1,6 +1,8 @@
 mod config;
 mod connection;
 mod crypto;
+mod formatter;
+mod i18n;
 mod redis;
 mod serialization;
 mod theme;

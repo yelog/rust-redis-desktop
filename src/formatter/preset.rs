@@ -63,10 +63,7 @@ fn url_decode(input: &[u8]) -> TransformResult {
 }
 
 fn decompress_gzip(input: &[u8]) -> TransformResult {
-    let mut decoder = match GzDecoder::new(input) {
-        Ok(d) => d,
-        Err(e) => return TransformResult::Error(format!("Gzip error: {}", e)),
-    };
+    let mut decoder = GzDecoder::new(input);
     let mut decompressed = Vec::new();
     match decoder.read_to_end(&mut decompressed) {
         Ok(_) => TransformResult::Binary(decompressed),
