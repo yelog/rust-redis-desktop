@@ -1,4 +1,4 @@
-use crate::theme::{COLOR_ACCENT, COLOR_BG_SECONDARY, COLOR_ERROR, COLOR_SUCCESS};
+use crate::theme::{COLOR_ERROR, COLOR_SUCCESS};
 use dioxus::prelude::*;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -79,9 +79,14 @@ impl ToastManager {
 
 #[component]
 pub fn ToastContainer(manager: Signal<ToastManager>) -> Element {
-    use_effect(move || {
-        let mut mgr = manager.write();
-        mgr.cleanup_expired();
+    use_future(move || {
+        let mut manager = manager.clone();
+        async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                manager.write().cleanup_expired();
+            }
+        }
     });
 
     rsx! {
