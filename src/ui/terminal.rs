@@ -66,7 +66,7 @@ fn CommandSuggestion(cmd: &'static RedisCommand, on_select: EventHandler<String>
 }
 
 #[component]
-fn CommandHelp(cmd: &'static RedisCommand) -> Element {
+fn CommandHelp(cmd: &'static RedisCommand, on_close: EventHandler<()>) -> Element {
     rsx! {
         div {
             padding: "12px",
@@ -80,20 +80,40 @@ fn CommandHelp(cmd: &'static RedisCommand) -> Element {
                 align_items: "center",
                 margin_bottom: "8px",
 
-                span {
-                    color: COLOR_ACCENT,
-                    font_family: "Consolas, monospace",
-                    font_size: "16px",
-                    font_weight: "bold",
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
 
-                    "{cmd.name}"
+                    span {
+                        color: COLOR_ACCENT,
+                        font_family: "Consolas, monospace",
+                        font_size: "16px",
+                        font_weight: "bold",
+
+                        "{cmd.name}"
+                    }
+
+                    span {
+                        color: COLOR_TEXT_SUBTLE,
+                        font_size: "12px",
+
+                        "{cmd.group}"
+                    }
                 }
 
-                span {
-                    color: COLOR_TEXT_SUBTLE,
+                button {
+                    padding: "4px 8px",
+                    background: COLOR_CONTROL_BG,
+                    border: "1px solid {COLOR_CONTROL_BORDER}",
+                    border_radius: "4px",
+                    color: COLOR_TEXT,
                     font_size: "12px",
+                    cursor: "pointer",
 
-                    "{cmd.group}"
+                    onclick: move |_| on_close.call(()),
+
+                    "关闭"
                 }
             }
 
@@ -164,9 +184,32 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
             let mut history = history.clone();
             let mut executing = executing.clone();
             let mut input = input.clone();
+            let mut show_help = show_help.clone();
             spawn(async move {
                 executing.set(true);
                 show_suggestions.set(false);
+
+                let upper_cmd = cmd.to_uppercase();
+                if upper_cmd == "HELP" || upper_cmd.starts_with("HELP ") {
+                    let cmd_name = cmd.split_whitespace().nth(1).unwrap_or("").to_uppercase();
+                    if !cmd_name.is_empty() {
+                        if find_command(&cmd_name).is_some() {
+                            show_help.set(Some(cmd_name));
+                        } else {
+                            let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
+                            history.write().push(TerminalHistoryEntry {
+                                command: cmd.clone(),
+                                result: format!("ERROR: Unknown command '{}'", cmd_name),
+                                timestamp,
+                            });
+                        }
+                    } else {
+                        show_help.set(None);
+                    }
+                    input.set(String::new());
+                    executing.set(false);
+                    return;
+                }
 
                 let start = std::time::Instant::now();
                 let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
@@ -224,6 +267,10 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                 if let Some(cmd) = find_command(cmd_name) {
                     CommandHelp {
                         cmd: cmd,
+                        on_close: {
+                            let mut show_help = show_help.clone();
+                            move |_| show_help.set(None)
+                        },
                     }
                 }
             }
@@ -350,7 +397,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                             show_suggestions.set(false);
                         },
                         onkeydown: {
-                            let execute_command = execute_command.clone();
+                            let mut execute_command = execute_command.clone();
                             move |e| {
                                 let key = e.data().key();
                                 if key == Key::Enter {
