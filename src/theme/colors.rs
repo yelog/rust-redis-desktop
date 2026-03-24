@@ -940,3 +940,14 @@ pub fn theme_spec(id: ThemeId) -> ThemeSpec {
 pub fn resolve_theme(preference: ThemePreference, system_is_dark: bool) -> ThemeSpec {
     theme_spec(preference.resolved_theme_id(system_is_dark))
 }
+
+pub fn preferred_window_theme(preference: ThemePreference) -> Option<tao::window::Theme> {
+    match preference {
+        ThemePreference::System => None,
+        ThemePreference::Manual(id) => Some(if theme_spec(id).is_dark() {
+            tao::window::Theme::Dark
+        } else {
+            tao::window::Theme::Light
+        }),
+    }
+}

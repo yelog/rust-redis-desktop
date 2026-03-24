@@ -1,10 +1,16 @@
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
-use crate::theme::{resolve_theme, theme_spec, ThemePreference, ThemeSpec, COLOR_BG, COLOR_BG_SECONDARY, COLOR_SURFACE_LOW, COLOR_BG_LOWEST, COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_TEXT_CONTRAST, COLOR_BORDER, COLOR_ACCENT, COLOR_ERROR, COLOR_PRIMARY};
-use crate::ui::{
-    ClientsPanel, ConnectionForm, FlushConfirmDialog, ImportPanel, KeyBrowser, LeftRail, MonitorPanel,
-    PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog, SlowLogPanel, Terminal, ToastContainer, ToastManager,
+use crate::theme::{
+    preferred_window_theme, resolve_theme, theme_spec, ThemePreference, ThemeSpec, COLOR_ACCENT,
+    COLOR_BG, COLOR_BG_SECONDARY, COLOR_BORDER, COLOR_ERROR, COLOR_PRIMARY, COLOR_SURFACE_LOW,
+    COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
 };
+use crate::ui::{
+    ClientsPanel, ConnectionForm, FlushConfirmDialog, ImportPanel, KeyBrowser, LeftRail,
+    MonitorPanel, PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog, SlowLogPanel,
+    Terminal, ToastContainer, ToastManager,
+};
+use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -40,6 +46,13 @@ fn system_theme_is_dark() -> bool {
     {
         false
     }
+}
+
+fn load_initial_settings() -> AppSettings {
+    ConfigStorage::new()
+        .ok()
+        .and_then(|storage| storage.load_settings().ok())
+        .unwrap_or_default()
 }
 
 fn build_theme_palette(theme: ThemeSpec) -> Value {
@@ -589,15 +602,16 @@ pub fn App() -> Element {
     let mut reconnecting_ids = use_signal(HashSet::<Uuid>::new);
     let mut connection_versions = use_signal(HashMap::<Uuid, u32>::new);
     let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
-    let mut app_settings = use_signal(AppSettings::default);
+    let mut app_settings = use_signal(load_initial_settings);
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
     let mut show_import_dialog = use_signal(|| None::<Uuid>);
     let mut current_db = use_signal(|| 0u8);
-    let mut theme_preference = use_signal(ThemePreference::default);
+    let theme_preference = use_signal(|| load_initial_settings().theme_preference);
     let mut system_theme_dark = use_signal(system_theme_is_dark);
-    let mut left_rail_width = use_signal(|| 280.0);
+    let left_rail_width = use_signal(|| 280.0);
     let toast_manager = use_context_provider(|| Signal::new(ToastManager::new()));
+    let desktop = use_window();
 
     let active_theme_preference = theme_preference();
     let active_system_theme_dark = system_theme_dark();
@@ -611,16 +625,16 @@ pub fn App() -> Element {
             if let Ok(saved) = storage.load_connections() {
                 connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
             }
-            if let Ok(settings) = storage.load_settings() {
-                app_settings.set(settings.clone());
-                theme_preference.set(settings.theme_preference);
-            }
         }
     });
 
     use_effect(move || {
         let script = build_theme_bridge_script(theme_preference());
         let _ = document::eval(&script);
+    });
+
+    use_effect(move || {
+        desktop.set_theme(preferred_window_theme(theme_preference()));
     });
 
     use_future(move || {
@@ -724,7 +738,7 @@ await new Promise(() => {});
         .unwrap_or(ConnectionState::Disconnected);
 
     rsx! {
-            style { {r#"
+                style { {r#"
                 * {
                     transition: background-color 300ms ease-in-out,
                                 border-color 300ms ease-in-out,
@@ -733,426 +747,494 @@ await new Promise(() => {});
                 }
             "#} }
 
-            div {
-                display: "flex",
-                flex_direction: "column",
-                height: "100vh",
-                background: COLOR_BG,
-                color: COLOR_TEXT,
-                overflow: "hidden",
-
                 div {
-                    flex: "1",
-                    min_height: "0",
                     display: "flex",
+                    flex_direction: "column",
+                    height: "100vh",
+                    background: COLOR_BG,
+                    color: COLOR_TEXT,
                     overflow: "hidden",
 
-                    LeftRail {
-                        width: left_rail_width,
-                        connections: connections(),
-                        connection_states: connection_states(),
-                        selected_connection: selected_connection(),
-                        colors: colors.clone(),
-                        on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
-                        on_select_connection: move |id: Uuid| {
-                            let previous_conn = selected_connection();
+                    div {
+                        flex: "1",
+                        min_height: "0",
+                        display: "flex",
+                        overflow: "hidden",
 
-                            selected_key.set(String::new());
-                            current_tab.set(Tab::Data);
+                        LeftRail {
+                            width: left_rail_width,
+                            connections: connections(),
+                            connection_states: connection_states(),
+                            selected_connection: selected_connection(),
+                            colors: colors.clone(),
+                            on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
+                            on_select_connection: move |id: Uuid| {
+                                let previous_conn = selected_connection();
 
-                            if previous_conn != Some(id) {
-                                connection_states
-                                    .write()
-                                    .insert(id, ConnectionState::Connecting);
-                            }
+                                selected_key.set(String::new());
+                                current_tab.set(Tab::Data);
 
-                            selected_connection.set(Some(id));
-
-                            if let Some(pool) = connection_pools.read().get(&id).cloned() {
-                                current_db.set(pool.current_db());
-                            } else if let Some(storage) = config_storage.read().as_ref() {
-                                if let Ok(saved) = storage.load_connections() {
-                                    if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                        current_db.set(config.db);
-                                    }
+                                if previous_conn != Some(id) {
+                                    connection_states
+                                        .write()
+                                        .insert(id, ConnectionState::Connecting);
                                 }
-                            }
 
-                            spawn(async move {
+                                selected_connection.set(Some(id));
+
                                 if let Some(pool) = connection_pools.read().get(&id).cloned() {
-                                    let db = pool.current_db();
-                                    if let Err(error) = pool.select_database(db).await {
-                                        tracing::error!("Failed to sync database for connection {id}: {error}");
-                                    }
-
-                                    let version =
-                                        connection_versions.read().get(&id).copied().unwrap_or(0);
-                                    connection_versions.write().insert(id, version + 1);
-                                    connection_states.write().insert(id, ConnectionState::Connected);
-                                    return;
-                                }
-
-                                connection_states.write().insert(id, ConnectionState::Connecting);
-
-                                if let Some(pool) = connection_manager.read().get_connection(id).await {
-                                    let db = pool.current_db();
-                                    if let Err(error) = pool.select_database(db).await {
-                                        tracing::error!("Failed to sync database for connection {id}: {error}");
-                                    }
-                                    current_db.set(db);
-                                    connection_pools.write().insert(id, pool);
-                                    connection_states.write().insert(id, ConnectionState::Connected);
-                                    return;
-                                }
-
-                                if let Some(storage) = config_storage.read().as_ref() {
+                                    current_db.set(pool.current_db());
+                                } else if let Some(storage) = config_storage.read().as_ref() {
                                     if let Ok(saved) = storage.load_connections() {
                                         if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                            match ConnectionPool::new(config.clone()).await {
-                                                Ok(pool) => {
-                                                    current_db.set(pool.current_db());
-                                                    let _ = connection_manager.read().add_connection(config).await;
-                                                    connection_pools.write().insert(id, pool);
-                                                    connection_states.write().insert(id, ConnectionState::Connected);
-                                                }
-                                                Err(_) => {
-                                                    connection_states.write().insert(id, ConnectionState::Error);
-                                                }
-                                            }
+                                            current_db.set(config.db);
                                         }
                                     }
                                 }
-                            });
-                        },
-                        on_reconnect_connection: move |id: Uuid| {
-                            spawn(async move {
-                                reconnecting_ids.write().insert(id);
-                                connection_states.write().insert(id, ConnectionState::Connecting);
 
-                                if let Some(storage) = config_storage.read().as_ref() {
-                                    if let Ok(saved) = storage.load_connections() {
-                                        if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                            match ConnectionPool::new(config.clone()).await {
-                                                Ok(pool) => {
-                                                    let db = pool.current_db();
-                                                    connection_pools.write().insert(id, pool);
-                                                    let _ = connection_manager.read().add_connection(config).await;
+                                spawn(async move {
+                                    if let Some(pool) = connection_pools.read().get(&id).cloned() {
+                                        let db = pool.current_db();
+                                        if let Err(error) = pool.select_database(db).await {
+                                            tracing::error!("Failed to sync database for connection {id}: {error}");
+                                        }
 
-                                                    let version = connection_versions.read().get(&id).copied().unwrap_or(0);
-                                                    connection_versions.write().insert(id, version + 1);
-                                                    connection_states.write().insert(id, ConnectionState::Connected);
-                                                    if selected_connection() == Some(id) {
-                                                        current_db.set(db);
+                                        let version =
+                                            connection_versions.read().get(&id).copied().unwrap_or(0);
+                                        connection_versions.write().insert(id, version + 1);
+                                        connection_states.write().insert(id, ConnectionState::Connected);
+                                        return;
+                                    }
+
+                                    connection_states.write().insert(id, ConnectionState::Connecting);
+
+                                    if let Some(pool) = connection_manager.read().get_connection(id).await {
+                                        let db = pool.current_db();
+                                        if let Err(error) = pool.select_database(db).await {
+                                            tracing::error!("Failed to sync database for connection {id}: {error}");
+                                        }
+                                        current_db.set(db);
+                                        connection_pools.write().insert(id, pool);
+                                        connection_states.write().insert(id, ConnectionState::Connected);
+                                        return;
+                                    }
+
+                                    if let Some(storage) = config_storage.read().as_ref() {
+                                        if let Ok(saved) = storage.load_connections() {
+                                            if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                                match ConnectionPool::new(config.clone()).await {
+                                                    Ok(pool) => {
+                                                        current_db.set(pool.current_db());
+                                                        let _ = connection_manager.read().add_connection(config).await;
+                                                        connection_pools.write().insert(id, pool);
+                                                        connection_states.write().insert(id, ConnectionState::Connected);
+                                                    }
+                                                    Err(_) => {
+                                                        connection_states.write().insert(id, ConnectionState::Error);
                                                     }
                                                 }
-                                                Err(_) => {
-                                                    connection_states.write().insert(id, ConnectionState::Error);
+                                            }
+                                        }
+                                    }
+                                });
+                            },
+                            on_reconnect_connection: move |id: Uuid| {
+                                spawn(async move {
+                                    reconnecting_ids.write().insert(id);
+                                    connection_states.write().insert(id, ConnectionState::Connecting);
+
+                                    if let Some(storage) = config_storage.read().as_ref() {
+                                        if let Ok(saved) = storage.load_connections() {
+                                            if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                                match ConnectionPool::new(config.clone()).await {
+                                                    Ok(pool) => {
+                                                        let db = pool.current_db();
+                                                        connection_pools.write().insert(id, pool);
+                                                        let _ = connection_manager.read().add_connection(config).await;
+
+                                                        let version = connection_versions.read().get(&id).copied().unwrap_or(0);
+                                                        connection_versions.write().insert(id, version + 1);
+                                                        connection_states.write().insert(id, ConnectionState::Connected);
+                                                        if selected_connection() == Some(id) {
+                                                            current_db.set(db);
+                                                        }
+                                                    }
+                                                    Err(_) => {
+                                                        connection_states.write().insert(id, ConnectionState::Error);
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
 
-                                reconnecting_ids.write().remove(&id);
-                            });
-                        },
-                        on_close_connection: move |id: Uuid| {
-                            spawn(async move {
-                                connection_pools.write().remove(&id);
-                                connection_manager.read().remove_connection(id).await;
-                                connection_states.write().insert(id, ConnectionState::Disconnected);
+                                    reconnecting_ids.write().remove(&id);
+                                });
+                            },
+                            on_close_connection: move |id: Uuid| {
+                                spawn(async move {
+                                    connection_pools.write().remove(&id);
+                                    connection_manager.read().remove_connection(id).await;
+                                    connection_states.write().insert(id, ConnectionState::Disconnected);
 
-                                if selected_connection() == Some(id) {
-                                    selected_connection.set(None);
-                                    selected_key.set(String::new());
-                                    current_db.set(0);
-                                }
-                            });
-                        },
-                        on_edit_connection: move |id: Uuid| {
-                            if let Some(storage) = config_storage.read().as_ref() {
-                                if let Ok(saved) = storage.load_connections() {
-                                    if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                        form_mode.set(Some(FormMode::Edit(config)));
+                                    if selected_connection() == Some(id) {
+                                        selected_connection.set(None);
+                                        selected_key.set(String::new());
+                                        current_db.set(0);
                                     }
-                                }
-                            }
-                        },
-                        on_delete_connection: move |id: Uuid| {
-                            spawn(async move {
-                                if let Some(storage) = config_storage.read().as_ref() {
-                                    let _ = storage.delete_connection(id);
-                                }
-
-                                connection_pools.write().remove(&id);
-                                connection_manager.read().remove_connection(id).await;
-                                connection_states.write().remove(&id);
-
+                                });
+                            },
+                            on_edit_connection: move |id: Uuid| {
                                 if let Some(storage) = config_storage.read().as_ref() {
                                     if let Ok(saved) = storage.load_connections() {
-                                        connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
+                                        if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                            form_mode.set(Some(FormMode::Edit(config)));
+                                        }
                                     }
                                 }
+                            },
+                            on_delete_connection: move |id: Uuid| {
+                                spawn(async move {
+                                    if let Some(storage) = config_storage.read().as_ref() {
+                                        let _ = storage.delete_connection(id);
+                                    }
 
-                                if selected_connection() == Some(id) {
-                                    selected_connection.set(None);
-                                    selected_key.set(String::new());
-                                    current_db.set(0);
-                                }
-                            });
-                        },
-                        on_flush_connection: move |id: Uuid| {
-                            show_flush_dialog.set(Some(id));
-                        },
-                        on_import_connection: move |id: Uuid| {
-                            show_import_dialog.set(Some(id));
-                        },
-                        on_open_settings: move |_| show_settings.set(true),
-                    }
+                                    connection_pools.write().remove(&id);
+                                    connection_manager.read().remove_connection(id).await;
+                                    connection_states.write().remove(&id);
 
-                    ResizableDivider {
-                        size: left_rail_width,
-                        min_size: 180.0,
-                        max_size: 400.0,
-                    }
+                                    if let Some(storage) = config_storage.read().as_ref() {
+                                        if let Ok(saved) = storage.load_connections() {
+                                            connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
+                                        }
+                                    }
 
-    if let Some(conn_id) = selected_connection() {
-                        if reconnecting_ids.read().contains(&conn_id) {
-                            div {
-                                flex: "1",
-                                display: "flex",
-                                flex_direction: "column",
-                                align_items: "center",
-                                justify_content: "center",
-                                gap: "16px",
-                                background: "{COLOR_SURFACE_LOW}",
+                                    if selected_connection() == Some(id) {
+                                        selected_connection.set(None);
+                                        selected_key.set(String::new());
+                                        current_db.set(0);
+                                    }
+                                });
+                            },
+                            on_flush_connection: move |id: Uuid| {
+                                show_flush_dialog.set(Some(id));
+                            },
+                            on_import_connection: move |id: Uuid| {
+                                show_import_dialog.set(Some(id));
+                            },
+                            on_open_settings: move |_| show_settings.set(true),
+                        }
 
-                                style { {r#"
+                        ResizableDivider {
+                            size: left_rail_width,
+                            min_size: 180.0,
+                            max_size: 400.0,
+                        }
+
+        if let Some(conn_id) = selected_connection() {
+                            if reconnecting_ids.read().contains(&conn_id) {
+                                div {
+                                    flex: "1",
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    gap: "16px",
+                                    background: "{COLOR_SURFACE_LOW}",
+
+                                    style { {r#"
                                 @keyframes spin {
                                     from { transform: rotate(0deg); }
                                     to { transform: rotate(360deg); }
                                 }
                             "#} }
 
-                                div {
-                                    width: "40px",
-                                    height: "40px",
-                                    border: "3px solid {COLOR_ACCENT}",
-                                    border_top_color: "transparent",
-                                    border_radius: "50%",
-                                    animation: "spin 0.8s linear infinite",
+                                    div {
+                                        width: "40px",
+                                        height: "40px",
+                                        border: "3px solid {COLOR_ACCENT}",
+                                        border_top_color: "transparent",
+                                        border_radius: "50%",
+                                        animation: "spin 0.8s linear infinite",
+                                    }
+
+                                    div {
+                                        color: "{COLOR_TEXT_SECONDARY}",
+                                        font_size: "14px",
+
+                                        "正在重新连接..."
+                                    }
                                 }
-
+                            } else if selected_conn_state == ConnectionState::Error {
                                 div {
-                                    color: "{COLOR_TEXT_SECONDARY}",
-                                    font_size: "14px",
+                                    flex: "1",
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    gap: "16px",
+                                    background: "{COLOR_SURFACE_LOW}",
 
-                                    "正在重新连接..."
-                                }
-                            }
-                        } else if selected_conn_state == ConnectionState::Error {
-                            div {
-                                flex: "1",
-                                display: "flex",
-                                flex_direction: "column",
-                                align_items: "center",
-                                justify_content: "center",
-                                gap: "16px",
-                                background: "{COLOR_SURFACE_LOW}",
+                                    div {
+                                        color: "{COLOR_ERROR}",
+                                        font_size: "14px",
 
-                                div {
-                                    color: "{COLOR_ERROR}",
-                                    font_size: "14px",
+                                        "连接失败，请检查连接配置后重试"
+                                    }
 
-                                    "连接失败，请检查连接配置后重试"
-                                }
+                                    button {
+                                        padding: "10px 20px",
+                                        background: "{COLOR_PRIMARY}",
+                                        color: "{COLOR_TEXT_CONTRAST}",
+                                        border: "none",
+                                        border_radius: "6px",
+                                        cursor: "pointer",
+                                        font_size: "13px",
 
-                                button {
-                                    padding: "10px 20px",
-                                    background: "{COLOR_PRIMARY}",
-                                    color: "{COLOR_TEXT_CONTRAST}",
-                                    border: "none",
-                                    border_radius: "6px",
-                                    cursor: "pointer",
-                                    font_size: "13px",
+                                        onclick: move |_| {
+                                            spawn(async move {
+                                                reconnecting_ids.write().insert(conn_id);
+                                                connection_states.write().insert(conn_id, ConnectionState::Connecting);
 
-                                    onclick: move |_| {
-                                        spawn(async move {
-                                            reconnecting_ids.write().insert(conn_id);
-                                            connection_states.write().insert(conn_id, ConnectionState::Connecting);
-
-                                            if let Some(storage) = config_storage.read().as_ref() {
-                                                if let Ok(saved) = storage.load_connections() {
-                                                    if let Some(config) = saved.into_iter().find(|c| c.id == conn_id) {
-                                                        match ConnectionPool::new(config.clone()).await {
-                                                            Ok(pool) => {
-                                                                connection_pools.write().insert(conn_id, pool);
-                                                                let _ = connection_manager.read().add_connection(config).await;
-                                                                let version = connection_versions.read().get(&conn_id).copied().unwrap_or(0);
-                                                                connection_versions.write().insert(conn_id, version + 1);
-                                                                connection_states.write().insert(conn_id, ConnectionState::Connected);
-                                                            }
-                                                            Err(_) => {
-                                                                connection_states.write().insert(conn_id, ConnectionState::Error);
+                                                if let Some(storage) = config_storage.read().as_ref() {
+                                                    if let Ok(saved) = storage.load_connections() {
+                                                        if let Some(config) = saved.into_iter().find(|c| c.id == conn_id) {
+                                                            match ConnectionPool::new(config.clone()).await {
+                                                                Ok(pool) => {
+                                                                    connection_pools.write().insert(conn_id, pool);
+                                                                    let _ = connection_manager.read().add_connection(config).await;
+                                                                    let version = connection_versions.read().get(&conn_id).copied().unwrap_or(0);
+                                                                    connection_versions.write().insert(conn_id, version + 1);
+                                                                    connection_states.write().insert(conn_id, ConnectionState::Connected);
+                                                                }
+                                                                Err(_) => {
+                                                                    connection_states.write().insert(conn_id, ConnectionState::Error);
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
-                                            }
 
-                                            reconnecting_ids.write().remove(&conn_id);
-                                        });
-                                    },
+                                                reconnecting_ids.write().remove(&conn_id);
+                                            });
+                                        },
 
-                                    "重新连接"
+                                        "重新连接"
+                                    }
                                 }
-                            }
-                        } else if selected_conn_state == ConnectionState::Connecting {
-                            div {
-                                flex: "1",
-                                display: "flex",
-                                flex_direction: "column",
-                                align_items: "center",
-                                justify_content: "center",
-                                gap: "16px",
-                                background: "{COLOR_SURFACE_LOW}",
+                            } else if selected_conn_state == ConnectionState::Connecting {
+                                div {
+                                    flex: "1",
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    gap: "16px",
+                                    background: "{COLOR_SURFACE_LOW}",
 
-                                style { {r#"
+                                    style { {r#"
                                 @keyframes spin {
                                     from { transform: rotate(0deg); }
                                     to { transform: rotate(360deg); }
                                 }
                             "#} }
 
-                                div {
-                                    width: "40px",
-                                    height: "40px",
-                                    border: "3px solid {COLOR_ACCENT}",
-                                    border_top_color: "transparent",
-                                    border_radius: "50%",
-                                    animation: "spin 0.8s linear infinite",
-                                }
+                                    div {
+                                        width: "40px",
+                                        height: "40px",
+                                        border: "3px solid {COLOR_ACCENT}",
+                                        border_top_color: "transparent",
+                                        border_radius: "50%",
+                                        animation: "spin 0.8s linear infinite",
+                                    }
 
-                                div {
-                                    color: "{COLOR_TEXT_SECONDARY}",
-                                    font_size: "14px",
+                                    div {
+                                        color: "{COLOR_TEXT_SECONDARY}",
+                                        font_size: "14px",
 
-                                    "正在加载连接..."
-                                }
-                            }
-                        } else if selected_conn_state == ConnectionState::Connected {
-                            if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
-                            div {
-                                flex: "1",
-                                min_width: "0",
-                                min_height: "0",
-                                display: "flex",
-                                flex_direction: "column",
-                                background: "{COLOR_SURFACE_LOW}",
-                                overflow: "hidden",
-
-                                div {
-                                    display: "flex",
-                                    align_items: "center",
-                                    gap: "8px",
-                                    padding: "10px 16px",
-                                    border_bottom: "1px solid {COLOR_BORDER}",
-                                    background: "{COLOR_BG_SECONDARY}",
-
-                                    for (tab, label) in [
-                                        (Tab::Data, "数据"),
-                                        (Tab::Terminal, "终端"),
-                                        (Tab::Monitor, "监控"),
-                                        (Tab::SlowLog, "慢日志"),
-                                        (Tab::Clients, "客户端"),
-                                        (Tab::PubSub, "Pub/Sub"),
-                                        (Tab::Script, "脚本"),
-                                    ] {
-                                        button {
-                                            padding: "8px 14px",
-                                            background: if current_tab() == tab { COLOR_BG } else { "transparent" },
-                                            color: if current_tab() == tab { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
-                                            border: if current_tab() == tab {
-                                                format!("1px solid {}", COLOR_BORDER)
-                                            } else {
-                                                "1px solid transparent".to_string()
-                                            },
-                                            border_bottom: if current_tab() == tab {
-                                                format!("2px solid {}", COLOR_ACCENT)
-                                            } else {
-                                                "2px solid transparent".to_string()
-                                            },
-                                            border_radius: "6px",
-                                            cursor: "pointer",
-                                            font_size: "13px",
-                                            font_weight: if current_tab() == tab { "700" } else { "500" },
-                                            transition: "all 150ms ease-out",
-                                            onclick: move |_| current_tab.set(tab),
-
-                                            "{label}"
-                                        }
+                                        "正在加载连接..."
                                     }
                                 }
-
+                            } else if selected_conn_state == ConnectionState::Connected {
+                                if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
                                 div {
                                     flex: "1",
+                                    min_width: "0",
                                     min_height: "0",
                                     display: "flex",
                                     flex_direction: "column",
+                                    background: "{COLOR_SURFACE_LOW}",
                                     overflow: "hidden",
 
-                                if current_tab() == Tab::Data {
+                                    div {
+                                        display: "flex",
+                                        align_items: "center",
+                                        gap: "8px",
+                                        padding: "10px 16px",
+                                        border_bottom: "1px solid {COLOR_BORDER}",
+                                        background: "{COLOR_BG_SECONDARY}",
+
+                                        for (tab, label) in [
+                                            (Tab::Data, "数据"),
+                                            (Tab::Terminal, "终端"),
+                                            (Tab::Monitor, "监控"),
+                                            (Tab::SlowLog, "慢日志"),
+                                            (Tab::Clients, "客户端"),
+                                            (Tab::PubSub, "Pub/Sub"),
+                                            (Tab::Script, "脚本"),
+                                        ] {
+                                            button {
+                                                padding: "8px 14px",
+                                                background: if current_tab() == tab { COLOR_BG } else { "transparent" },
+                                                color: if current_tab() == tab { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
+                                                border: if current_tab() == tab {
+                                                    format!("1px solid {}", COLOR_BORDER)
+                                                } else {
+                                                    "1px solid transparent".to_string()
+                                                },
+                                                border_bottom: if current_tab() == tab {
+                                                    format!("2px solid {}", COLOR_ACCENT)
+                                                } else {
+                                                    "2px solid transparent".to_string()
+                                                },
+                                                border_radius: "6px",
+                                                cursor: "pointer",
+                                                font_size: "13px",
+                                                font_weight: if current_tab() == tab { "700" } else { "500" },
+                                                transition: "all 150ms ease-out",
+                                                onclick: move |_| current_tab.set(tab),
+
+                                                "{label}"
+                                            }
+                                        }
+                                    }
+
+                                    div {
+                                        flex: "1",
+                                        min_height: "0",
+                                        display: "flex",
+                                        flex_direction: "column",
+                                        overflow: "hidden",
+
+                                    if current_tab() == Tab::Data {
+                                    div {
+                                        flex: "1",
+                                        min_height: "0px",
+                                        overflow: "hidden",
+
+                                            KeyBrowser {
+                                                key: "{conn_id}-{connection_versions.read().get(&conn_id).copied().unwrap_or(0)}-{resolved_theme_key}",
+                                                connection_id: conn_id,
+                                                connection_pool: pool.clone(),
+                                                connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
+                                                selected_key: selected_key,
+                                                current_db: current_db,
+                                                refresh_trigger: refresh_trigger,
+                                                colors,
+                                                on_key_select: move |key: String| {
+                                                    selected_key.set(key);
+                                                    current_tab.set(Tab::Data);
+                                                },
+                                            }
+                                        }
+                                    } else if current_tab() == Tab::Terminal {
+                                            Terminal {
+                                                key: "{conn_id}",
+                                                connection_pool: pool.clone(),
+                                            }
+                                        } else if current_tab() == Tab::Monitor {
+                                            MonitorPanel {
+                                                key: "{conn_id}",
+                                                connection_pool: pool.clone(),
+                                                auto_refresh_interval: app_settings.read().auto_refresh_interval,
+                                            }
+                                        } else if current_tab() == Tab::SlowLog {
+                                            SlowLogPanel {
+                                                key: "{conn_id}",
+                                                connection_pool: pool.clone(),
+                                            }
+                                        } else if current_tab() == Tab::Clients {
+                                            ClientsPanel {
+                                                key: "{conn_id}",
+                                                connection_pool: pool.clone(),
+                                            }
+                                        } else if current_tab() == Tab::PubSub {
+                                            PubSubPanel {
+                                                key: "{conn_id}",
+                                                connection_pool: pool.clone(),
+                                            }
+                                        } else {
+                                            ScriptPanel {
+                                                key: "{conn_id}",
+                                                connection_pool: pool.clone(),
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
                                 div {
                                     flex: "1",
-                                    min_height: "0px",
-                                    overflow: "hidden",
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    gap: "16px",
+                                    background: "{COLOR_SURFACE_LOW}",
 
-                                        KeyBrowser {
-                                            key: "{conn_id}-{connection_versions.read().get(&conn_id).copied().unwrap_or(0)}-{resolved_theme_key}",
-                                            connection_id: conn_id,
-                                            connection_pool: pool.clone(),
-                                            connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
-                                            selected_key: selected_key,
-                                            current_db: current_db,
-                                            refresh_trigger: refresh_trigger,
-                                            colors,
-                                            on_key_select: move |key: String| {
-                                                selected_key.set(key);
-                                                current_tab.set(Tab::Data);
-                                            },
-                                        }
+                                    style { {r#"
+                                @keyframes spin {
+                                    from { transform: rotate(0deg); }
+                                    to { transform: rotate(360deg); }
+                                }
+                            "#} }
+
+                                    div {
+                                        width: "40px",
+                                        height: "40px",
+                                        border: "3px solid {COLOR_ACCENT}",
+                                        border_top_color: "transparent",
+                                        border_radius: "50%",
+                                        animation: "spin 0.8s linear infinite",
                                     }
-                                } else if current_tab() == Tab::Terminal {
-                                        Terminal {
-                                            key: "{conn_id}",
-                                            connection_pool: pool.clone(),
-                                        }
-                                    } else if current_tab() == Tab::Monitor {
-                                        MonitorPanel {
-                                            key: "{conn_id}",
-                                            connection_pool: pool.clone(),
-                                            auto_refresh_interval: app_settings.read().auto_refresh_interval,
-                                        }
-                                    } else if current_tab() == Tab::SlowLog {
-                                        SlowLogPanel {
-                                            key: "{conn_id}",
-                                            connection_pool: pool.clone(),
-                                        }
-                                    } else if current_tab() == Tab::Clients {
-                                        ClientsPanel {
-                                            key: "{conn_id}",
-                                            connection_pool: pool.clone(),
-                                        }
-                                    } else if current_tab() == Tab::PubSub {
-                                        PubSubPanel {
-                                            key: "{conn_id}",
-                                            connection_pool: pool.clone(),
-                                        }
-                                    } else {
-                                        ScriptPanel {
-                                            key: "{conn_id}",
-                                            connection_pool: pool.clone(),
-                                        }
+
+                                    div {
+                                        color: "{COLOR_TEXT_SECONDARY}",
+                                        font_size: "14px",
+
+                                        "正在初始化连接..."
+                                    }
+                                }
+                            }
+                            } else {
+                                div {
+                                    flex: "1",
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    gap: "16px",
+                                    background: "{COLOR_SURFACE_LOW}",
+
+                                    style { {r#"
+                                @keyframes spin {
+                                    from { transform: rotate(0deg); }
+                                    to { transform: rotate(360deg); }
+                                }
+                            "#} }
+
+                                    div {
+                                        width: "40px",
+                                        height: "40px",
+                                        border: "3px solid {COLOR_ACCENT}",
+                                        border_top_color: "transparent",
+                                        border_radius: "50%",
+                                        animation: "spin 0.8s linear infinite",
+                                    }
+
+                                    div {
+                                        color: "{COLOR_TEXT_SECONDARY}",
+                                        font_size: "14px",
+
+                                        "正在连接..."
                                     }
                                 }
                             }
@@ -1163,204 +1245,136 @@ await new Promise(() => {});
                                 flex_direction: "column",
                                 align_items: "center",
                                 justify_content: "center",
-                                gap: "16px",
+                                gap: "10px",
+                                color: "{COLOR_TEXT_SECONDARY}",
                                 background: "{COLOR_SURFACE_LOW}",
 
-                                style { {r#"
-                                @keyframes spin {
-                                    from { transform: rotate(0deg); }
-                                    to { transform: rotate(360deg); }
-                                }
-                            "#} }
-
                                 div {
-                                    width: "40px",
-                                    height: "40px",
-                                    border: "3px solid {COLOR_ACCENT}",
-                                    border_top_color: "transparent",
-                                    border_radius: "50%",
-                                    animation: "spin 0.8s linear infinite",
+                                    font_size: "28px",
+                                    font_weight: "700",
+                                    color: "{COLOR_TEXT}",
+
+                                    "Redis 工作台"
                                 }
 
                                 div {
-                                    color: "{COLOR_TEXT_SECONDARY}",
                                     font_size: "14px",
 
-                                    "正在初始化连接..."
+                                    "从左侧选择一个连接，或先创建新的 Redis 连接。"
                                 }
-                            }
-                        }
-                        } else {
-                            div {
-                                flex: "1",
-                                display: "flex",
-                                flex_direction: "column",
-                                align_items: "center",
-                                justify_content: "center",
-                                gap: "16px",
-                                background: "{COLOR_SURFACE_LOW}",
-
-                                style { {r#"
-                                @keyframes spin {
-                                    from { transform: rotate(0deg); }
-                                    to { transform: rotate(360deg); }
-                                }
-                            "#} }
-
-                                div {
-                                    width: "40px",
-                                    height: "40px",
-                                    border: "3px solid {COLOR_ACCENT}",
-                                    border_top_color: "transparent",
-                                    border_radius: "50%",
-                                    animation: "spin 0.8s linear infinite",
-                                }
-
-                                div {
-                                    color: "{COLOR_TEXT_SECONDARY}",
-                                    font_size: "14px",
-
-                                    "正在连接..."
-                                }
-                            }
-                        }
-                    } else {
-                        div {
-                            flex: "1",
-                            display: "flex",
-                            flex_direction: "column",
-                            align_items: "center",
-                            justify_content: "center",
-                            gap: "10px",
-                            color: "{COLOR_TEXT_SECONDARY}",
-                            background: "{COLOR_SURFACE_LOW}",
-
-                            div {
-                                font_size: "28px",
-                                font_weight: "700",
-                                color: "{COLOR_TEXT}",
-
-                                "Redis 工作台"
-                            }
-
-                            div {
-                                font_size: "14px",
-
-                                "从左侧选择一个连接，或先创建新的 Redis 连接。"
                             }
                         }
                     }
                 }
-            }
 
-            if let Some(mode) = form_mode() {
-                ConnectionForm {
-                    editing_config: match mode {
-                        FormMode::Edit(config) => Some(config),
-                        FormMode::New => None,
-                    },
-                    colors,
-                    on_save: move |config: ConnectionConfig| {
-                        let id = config.id;
-                        let name = config.name.clone();
+                if let Some(mode) = form_mode() {
+                    ConnectionForm {
+                        editing_config: match mode {
+                            FormMode::Edit(config) => Some(config),
+                            FormMode::New => None,
+                        },
+                        colors,
+                        on_save: move |config: ConnectionConfig| {
+                            let id = config.id;
+                            let name = config.name.clone();
 
-                        spawn(async move {
-                            tracing::info!("=== Save Connection Start ===");
-                            tracing::info!("Connection: {} ({})", name, id);
+                            spawn(async move {
+                                tracing::info!("=== Save Connection Start ===");
+                                tracing::info!("Connection: {} ({})", name, id);
 
-                            let storage = config_storage.read();
-                            if storage.is_none() {
-                                tracing::error!("ConfigStorage is None!");
-                                form_mode.set(None);
-                                return;
-                            }
-
-                            let storage = storage.as_ref().unwrap();
-
-                            tracing::info!("Saving to storage...");
-                            match storage.save_connection(config.clone()) {
-                                Ok(_) => tracing::info!("✓ Config saved successfully"),
-                                Err(e) => {
-                                    tracing::error!("✗ Save failed: {}", e);
+                                let storage = config_storage.read();
+                                if storage.is_none() {
+                                    tracing::error!("ConfigStorage is None!");
                                     form_mode.set(None);
                                     return;
                                 }
-                            }
 
-                            tracing::info!("Reloading connections...");
-                            match storage.load_connections() {
-                                Ok(saved) => {
-                                    let list: Vec<(Uuid, String)> = saved.into_iter().map(|c| (c.id, c.name)).collect();
-                                    tracing::info!("✓ Loaded {} connections: {:?}", list.len(), list);
-                                    connections.set(list);
+                                let storage = storage.as_ref().unwrap();
+
+                                tracing::info!("Saving to storage...");
+                                match storage.save_connection(config.clone()) {
+                                    Ok(_) => tracing::info!("✓ Config saved successfully"),
+                                    Err(e) => {
+                                        tracing::error!("✗ Save failed: {}", e);
+                                        form_mode.set(None);
+                                        return;
+                                    }
                                 }
-                                Err(e) => {
-                                    tracing::error!("✗ Load failed: {}", e);
+
+                                tracing::info!("Reloading connections...");
+                                match storage.load_connections() {
+                                    Ok(saved) => {
+                                        let list: Vec<(Uuid, String)> = saved.into_iter().map(|c| (c.id, c.name)).collect();
+                                        tracing::info!("✓ Loaded {} connections: {:?}", list.len(), list);
+                                        connections.set(list);
+                                    }
+                                    Err(e) => {
+                                        tracing::error!("✗ Load failed: {}", e);
+                                    }
                                 }
-                            }
 
-                            let _ = connection_manager.read().add_connection(config).await;
+                                let _ = connection_manager.read().add_connection(config).await;
 
-                            tracing::info!("=== Save Connection End ===");
-                            form_mode.set(None);
-                        });
-                    },
-                    on_cancel: move |_| form_mode.set(None),
-                }
-            }
-
-            if show_settings() {
-                    SettingsDialog {
-                        settings: app_settings.read().clone(),
-                        colors,
-                        resolved_theme_id,
-                        on_change: {
-                            let mut save_settings = save_settings.clone();
-                            move |settings: AppSettings| {
-                                save_settings(settings);
-                            }
+                                tracing::info!("=== Save Connection End ===");
+                                form_mode.set(None);
+                            });
                         },
-                        on_close: move |_| show_settings.set(false),
+                        on_cancel: move |_| form_mode.set(None),
                     }
                 }
 
-if let Some(flush_id) = show_flush_dialog() {
-                if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
-                    FlushConfirmDialog {
-                        connection_pool: pool,
-                        current_db: current_db(),
-                        colors,
-                        on_confirm: move |_| {
-                            show_flush_dialog.set(None);
-                            refresh_trigger.set(refresh_trigger() + 1);
-                        },
-                        on_cancel: move |_| show_flush_dialog.set(None),
+                if show_settings() {
+                        SettingsDialog {
+                            settings: app_settings.read().clone(),
+                            colors,
+                            resolved_theme_id,
+                            on_change: {
+                                let mut save_settings = save_settings.clone();
+                                move |settings: AppSettings| {
+                                    save_settings(settings);
+                                }
+                            },
+                            on_close: move |_| show_settings.set(false),
+                        }
                     }
-                }
-            }
 
-if let Some(import_id) = show_import_dialog() {
-                if let Some(pool) = connection_pools.read().get(&import_id).cloned() {
-                    div {
-                        position: "fixed",
-                        top: "0",
-                        left: "0",
-                        right: "0",
-                        bottom: "0",
-                        background: "rgba(0, 0, 0, 0.5)",
-                        display: "flex",
-                        align_items: "center",
-                        justify_content: "center",
-                        z_index: "1000",
-
-                        ImportPanel {
+    if let Some(flush_id) = show_flush_dialog() {
+                    if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
+                        FlushConfirmDialog {
                             connection_pool: pool,
-                            on_close: move |_| show_import_dialog.set(None),
+                            current_db: current_db(),
+                            colors,
+                            on_confirm: move |_| {
+                                show_flush_dialog.set(None);
+                                refresh_trigger.set(refresh_trigger() + 1);
+                            },
+                            on_cancel: move |_| show_flush_dialog.set(None),
                         }
                     }
                 }
-            }
 
-            ToastContainer { manager: toast_manager }
-        }
-    }
+    if let Some(import_id) = show_import_dialog() {
+                    if let Some(pool) = connection_pools.read().get(&import_id).cloned() {
+                        div {
+                            position: "fixed",
+                            top: "0",
+                            left: "0",
+                            right: "0",
+                            bottom: "0",
+                            background: "rgba(0, 0, 0, 0.5)",
+                            display: "flex",
+                            align_items: "center",
+                            justify_content: "center",
+                            z_index: "1000",
+
+                            ImportPanel {
+                                connection_pool: pool,
+                                on_close: move |_| show_import_dialog.set(None),
+                            }
+                        }
+                    }
+                }
+
+                ToastContainer { manager: toast_manager }
+            }
+}

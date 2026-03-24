@@ -7,11 +7,12 @@ mod theme;
 mod ui;
 
 use config::ConfigStorage;
+use dioxus::desktop::tao::dpi::LogicalSize;
 use dioxus::desktop::{
     muda::{accelerator::Accelerator, Menu, MenuItem, PredefinedMenuItem, Submenu},
     Config, WindowBuilder,
 };
-use dioxus::desktop::tao::dpi::LogicalSize;
+use theme::preferred_window_theme;
 use ui::App;
 
 fn create_menu() -> Menu {
@@ -72,7 +73,7 @@ fn main() {
 
     let menu = create_menu();
 
-    let _settings = ConfigStorage::new()
+    let settings = ConfigStorage::new()
         .ok()
         .and_then(|s| s.load_settings().ok())
         .unwrap_or_default();
@@ -80,13 +81,10 @@ fn main() {
     let window_builder = WindowBuilder::new()
         .with_title("Redis Desktop")
         .with_inner_size(LogicalSize::new(1200, 800))
+        .with_theme(preferred_window_theme(settings.theme_preference))
         .with_visible(true);
 
     dioxus::LaunchBuilder::new()
-        .with_cfg(
-            Config::new()
-                .with_menu(menu)
-                .with_window(window_builder)
-        )
+        .with_cfg(Config::new().with_menu(menu).with_window(window_builder))
         .launch(App);
 }
