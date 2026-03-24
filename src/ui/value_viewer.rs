@@ -4108,7 +4108,7 @@ pub fn ValueViewer(
                                                         }
 
                                                         th {
-                                                            width: "60px",
+width: "30px",
                                                             padding: "12px",
                                                             color: COLOR_TEXT_SECONDARY,
                                                             font_size: "12px",

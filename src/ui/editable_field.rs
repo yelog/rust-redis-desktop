@@ -31,6 +31,7 @@ pub fn EditableField(
     rsx! {
         div {
             height: "100%",
+            width: "100%",
             display: "flex",
             flex_direction: "column",
 
@@ -95,8 +96,10 @@ pub fn EditableField(
             } else {
                 div {
                     display: "flex",
-                    justify_content: "space_between",
+                    justify_content: "space-between",
                     align_items: "center",
+                    width: "100%",
+                    gap: "12px",
                     margin_bottom: "8px",
                     flex_shrink: "0",
 
@@ -113,6 +116,8 @@ pub fn EditableField(
                         display: "flex",
                         align_items: "center",
                         gap: "8px",
+                        margin_left: "auto",
+                        flex_shrink: "0",
 
                         button {
                             padding: "6px 10px",
