@@ -2,6 +2,7 @@ use crate::connection::ConnectionPool;
 use crate::redis::ExportFormat;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
+use crate::ui::ToastManager;
 use arboard::Clipboard;
 use dioxus::prelude::*;
 
@@ -25,6 +26,7 @@ pub fn ExportDialog(
     let mut loaded = use_signal(|| false);
     let mut export_done = use_signal(|| false);
     let mut error_msg = use_signal(String::new);
+    let mut toast_manager = use_context::<Signal<ToastManager>>();
 
     use_effect({
         let pool = connection_pool.clone();
@@ -82,7 +84,9 @@ pub fn ExportDialog(
 
     let copy_to_clipboard = move |_| {
         if let Ok(mut clipboard) = Clipboard::new() {
-            let _ = clipboard.set_text(exported_content());
+            if clipboard.set_text(exported_content()).is_ok() {
+                toast_manager.write().success("已复制到剪贴板");
+            }
         }
     };
 

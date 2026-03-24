@@ -4,6 +4,7 @@ use crate::theme::{
     SYNTAX_BRACKET, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING,
 };
 use crate::ui::icons::IconCopy;
+use crate::ui::ToastManager;
 use dioxus::prelude::*;
 use serde_json::Value;
 
@@ -168,6 +169,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
     let mut temp_value = use_signal(String::new);
     let mut view_mode = use_signal(ViewMode::default);
     let mut parse_error = use_signal(|| None::<String>);
+    let mut toast_manager = use_context::<Signal<ToastManager>>();
 
     let display_value = value.clone();
     let formatted = format_json(&display_value).unwrap_or_else(|e| {
@@ -185,7 +187,9 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
         let val = formatted.clone();
         move |_| {
             if let Err(e) = copy_value_to_clipboard(&val) {
-                tracing::error!("Failed to copy: {}", e);
+                toast_manager.write().error(&format!("复制失败：{}", e));
+            } else {
+                toast_manager.write().success("已复制到剪贴板");
             }
         }
     };

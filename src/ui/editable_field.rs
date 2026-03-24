@@ -3,6 +3,7 @@ use crate::theme::{
     COLOR_TEXT_SECONDARY,
 };
 use crate::ui::icons::IconCopy;
+use crate::ui::ToastManager;
 use arboard::Clipboard;
 use dioxus::prelude::*;
 
@@ -30,6 +31,7 @@ pub fn EditableField(
 ) -> Element {
     let mut is_editing = use_signal(|| false);
     let mut temp_value = use_signal(String::new);
+    let mut toast_manager = use_context::<Signal<ToastManager>>();
 
     rsx! {
         div {
@@ -131,8 +133,12 @@ pub fn EditableField(
                             onclick: {
                                 let val = value.clone();
                                 move |_| match copy_to_clipboard(&val) {
-                                    Ok(_) => {}
-                                    Err(_) => {}
+                                    Ok(_) => {
+                                        toast_manager.write().success("已复制到剪贴板");
+                                    }
+                                    Err(e) => {
+                                        toast_manager.write().error(&format!("复制失败：{}", e));
+                                    }
                                 }
                             },
 

@@ -14,6 +14,7 @@ use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
 use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
+use crate::ui::ToastManager;
 use arboard::Clipboard;
 use dioxus::prelude::*;
 use serde_json;
@@ -462,8 +463,7 @@ pub fn ValueViewer(
     let mut show_large_key_warning = use_signal(|| false);
     let mut memory_usage = use_signal(|| None::<u64>);
     let mut ttl_input = use_signal(String::new);
-    let mut shell_status_message = use_signal(String::new);
-    let mut shell_status_error = use_signal(|| false);
+    let mut toast_manager = use_context::<Signal<ToastManager>>();
     let mut ttl_processing = use_signal(|| false);
     let mut delete_key_confirm = use_signal(|| false);
     let mut delete_key_processing = use_signal(|| false);
@@ -535,8 +535,6 @@ pub fn ValueViewer(
         show_large_key_warning.set(false);
         memory_usage.set(None);
         ttl_input.set(String::new());
-        shell_status_message.set(String::new());
-        shell_status_error.set(false);
         ttl_processing.set(false);
         delete_key_confirm.set(false);
         delete_key_processing.set(false);
@@ -674,12 +672,6 @@ pub fn ValueViewer(
         })
         .cloned()
         .collect();
-    let shell_message = shell_status_message();
-    let shell_message_color = if shell_status_error() {
-        COLOR_ERROR
-    } else {
-        COLOR_ACCENT
-    };
 
     rsx! {
         div {
@@ -748,12 +740,10 @@ pub fn ValueViewer(
                                         let key = display_key.clone();
                                         move |_| match copy_value_to_clipboard(&key) {
                                             Ok(_) => {
-                                                shell_status_message.set("Key 路径已复制".to_string());
-                                                shell_status_error.set(false);
+toast_manager.write().success("Key 路径已复制");
                                             }
                                             Err(error) => {
-                                                shell_status_message.set(format!("复制失败：{error}"));
-                                                shell_status_error.set(true);
+toast_manager.write().error(&format!("复制失败：{error}"));
                                             }
                                         }
                                     },
@@ -784,19 +774,16 @@ pub fn ValueViewer(
                                                     let key = key.clone();
                                                     spawn(async move {
                                                         delete_key_processing.set(true);
-                                                        shell_status_message.set(String::new());
-                                                        shell_status_error.set(false);
 
                                                         match pool.delete_key(&key).await {
                                                             Ok(_) => {
                                                                 delete_key_confirm.set(false);
-                                                                shell_status_message.set("Key 已删除".to_string());
+                                                                toast_manager.write().success("Key 已删除");
                                                                 selected_key.set(String::new());
                                                                 on_refresh.call(());
                                                             }
                                                             Err(error) => {
-                                                                shell_status_message.set(format!("删除失败：{error}"));
-                                                                shell_status_error.set(true);
+                                                                toast_manager.write().error(&format!("删除失败：{error}"));
                                                             }
                                                         }
 
@@ -923,16 +910,14 @@ pub fn ValueViewer(
                                             move |_| {
                                                 let ttl_text = ttl_input().trim().to_string();
                                                 if ttl_text.is_empty() {
-                                                    shell_status_message.set("请输入 TTL".to_string());
-                                                    shell_status_error.set(true);
+                                                    toast_manager.write().error("请输入 TTL");
                                                     return;
                                                 }
 
                                                 let ttl = match ttl_text.parse::<i64>() {
                                                     Ok(ttl) if ttl > 0 => ttl,
                                                     _ => {
-                                                        shell_status_message.set("TTL 必须大于 0".to_string());
-                                                        shell_status_error.set(true);
+                                                        toast_manager.write().error("TTL 必须大于 0");
                                                         return;
                                                     }
                                                 };
@@ -941,13 +926,10 @@ pub fn ValueViewer(
                                                 let key = key.clone();
                                                 spawn(async move {
                                                     ttl_processing.set(true);
-                                                    shell_status_message.set(String::new());
-                                                    shell_status_error.set(false);
 
                                                     match pool.set_ttl(&key, ttl).await {
                                                         Ok(_) => {
-                                                            shell_status_message.set("TTL 已更新".to_string());
-                                                            shell_status_error.set(false);
+                                                            toast_manager.write().success("TTL 已更新");
                                                             if let Err(error) = load_key_data(
                                                                 pool.clone(),
                                                                 key.clone(),
@@ -970,8 +952,7 @@ pub fn ValueViewer(
                                                             }
                                                         }
                                                         Err(error) => {
-                                                            shell_status_message.set(format!("TTL 更新失败：{error}"));
-                                                            shell_status_error.set(true);
+                                                            toast_manager.write().error(&format!("TTL 更新失败：{error}"));
                                                         }
                                                     }
 
@@ -1000,8 +981,7 @@ pub fn ValueViewer(
                                                 spawn(async move {
                                                     match pool.remove_ttl(&key).await {
                                                         Ok(_) => {
-                                                            shell_status_message.set("已设为永久".to_string());
-                                                            shell_status_error.set(false);
+                                                            toast_manager.write().success("已设为永久");
                                                             ttl_input.set(String::new());
                                                             if let Err(error) = load_key_data(
                                                                 pool.clone(),
@@ -1025,8 +1005,7 @@ pub fn ValueViewer(
                                                             }
                                                         }
                                                         Err(error) => {
-                                                            shell_status_message.set(format!("设置失败：{error}"));
-                                                            shell_status_error.set(true);
+                                                            toast_manager.write().error(&format!("设置失败：{error}"));
                                                         }
                                                     }
                                                 });
@@ -1045,16 +1024,6 @@ pub fn ValueViewer(
                                 "选择一个 Key 以查看和编辑详情"
                             }
                         }
-                    }
-                }
-
-                if !shell_message.is_empty() {
-                    div {
-                        margin_top: "10px",
-                        color: "{shell_message_color}",
-                        font_size: "12px",
-
-                        "{shell_message}"
                     }
                 }
             }
@@ -1294,8 +1263,7 @@ match info.key_type {
                                                                             binary_format.set(BinaryFormat::Bitmap);
                                                                         }
                                                                         Err(e) => {
-                                                                            shell_status_message.set(format!("加载 Bitmap 失败: {}", e));
-                                                                            shell_status_error.set(true);
+                                                                            toast_manager.write().error(&format!("加载 Bitmap 失败: {}", e));
                                                                         }
                                                                     }
                                                                 });
@@ -1339,18 +1307,15 @@ match info.key_type {
                                                                 Ok(mut clipboard) => {
                                                                     match clipboard.set_text(&copy_text) {
                                                                         Ok(_) => {
-                                                                            shell_status_message.set("复制成功".to_string());
-                                                                            shell_status_error.set(false);
+                                                                            toast_manager.write().success("复制成功");
                                                                         }
                                                                         Err(e) => {
-                                                                            shell_status_message.set(format!("复制失败：{}", e));
-                                                                            shell_status_error.set(true);
+                                                                            toast_manager.write().error(&format!("复制失败：{}", e));
                                                                         }
                                                                     }
                                                                 }
                                                                 Err(e) => {
-                                                                    shell_status_message.set(format!("复制失败：{}", e));
-                                                                    shell_status_error.set(true);
+                                                                    toast_manager.write().error(&format!("复制失败：{}", e));
                                                                 }
                                                             }
                                                         },
