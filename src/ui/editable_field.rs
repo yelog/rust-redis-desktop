@@ -2,16 +2,11 @@ use crate::theme::{
     COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST,
     COLOR_TEXT_SECONDARY,
 };
-use crate::ui::icons::IconCopy;
-use crate::ui::ToastManager;
-use arboard::Clipboard;
+use crate::ui::{copy_text_to_clipboard, icons::IconCopy, ToastManager};
 use dioxus::prelude::*;
 
 fn copy_to_clipboard(value: &str) -> Result<(), String> {
-    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard
-        .set_text(value.to_string())
-        .map_err(|e| e.to_string())
+    copy_text_to_clipboard(value)
 }
 
 #[derive(Clone, PartialEq)]

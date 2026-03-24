@@ -8,8 +8,7 @@ use crate::theme::{
     COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_WARNING, SYNTAX_BOOLEAN, SYNTAX_COMMENT,
     SYNTAX_FUNCTION, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING, SYNTAX_TYPE,
 };
-use crate::ui::json_viewer::JsonViewer;
-use arboard::Clipboard;
+use crate::ui::{copy_text_to_clipboard, json_viewer::JsonViewer};
 use dioxus::prelude::*;
 use serde_json::Value as JsonValue;
 use std::io::Cursor;
@@ -611,10 +610,8 @@ fn CopyButton(text: String) -> Element {
             cursor: "pointer",
 
             onclick: move |_| {
-                if let Ok(mut clipboard) = Clipboard::new() {
-                    if clipboard.set_text(&text).is_ok() {
-                        copied.set(true);
-                    }
+                if copy_text_to_clipboard(&text).is_ok() {
+                    copied.set(true);
                 }
             },
 

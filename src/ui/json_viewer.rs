@@ -3,8 +3,7 @@ use crate::theme::{
     COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST, SYNTAX_BOOLEAN,
     SYNTAX_BRACKET, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING,
 };
-use crate::ui::icons::IconCopy;
-use crate::ui::ToastManager;
+use crate::ui::{copy_text_to_clipboard, icons::IconCopy, ToastManager};
 use dioxus::prelude::*;
 use serde_json::Value;
 
@@ -399,8 +398,5 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 }
 
 fn copy_value_to_clipboard(value: &str) -> Result<(), String> {
-    let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard
-        .set_text(value.to_string())
-        .map_err(|e| e.to_string())
+    copy_text_to_clipboard(value)
 }

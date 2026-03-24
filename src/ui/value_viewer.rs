@@ -14,8 +14,7 @@ use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
 use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
-use crate::ui::ToastManager;
-use arboard::Clipboard;
+use crate::ui::{copy_text_to_clipboard, ToastManager};
 use dioxus::prelude::*;
 use serde_json;
 use std::collections::HashMap;
@@ -146,10 +145,7 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
 }
 
 fn copy_value_to_clipboard(value: &str) -> Result<(), String> {
-    let mut clipboard = Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard
-        .set_text(value.to_string())
-        .map_err(|e| e.to_string())
+    copy_text_to_clipboard(value)
 }
 
 fn sorted_hash_entries(fields: &HashMap<String, String>) -> Vec<(String, String)> {
@@ -600,7 +596,11 @@ pub fn ValueViewer(
     use_effect(move || {
         if let Some(info) = key_info() {
             let key = info.name.clone();
-            ttl_input.set(info.ttl.map(|ttl| ttl.to_string()).unwrap_or_else(|| "-1".to_string()));
+            ttl_input.set(
+                info.ttl
+                    .map(|ttl| ttl.to_string())
+                    .unwrap_or_else(|| "-1".to_string()),
+            );
 
             let pool = pool_for_meta.clone();
             spawn(async move {
@@ -1293,16 +1293,9 @@ pub fn ValueViewer(
                                                                     }
                                                                     _ => current_str,
                                                                 };
-                                                                match Clipboard::new() {
-                                                                    Ok(mut clipboard) => {
-                                                                        match clipboard.set_text(&copy_text) {
-                                                                            Ok(_) => {
-                                                                                toast_manager.write().success("复制成功");
-                                                                            }
-                                                                            Err(e) => {
-                                                                                toast_manager.write().error(&format!("复制失败：{}", e));
-                                                                            }
-                                                                        }
+                                                                match copy_text_to_clipboard(&copy_text) {
+                                                                    Ok(_) => {
+                                                                        toast_manager.write().success("复制成功");
                                                                     }
                                                                     Err(e) => {
                                                                         toast_manager.write().error(&format!("复制失败：{}", e));

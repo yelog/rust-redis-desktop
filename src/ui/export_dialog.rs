@@ -2,8 +2,7 @@ use crate::connection::ConnectionPool;
 use crate::redis::ExportFormat;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
-use crate::ui::ToastManager;
-use arboard::Clipboard;
+use crate::ui::{copy_text_to_clipboard, ToastManager};
 use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq)]
@@ -83,10 +82,8 @@ pub fn ExportDialog(
     };
 
     let copy_to_clipboard = move |_| {
-        if let Ok(mut clipboard) = Clipboard::new() {
-            if clipboard.set_text(exported_content()).is_ok() {
-                toast_manager.write().success("已复制到剪贴板");
-            }
+        if copy_text_to_clipboard(&exported_content()).is_ok() {
+            toast_manager.write().success("已复制到剪贴板");
         }
     };
 

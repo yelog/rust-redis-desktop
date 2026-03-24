@@ -10,8 +10,9 @@ use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::export_dialog::{ExportDialog, ExportTarget};
 use crate::ui::icons::*;
-use crate::ui::{LazyTreeNode, ResizableDivider, ToastManager, TreeState, ValueViewer};
-use arboard::Clipboard;
+use crate::ui::{
+    copy_text_to_clipboard, LazyTreeNode, ResizableDivider, ToastManager, TreeState, ValueViewer,
+};
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -757,10 +758,8 @@ pub fn KeyBrowser(
                         let node_path = node_path.clone();
                         move |_| {
                             context_menu.set(None);
-                            if let Ok(mut clipboard) = Clipboard::new() {
-                                if clipboard.set_text(node_path.clone()).is_ok() {
-                                    toast_manager.write().success("路径已复制");
-                                }
+                            if copy_text_to_clipboard(&node_path).is_ok() {
+                                toast_manager.write().success("路径已复制");
                             }
                         }
                     },
