@@ -25,13 +25,16 @@ pub enum ThemeId {
 }
 
 impl ThemeId {
-    pub const MANUAL_OPTIONS: [Self; 8] = [
-        Self::ClassicDark,
+    pub const LIGHT_OPTIONS: [Self; 4] = [
         Self::ClassicLight,
-        Self::TokyoNight,
         Self::TokyoNightLight,
         Self::AtomOneLight,
         Self::GitHubLight,
+    ];
+
+    pub const DARK_OPTIONS: [Self; 4] = [
+        Self::ClassicDark,
+        Self::TokyoNight,
         Self::OneDarkPro,
         Self::Dracula,
     ];
@@ -80,59 +83,84 @@ impl ThemeId {
             _ => None,
         }
     }
+
+    pub fn kind(self) -> ThemeKind {
+        match self {
+            Self::ClassicLight | Self::TokyoNightLight | Self::AtomOneLight | Self::GitHubLight => {
+                ThemeKind::Light
+            }
+            Self::ClassicDark | Self::TokyoNight | Self::OneDarkPro | Self::Dracula => {
+                ThemeKind::Dark
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ThemePreference {
+pub enum ThemeMode {
     System,
-    Manual(ThemeId),
+    Dark,
+    Light,
 }
 
-impl Default for ThemePreference {
+impl Default for ThemeMode {
     fn default() -> Self {
         Self::System
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemePreference {
+    System { light: ThemeId, dark: ThemeId },
+    Dark(ThemeId),
+    Light(ThemeId),
+}
+
+impl Default for ThemePreference {
+    fn default() -> Self {
+        Self::System {
+            light: ThemeId::ClassicLight,
+            dark: ThemeId::ClassicDark,
+        }
+    }
+}
+
 impl ThemePreference {
-    pub fn is_system(self) -> bool {
-        matches!(self, Self::System)
+    pub fn mode(self) -> ThemeMode {
+        match self {
+            Self::System { .. } => ThemeMode::System,
+            Self::Dark(_) => ThemeMode::Dark,
+            Self::Light(_) => ThemeMode::Light,
+        }
     }
 
-    pub fn manual_theme(self) -> Option<ThemeId> {
+    pub fn light_theme(self) -> ThemeId {
         match self {
-            Self::System => None,
-            Self::Manual(id) => Some(id),
+            Self::System { light, .. } => light,
+            Self::Light(id) => id,
+            Self::Dark(_) => ThemeId::ClassicLight,
+        }
+    }
+
+    pub fn dark_theme(self) -> ThemeId {
+        match self {
+            Self::System { dark, .. } => dark,
+            Self::Dark(id) => id,
+            Self::Light(_) => ThemeId::ClassicDark,
         }
     }
 
     pub fn resolved_theme_id(self, system_is_dark: bool) -> ThemeId {
         match self {
-            Self::System => {
+            Self::System { light, dark } => {
                 if system_is_dark {
-                    ThemeId::ClassicDark
+                    dark
                 } else {
-                    ThemeId::ClassicLight
+                    light
                 }
             }
-            Self::Manual(id) => id,
+            Self::Dark(id) | Self::Light(id) => id,
         }
-    }
-
-    fn storage_value(self) -> &'static str {
-        match self {
-            Self::System => "system",
-            Self::Manual(id) => id.as_str(),
-        }
-    }
-
-    fn from_storage_value(value: &str) -> Option<Self> {
-        let normalized = value.trim();
-        if normalized.eq_ignore_ascii_case("system") {
-            return Some(Self::System);
-        }
-
-        ThemeId::from_str(normalized).map(Self::Manual)
     }
 }
 
@@ -141,7 +169,26 @@ impl Serialize for ThemePreference {
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.storage_value())
+        match self {
+            Self::System { light, dark } => {
+                let mut map = serde_json::Map::new();
+                let mut inner = serde_json::Map::new();
+                inner.insert("light".to_string(), serde_json::json!(light.as_str()));
+                inner.insert("dark".to_string(), serde_json::json!(dark.as_str()));
+                map.insert("system".to_string(), serde_json::Value::Object(inner));
+                serializer.serialize_some(&serde_json::Value::Object(map))
+            }
+            Self::Dark(id) => {
+                let mut map = serde_json::Map::new();
+                map.insert("dark".to_string(), serde_json::json!(id.as_str()));
+                serializer.serialize_some(&serde_json::Value::Object(map))
+            }
+            Self::Light(id) => {
+                let mut map = serde_json::Map::new();
+                map.insert("light".to_string(), serde_json::json!(id.as_str()));
+                serializer.serialize_some(&serde_json::Value::Object(map))
+            }
+        }
     }
 }
 
@@ -151,22 +198,71 @@ impl<'de> Visitor<'de> for ThemePreferenceVisitor {
     type Value = ThemePreference;
 
     fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("a theme preference string")
+        formatter.write_str("a theme preference object or string")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where
         E: de::Error,
     {
-        ThemePreference::from_storage_value(value)
-            .ok_or_else(|| E::custom(format!("unknown theme preference: {value}")))
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("system") {
+            return Ok(ThemePreference::default());
+        }
+        if let Some(id) = ThemeId::from_str(normalized) {
+            return Ok(match id.kind() {
+                ThemeKind::Light => ThemePreference::Light(id),
+                ThemeKind::Dark => ThemePreference::Dark(id),
+            });
+        }
+        Err(E::custom(format!("unknown theme preference: {value}")))
     }
 
-    fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+    fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
     where
-        E: de::Error,
+        M: de::MapAccess<'de>,
     {
-        self.visit_str(&value)
+        let mut system_light: Option<ThemeId> = None;
+        let mut system_dark: Option<ThemeId> = None;
+        let mut dark_id: Option<ThemeId> = None;
+        let mut light_id: Option<ThemeId> = None;
+
+        while let Some(key) = map.next_key::<String>()? {
+            match key.as_str() {
+                "system" => {
+                    let inner: serde_json::Map<String, serde_json::Value> = map.next_value()?;
+                    if let Some(v) = inner.get("light").and_then(|v| v.as_str()) {
+                        system_light = ThemeId::from_str(v);
+                    }
+                    if let Some(v) = inner.get("dark").and_then(|v| v.as_str()) {
+                        system_dark = ThemeId::from_str(v);
+                    }
+                }
+                "dark" => {
+                    if let Some(v) = map.next_value::<serde_json::Value>()?.as_str() {
+                        dark_id = ThemeId::from_str(v);
+                    }
+                }
+                "light" => {
+                    if let Some(v) = map.next_value::<serde_json::Value>()?.as_str() {
+                        light_id = ThemeId::from_str(v);
+                    }
+                }
+                _ => {
+                    let _ = map.next_value::<de::IgnoredAny>()?;
+                }
+            }
+        }
+
+        if let (Some(light), Some(dark)) = (system_light, system_dark) {
+            Ok(ThemePreference::System { light, dark })
+        } else if let Some(id) = dark_id {
+            Ok(ThemePreference::Dark(id))
+        } else if let Some(id) = light_id {
+            Ok(ThemePreference::Light(id))
+        } else {
+            Ok(ThemePreference::default())
+        }
     }
 }
 
@@ -943,11 +1039,8 @@ pub fn resolve_theme(preference: ThemePreference, system_is_dark: bool) -> Theme
 
 pub fn preferred_window_theme(preference: ThemePreference) -> Option<tao::window::Theme> {
     match preference {
-        ThemePreference::System => None,
-        ThemePreference::Manual(id) => Some(if theme_spec(id).is_dark() {
-            tao::window::Theme::Dark
-        } else {
-            tao::window::Theme::Light
-        }),
+        ThemePreference::System { .. } => None,
+        ThemePreference::Dark(_) => Some(tao::window::Theme::Dark),
+        ThemePreference::Light(_) => Some(tao::window::Theme::Light),
     }
 }

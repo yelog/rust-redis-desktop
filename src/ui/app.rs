@@ -289,13 +289,19 @@ fn build_theme_bridge_script(preference: ThemePreference) -> String {
   const legacyTextSecondary = new Set(["#888", "#666", "#808080"].map(normalize));
 
   const resolveTheme = () => {{
-    if (bridge.selectedPreference === "system") {{
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? bridge.themes.classic_dark
-        : bridge.themes.classic_light;
+    const pref = bridge.selectedPreference;
+    if (pref.system) {{
+      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const themeId = isDark ? pref.system.dark : pref.system.light;
+      return bridge.themes[themeId] || bridge.themes.classic_dark;
     }}
-
-    return bridge.themes[bridge.selectedPreference] || bridge.themes.classic_dark;
+    if (pref.dark) {{
+      return bridge.themes[pref.dark] || bridge.themes.classic_dark;
+    }}
+    if (pref.light) {{
+      return bridge.themes[pref.light] || bridge.themes.classic_light;
+    }}
+    return bridge.themes.classic_dark;
   }};
 
   const buildMaps = (theme) => {{
@@ -473,7 +479,15 @@ fn build_theme_bridge_script(preference: ThemePreference) -> String {
       bridge.observer.disconnect();
     }}
 
-    root.dataset.themeMode = bridge.selectedPreference;
+    const getThemeMode = () => {{
+    const pref = bridge.selectedPreference;
+    if (pref.system) return "system";
+    if (pref.dark) return "dark";
+    if (pref.light) return "light";
+    return "system";
+  }};
+
+    root.dataset.themeMode = getThemeMode();
     root.dataset.themeResolved = theme.isDark ? "dark" : "light";
     root.style.colorScheme = theme.isDark ? "dark" : "light";
     root.style.setProperty("--theme-bg", theme.surfaceBase);

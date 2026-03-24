@@ -1,5 +1,5 @@
 use crate::config::AppSettings;
-use crate::theme::{ThemeColors, ThemeId, ThemePreference};
+use crate::theme::{ThemeColors, ThemeId, ThemeMode, ThemePreference};
 use crate::ui::animated_dialog::AnimatedDialog;
 use crate::ui::icons::IconX;
 use dioxus::prelude::*;
@@ -13,24 +13,24 @@ pub fn SettingsDialog(
     on_close: EventHandler<()>,
 ) -> Element {
     let mut auto_refresh_interval = use_signal(|| settings.auto_refresh_interval);
-    let mut use_system_theme = use_signal(|| settings.theme_preference.is_system());
-    let mut manual_theme = use_signal(|| {
-        settings
-            .theme_preference
-            .manual_theme()
-            .unwrap_or(resolved_theme_id)
-    });
+    let mut theme_mode = use_signal(|| settings.theme_preference.mode());
+    let mut light_theme = use_signal(|| settings.theme_preference.light_theme());
+    let mut dark_theme = use_signal(|| settings.theme_preference.dark_theme());
 
     let apply_settings = {
         let on_change = on_change.clone();
         move || {
+            let preference = match theme_mode() {
+                ThemeMode::System => ThemePreference::System {
+                    light: light_theme(),
+                    dark: dark_theme(),
+                },
+                ThemeMode::Dark => ThemePreference::Dark(dark_theme()),
+                ThemeMode::Light => ThemePreference::Light(light_theme()),
+            };
             on_change.call(AppSettings {
                 auto_refresh_interval: auto_refresh_interval(),
-                theme_preference: if use_system_theme() {
-                    ThemePreference::System
-                } else {
-                    ThemePreference::Manual(manual_theme())
-                },
+                theme_preference: preference,
             });
         }
     };
@@ -85,9 +85,13 @@ pub fn SettingsDialog(
                         flex_wrap: "wrap",
                         gap: "8px",
 
-                        for (value, label) in [(true, "跟随系统"), (false, "手动选择")] {
+                        for (mode, label) in [
+                            (ThemeMode::System, "跟随系统"),
+                            (ThemeMode::Dark, "暗色"),
+                            (ThemeMode::Light, "亮色"),
+                        ] {
                             {
-                                let is_selected = use_system_theme() == value;
+                                let is_selected = theme_mode() == mode;
                                 let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
                                 let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
                                 let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
@@ -105,7 +109,7 @@ pub fn SettingsDialog(
                                         onclick: {
                                             let apply = apply_settings.clone();
                                             move |_| {
-                                                use_system_theme.set(value);
+                                                theme_mode.set(mode);
                                                 apply();
                                             }
                                         },
@@ -116,55 +120,43 @@ pub fn SettingsDialog(
                             }
                         }
                     }
+                }
 
-                    if !use_system_theme() {
-                        div {
-                            margin_top: "16px",
+                {
+                    let mode = theme_mode();
+                    let show_light = matches!(mode, ThemeMode::System | ThemeMode::Light);
+                    let show_dark = matches!(mode, ThemeMode::System | ThemeMode::Dark);
 
-                            label {
-                                display: "block",
-                                color: "{colors.text_secondary}",
-                                font_size: "12px",
-                                margin_bottom: "8px",
-
-                                "手动主题"
-                            }
-
-                            div {
-                                display: "flex",
-                                flex_wrap: "wrap",
-                                gap: "8px",
-
-                                for theme_id in ThemeId::MANUAL_OPTIONS {
-                                    {
-                                        let is_selected = manual_theme() == theme_id;
-                                        let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
-                                        let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
-                                        let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
-                                        rsx! {
-                                            div {
-                                                key: "{theme_id.as_str()}",
-                                                padding: "6px 14px",
-                                                background: "{bg}",
-                                                border: "1px solid {border_color}",
-                                                border_radius: "16px",
-                                                color: "{text_color}",
-                                                font_size: "13px",
-                                                cursor: "pointer",
-                                                user_select: "none",
-                                                onclick: {
-                                                    let apply = apply_settings.clone();
-                                                    move |_| {
-                                                        manual_theme.set(theme_id);
-                                                        apply();
-                                                    }
-                                                },
-
-                                                "{theme_id.label()}"
-                                            }
-                                        }
+                    rsx! {
+                        if show_light {
+                            ThemeSelector {
+                                label: "亮色主题",
+                                options: ThemeId::LIGHT_OPTIONS,
+                                selected: light_theme(),
+                                colors,
+                                on_select: {
+                                    let apply = apply_settings.clone();
+                                    move |id: ThemeId| {
+                                        light_theme.set(id);
+                                        apply();
                                     }
-                                }
+                                },
+                            }
+                        }
+
+                        if show_dark {
+                            ThemeSelector {
+                                label: "暗色主题",
+                                options: ThemeId::DARK_OPTIONS,
+                                selected: dark_theme(),
+                                colors,
+                                on_select: {
+                                    let apply = apply_settings.clone();
+                                    move |id: ThemeId| {
+                                        dark_theme.set(id);
+                                        apply();
+                                    }
+                                },
                             }
                         }
                     }
@@ -215,6 +207,61 @@ pub fn SettingsDialog(
                                         "{label}"
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn ThemeSelector(
+    label: &'static str,
+    options: [ThemeId; 4],
+    selected: ThemeId,
+    colors: ThemeColors,
+    on_select: EventHandler<ThemeId>,
+) -> Element {
+    rsx! {
+        div {
+            margin_bottom: "20px",
+
+            label {
+                display: "block",
+                color: "{colors.text_secondary}",
+                font_size: "12px",
+                margin_bottom: "8px",
+
+                "{label}"
+            }
+
+            div {
+                display: "flex",
+                flex_wrap: "wrap",
+                gap: "8px",
+
+                for theme_id in options {
+                    {
+                        let is_selected = selected == theme_id;
+                        let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
+                        let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
+                        let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                        rsx! {
+                            div {
+                                key: "{theme_id.as_str()}",
+                                padding: "6px 14px",
+                                background: "{bg}",
+                                border: "1px solid {border_color}",
+                                border_radius: "16px",
+                                color: "{text_color}",
+                                font_size: "13px",
+                                cursor: "pointer",
+                                user_select: "none",
+                                onclick: move |_| on_select.call(theme_id),
+
+                                "{theme_id.label()}"
                             }
                         }
                     }
