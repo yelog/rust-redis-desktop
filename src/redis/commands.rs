@@ -1434,3 +1434,95 @@ impl ConnectionPool {
         }
     }
 }
+
+impl ConnectionPool {
+    pub async fn get_bit(&self, key: &str, offset: u64) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: u8 = conn
+                .execute_cmd(&mut redis::cmd("GETBIT").arg(key).arg(offset))
+                .await?;
+            Ok(result == 1)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_bit(&self, key: &str, offset: u64, value: bool) -> Result<bool> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: u8 = conn
+                .execute_cmd(&mut redis::cmd("SETBIT").arg(key).arg(offset).arg(if value { 1 } else { 0 }))
+                .await?;
+            Ok(result == 1)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn bit_count(&self, key: &str) -> Result<u64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(&mut redis::cmd("BITCOUNT").arg(key)).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn bit_count_range(&self, key: &str, start: i64, end: i64) -> Result<u64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(&mut redis::cmd("BITCOUNT").arg(key).arg(start).arg(end)).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn bit_pos(&self, key: &str, bit: bool) -> Result<i64> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(&mut redis::cmd("BITPOS").arg(key).arg(if bit { 1 } else { 0 })).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn get_bitmap_info(&self, key: &str) -> Result<BitmapInfo> {
+        let bytes = self.get_string_bytes(key).await?;
+        let bit_count = self.bit_count(key).await?;
+        
+        let set_bits: Vec<u64> = {
+            let mut bits = Vec::new();
+            for (byte_idx, &byte) in bytes.iter().enumerate() {
+                for bit_idx in 0..8 {
+                    if (byte >> (7 - bit_idx)) & 1 == 1 {
+                        bits.push((byte_idx as u64 * 8 + bit_idx as u64) as u64);
+                    }
+                }
+            }
+            bits
+        };
+
+        Ok(BitmapInfo {
+            total_bytes: bytes.len() as u64,
+            total_bits: bytes.len() as u64 * 8,
+            set_bits_count: bit_count,
+            set_bits,
+            raw_bytes: bytes,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BitmapInfo {
+    pub total_bytes: u64,
+    pub total_bits: u64,
+    pub set_bits_count: u64,
+    pub set_bits: Vec<u64>,
+    pub raw_bytes: Vec<u8>,
+}

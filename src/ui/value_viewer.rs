@@ -35,6 +35,7 @@ pub enum BinaryFormat {
     MsgPack,
     Pickle,
     Kryo,
+    Bitmap,
 }
 
 #[derive(Clone, PartialEq)]
@@ -127,6 +128,9 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
                 "非 Kryo/FST 数据".to_string()
             }
         }
+        BinaryFormat::Bitmap => {
+            format!("Bitmap 数据 ({} 字节)\n\n请点击 Bitmap 按钮查看可视化", data.len())
+        }
     }
 }
 
@@ -198,6 +202,7 @@ async fn load_key_data(
     mut is_binary: Signal<bool>,
     mut binary_format: Signal<BinaryFormat>,
     mut serialization_data: Signal<Option<(SerializationFormat, Vec<u8>)>>,
+    mut bitmap_info: Signal<Option<crate::redis::BitmapInfo>>,
     mut loading: Signal<bool>,
 ) -> Result<(), String> {
     if key.is_empty() {
@@ -209,6 +214,7 @@ async fn load_key_data(
         zset_value.set(Vec::new());
         is_binary.set(false);
         serialization_data.set(None);
+        bitmap_info.set(None);
         loading.set(false);
         return Ok(());
     }
@@ -251,6 +257,12 @@ async fn load_key_data(
                         });
                     } else {
                         serialization_data.set(None);
+                        if bytes.len() <= 1024 {
+                            if let Ok(info) = pool.get_bitmap_info(&key).await {
+                                bitmap_info.set(Some(info));
+                                binary_format.set(BinaryFormat::Bitmap);
+                            }
+                        }
                     }
 
                     let formatted = format_bytes(&bytes, binary_format());
@@ -433,6 +445,10 @@ pub fn ValueViewer(
     let mut delete_key_confirm = use_signal(|| false);
     let mut delete_key_processing = use_signal(|| false);
 
+    let mut bitmap_info = use_signal(|| None::<crate::redis::BitmapInfo>);
+    let mut bitmap_editing_offset = use_signal(String::new);
+    let mut bitmap_editing_value = use_signal(String::new);
+
     let pool = connection_pool.clone();
     let pool_for_edit = connection_pool.clone();
     let pool_for_reload = connection_pool.clone();
@@ -514,6 +530,7 @@ pub fn ValueViewer(
                 is_binary,
                 binary_format,
                 serialization_data,
+                bitmap_info,
                 loading,
             )
             .await
@@ -912,6 +929,7 @@ pub fn ValueViewer(
                                                                 is_binary,
                                                                 binary_format,
                                                                 serialization_data,
+                                                                bitmap_info,
                                                                 loading,
                                                             ).await {
                                                                 tracing::error!("{error}");
@@ -965,6 +983,7 @@ pub fn ValueViewer(
                                                                 is_binary,
                                                                 binary_format,
                                                                 serialization_data,
+                                                                bitmap_info,
                                                                 loading,
                                                             ).await {
                                                                 tracing::error!("{error}");
@@ -1221,6 +1240,38 @@ match info.key_type {
                                                     }
 
                                                     button {
+                                                        padding: "4px 8px",
+                                                        background: if binary_format() == BinaryFormat::Bitmap { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                        color: if binary_format() == BinaryFormat::Bitmap { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                        border: "none",
+                                                        border_radius: "4px",
+                                                        cursor: "pointer",
+                                                        font_size: "12px",
+                                                        onclick: {
+                                                            let pool = connection_pool.clone();
+                                                            let key = display_key.clone();
+                                                            move |_| {
+                                                                let pool = pool.clone();
+                                                                let key = key.clone();
+                                                                spawn(async move {
+                                                                    match pool.get_bitmap_info(&key).await {
+                                                                        Ok(info) => {
+                                                                            bitmap_info.set(Some(info));
+                                                                            binary_format.set(BinaryFormat::Bitmap);
+                                                                        }
+                                                                        Err(e) => {
+                                                                            shell_status_message.set(format!("加载 Bitmap 失败: {}", e));
+                                                                            shell_status_error.set(true);
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }
+                                                        },
+
+                                                        "Bitmap"
+                                                    }
+
+                                                    button {
                                                         padding: "4px 10px",
                                                         background: "rgba(47, 133, 90, 0.16)",
                                                         color: COLOR_SUCCESS,
@@ -1447,6 +1498,41 @@ match info.key_type {
                                                             }
                                                         }
                                                     }
+                                                    BinaryFormat::Bitmap => {
+                                                        if let Some(ref info) = bitmap_info() {
+                                                            rsx! {
+                                                                BitmapViewer {
+                                                                    info: info.clone(),
+                                                                    pool: connection_pool.clone(),
+                                                                    redis_key: display_key.clone(),
+                                                                    on_update: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        move || {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            spawn(async move {
+                                                                                if let Ok(new_info) = pool.get_bitmap_info(&key).await {
+                                                                                    bitmap_info.set(Some(new_info));
+                                                                                }
+                                                                            });
+                                                                        }
+                                                                    },
+                                                                }
+                                                            }
+                                                        } else {
+                                                            rsx! {
+                                                                div {
+                                                                    padding: "16px",
+                                                                    background: COLOR_BG_TERTIARY,
+                                                                    border_radius: "8px",
+                                                                    color: COLOR_TEXT_SECONDARY,
+
+                                                                    "点击 \"Bitmap\" 按钮加载可视化数据"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                     _ => {
                                                         rsx! {
                                                             EditableField {
@@ -1620,7 +1706,6 @@ match info.key_type {
 
                                         table {
                                             width: "100%",
-                                            min_width: "920px",
                                             border_collapse: "collapse",
 
                                             thead {
@@ -1788,6 +1873,7 @@ match info.key_type {
                                                                                             is_binary,
                                                                                             binary_format,
                                                                                             serialization_data,
+                                                                                            bitmap_info,
                                                                                             loading,
                                                                                         )
                                                                                         .await
@@ -1960,6 +2046,7 @@ match info.key_type {
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
+                                                                                                bitmap_info,
                                                                                                 loading,
                                                                                             )
                                                                                             .await
@@ -2274,6 +2361,7 @@ match info.key_type {
                                                                                             is_binary,
                                                                                             binary_format,
                                                                                             serialization_data,
+                                                                                            bitmap_info,
                                                                                             loading,
                                                                                         )
                                                                             .await
@@ -2378,6 +2466,7 @@ match info.key_type {
                                                                         is_binary,
                                                                         binary_format,
                                                                         serialization_data,
+                                                                        bitmap_info,
                                                                         loading,
                                                                     ).await {
                                                                         tracing::error!("{error}");
@@ -2438,6 +2527,7 @@ match info.key_type {
                                                                         is_binary,
                                                                         binary_format,
                                                                         serialization_data,
+                                                                        bitmap_info,
                                                                         loading,
                                                                     ).await {
                                                                         tracing::error!("{error}");
@@ -2642,6 +2732,7 @@ match info.key_type {
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
+                                                                                                bitmap_info,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -2800,6 +2891,7 @@ match info.key_type {
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
+                                                                                                bitmap_info,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -2910,6 +3002,7 @@ match info.key_type {
                                                                         is_binary,
                                                                         binary_format,
                                                                         serialization_data,
+                                                                        bitmap_info,
                                                                         loading,
                                                                     ).await {
                                                                         tracing::error!("{error}");
@@ -3145,6 +3238,7 @@ match info.key_type {
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
+                                                                                                bitmap_info,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -3307,6 +3401,7 @@ match info.key_type {
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
+                                                                                                bitmap_info,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -3442,6 +3537,7 @@ match info.key_type {
                                                                         is_binary,
                                                                         binary_format,
                                                                         serialization_data,
+                                                                        bitmap_info,
                                                                         loading,
                                                                     ).await {
                                                                         tracing::error!("{error}");
@@ -3674,6 +3770,7 @@ match info.key_type {
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
+                                                                                                bitmap_info,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -3843,6 +3940,7 @@ match info.key_type {
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
+                                                                                                bitmap_info,
                                                                                                 loading,
                                                                                             ).await {
                                                                                                 tracing::error!("{error}");
@@ -3900,6 +3998,284 @@ match info.key_type {
                         background: COLOR_BG_SECONDARY,
 
                         "未能加载 Key 数据"
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn BitmapViewer(
+    info: crate::redis::BitmapInfo,
+    pool: ConnectionPool,
+    redis_key: String,
+    on_update: EventHandler<()>,
+) -> Element {
+    let mut editing_offset = use_signal(String::new);
+    let mut editing_value = use_signal(|| "1".to_string());
+
+    rsx! {
+        div {
+            display: "flex",
+            flex_direction: "column",
+            gap: "16px",
+
+            div {
+                display: "flex",
+                gap: "16px",
+                flex_wrap: "wrap",
+
+                div {
+                    padding: "8px 12px",
+                    background: COLOR_BG_TERTIARY,
+                    border_radius: "6px",
+
+                    span {
+                        color: COLOR_TEXT_SECONDARY,
+                        font_size: "12px",
+
+                        "总字节数: "
+                    }
+                    span {
+                        color: COLOR_TEXT,
+                        font_size: "12px",
+                        font_weight: "600",
+
+                        "{info.total_bytes}"
+                    }
+                }
+
+                div {
+                    padding: "8px 12px",
+                    background: COLOR_BG_TERTIARY,
+                    border_radius: "6px",
+
+                    span {
+                        color: COLOR_TEXT_SECONDARY,
+                        font_size: "12px",
+
+                        "总位数: "
+                    }
+                    span {
+                        color: COLOR_TEXT,
+                        font_size: "12px",
+                        font_weight: "600",
+
+                        "{info.total_bits}"
+                    }
+                }
+
+                div {
+                    padding: "8px 12px",
+                    background: "rgba(47, 133, 90, 0.16)",
+                    border_radius: "6px",
+
+                    span {
+                        color: COLOR_TEXT_SECONDARY,
+                        font_size: "12px",
+
+                        "已设置位: "
+                    }
+                    span {
+                        color: COLOR_SUCCESS,
+                        font_size: "12px",
+                        font_weight: "600",
+
+                        "{info.set_bits_count}"
+                    }
+                }
+            }
+
+            div {
+                span {
+                    color: COLOR_TEXT_SECONDARY,
+                    font_size: "12px",
+                    font_weight: "600",
+                    margin_bottom: "8px",
+                    display: "block",
+
+                    "已设置的位 (offset):"
+                }
+
+                div {
+                    display: "flex",
+                    flex_wrap: "wrap",
+                    gap: "6px",
+                    max_height: "120px",
+                    overflow_y: "auto",
+                    padding: "8px",
+                    background: COLOR_BG_TERTIARY,
+                    border_radius: "6px",
+
+                    for offset in info.set_bits.iter().take(200) {
+                        span {
+                            padding: "2px 8px",
+                            background: "rgba(99, 102, 241, 0.20)",
+                            color: "#818cf8",
+                            border_radius: "4px",
+                            font_size: "11px",
+                            font_family: "Consolas, monospace",
+
+                            "{offset}"
+                        }
+                    }
+                    if info.set_bits.len() > 200 {
+                        span {
+                            padding: "2px 8px",
+                            color: COLOR_TEXT_SECONDARY,
+                            font_size: "11px",
+
+                            "... 还有 {info.set_bits.len() - 200} 个"
+                        }
+                    }
+                }
+            }
+
+            div {
+                span {
+                    color: COLOR_TEXT_SECONDARY,
+                    font_size: "12px",
+                    font_weight: "600",
+                    margin_bottom: "8px",
+                    display: "block",
+
+                    "二进制视图:"
+                }
+
+                div {
+                    display: "flex",
+                    flex_wrap: "wrap",
+                    gap: "4px",
+                    font_family: "Consolas, monospace",
+                    font_size: "11px",
+                    max_height: "200px",
+                    overflow_y: "auto",
+                    padding: "8px",
+                    background: COLOR_BG_TERTIARY,
+                    border_radius: "6px",
+
+                    for (byte_idx, byte) in info.raw_bytes.iter().enumerate().take(64) {
+                        div {
+                            display: "flex",
+                            flex_direction: "column",
+                            align_items: "center",
+                            gap: "2px",
+
+                            div {
+                                display: "flex",
+                                gap: "1px",
+
+                                for bit_idx in 0..8 {
+                                    { let bit_val = (*byte >> (7 - bit_idx)) & 1; rsx! {
+                                        div {
+                                            width: "12px",
+                                            height: "12px",
+                                            background: if bit_val == 1 { "#22c55e" } else { COLOR_BG },
+                                            border_radius: "2px",
+                                        }
+                                    }}
+                                }
+                            }
+
+                            span {
+                                color: COLOR_TEXT_SUBTLE,
+                                font_size: "9px",
+
+                                "{byte_idx}"
+                            }
+                        }
+                    }
+                    if info.raw_bytes.len() > 64 {
+                        span {
+                            color: COLOR_TEXT_SECONDARY,
+                            font_size: "11px",
+
+                            "... 共 {info.raw_bytes.len()} 字节"
+                        }
+                    }
+                }
+            }
+
+            div {
+                span {
+                    color: COLOR_TEXT_SECONDARY,
+                    font_size: "12px",
+                    font_weight: "600",
+                    margin_bottom: "8px",
+                    display: "block",
+
+                    "设置/修改位:"
+                }
+
+                div {
+                    display: "flex",
+                    gap: "8px",
+                    align_items: "center",
+
+                    input {
+                        width: "100px",
+                        padding: "6px 10px",
+                        background: COLOR_BG_TERTIARY,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "4px",
+                        color: COLOR_TEXT,
+                        font_size: "12px",
+                        placeholder: "Offset",
+                        value: "{editing_offset}",
+                        oninput: move |e| editing_offset.set(e.value()),
+                    }
+
+                    select {
+                        padding: "6px 10px",
+                        background: COLOR_BG_TERTIARY,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "4px",
+                        color: COLOR_TEXT,
+                        font_size: "12px",
+                        value: "{editing_value}",
+                        onchange: move |e| editing_value.set(e.value()),
+
+                        option {
+                            value: "0",
+
+                            "设为 0"
+                        }
+                        option {
+                            value: "1",
+
+                            "设为 1"
+                        }
+                    }
+
+                    button {
+                        padding: "6px 12px",
+                        background: COLOR_PRIMARY,
+                        color: COLOR_TEXT_CONTRAST,
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "12px",
+                        onclick: {
+                            let pool = pool.clone();
+                            let redis_key = redis_key.clone();
+                            move |_| {
+                                let offset_str = editing_offset();
+                                let value_str = editing_value();
+                                if let Ok(offset) = offset_str.parse::<u64>() {
+                                    let value = value_str == "1";
+                                    let pool = pool.clone();
+                                    let redis_key = redis_key.clone();
+                                    spawn(async move {
+                                        if pool.set_bit(&redis_key, offset, value).await.is_ok() {
+                                            on_update.call(());
+                                        }
+                                    });
+                                }
+                            }
+                        },
+
+                        "应用"
                     }
                 }
             }
