@@ -10,6 +10,7 @@ use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::export_dialog::{ExportDialog, ExportTarget};
 use crate::ui::icons::*;
+use crate::ui::memory_analysis_dialog::MemoryAnalysisDialog;
 use crate::ui::pattern_delete_dialog::PatternDeleteDialog;
 use crate::ui::{
     copy_text_to_clipboard, LazyTreeNode, ResizableDivider, ToastManager, TreeState, ValueViewer,
@@ -108,6 +109,7 @@ pub fn KeyBrowser(
     let db_keys_count = use_signal(HashMap::<u8, u64>::new);
     let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
     let mut show_pattern_delete_dialog = use_signal(|| false);
+    let mut show_memory_analysis_dialog = use_signal(|| false);
     let scan_progress = use_signal(ScanProgress::default);
     let cancel_scan = use_signal(|| Arc::new(AtomicBool::new(false)));
     let key_type_cache = use_signal(HashMap::<String, KeyType>::new);
@@ -447,24 +449,41 @@ pub fn KeyBrowser(
                                 "刷新"
                             }
 
-                            button {
-                                padding: "6px 10px",
-                                background: "rgba(255, 180, 171, 0.10)",
-                                color: "#ffb4ab",
-                                border: "1px solid rgba(255, 180, 171, 0.24)",
-                                border_radius: "6px",
-                                cursor: "pointer",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "6px",
-                                font_size: "12px",
-                                onclick: move |_| show_pattern_delete_dialog.set(true),
+button {
+                            padding: "6px 10px",
+                            background: "rgba(255, 180, 171, 0.10)",
+                            color: "#ffb4ab",
+                            border: "1px solid rgba(255, 180, 171, 0.24)",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            align_items: "center",
+                            gap: "6px",
+                            font_size: "12px",
+                            onclick: move |_| show_pattern_delete_dialog.set(true),
 
-                                IconTrash { size: Some(12) }
-                                "模式删除"
-                            }
+                            IconTrash { size: Some(12) }
+                            "模式删除"
+                        }
 
-                            if scan_progress.read().is_scanning {
+                        button {
+                            padding: "6px 10px",
+                            background: COLOR_SURFACE_HIGHEST,
+                            color: COLOR_TEXT,
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            align_items: "center",
+                            gap: "6px",
+                            font_size: "12px",
+                            onclick: move |_| show_memory_analysis_dialog.set(true),
+
+                            IconSearch { size: Some(12) }
+                            "内存分析"
+                        }
+
+                        if scan_progress.read().is_scanning {
                                 button {
                                     padding: "6px 10px",
                                     background: "#c53030",
@@ -900,6 +919,21 @@ pub fn KeyBrowser(
                         }
                     },
                     on_cancel: move |_| show_pattern_delete_dialog.set(false),
+                }
+            }
+
+            if show_memory_analysis_dialog() {
+                MemoryAnalysisDialog {
+                    connection_pool: connection_pool.clone(),
+                    colors,
+                    on_select_key: {
+                        let on_key_select = on_key_select.clone();
+                        move |key: String| {
+                            show_memory_analysis_dialog.set(false);
+                            on_key_select.call(key);
+                        }
+                    },
+                    on_close: move |_| show_memory_analysis_dialog.set(false),
                 }
             }
         }
