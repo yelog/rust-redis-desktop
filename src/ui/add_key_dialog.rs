@@ -55,7 +55,7 @@ pub fn AddKeyDialog(
     let mut stream_entries = use_signal(Vec::<StreamEntry>::new);
 
     let input_style = format!(
-        "width: 100%; padding: 8px 12px; background: {}; border: 1px solid {}; border_radius: 4px; color: {}; font_size: 13px; box_sizing: border_box;",
+        "width: 100%; padding: 8px 12px; background: {}; border: 1px solid {}; border_radius: 4px; color: {}; font_size: 13px; box_sizing: border-box;",
         colors.background_tertiary, colors.border, colors.text
     );
 
@@ -136,7 +136,7 @@ pub fn AddKeyDialog(
                     border_radius: "4px",
                     color: "{colors.text}",
                     font_size: "13px",
-                    box_sizing: "border_box",
+                    box_sizing: "border-box",
                     value: "{key_name}",
                     oninput: move |e| key_name.set(e.value()),
                 }
@@ -193,6 +193,8 @@ pub fn AddKeyDialog(
             div {
                 margin_bottom: "16px",
                 flex: "1",
+                width: "100%",
+                box_sizing: "border-box",
                 overflow_y: "auto",
                 overflow_x: "hidden",
 
@@ -209,6 +211,7 @@ pub fn AddKeyDialog(
                     KeyType::String => rsx! {
                         textarea {
                             width: "100%",
+                            min_width: "0",
                             height: "150px",
                             padding: "8px 12px",
                             background: "{colors.background_tertiary}",
@@ -218,7 +221,7 @@ pub fn AddKeyDialog(
                             font_size: "13px",
                             font_family: "monospace",
                             resize: "vertical",
-                            box_sizing: "border_box",
+                            box_sizing: "border-box",
                             value: "{string_value}",
                             oninput: move |e| string_value.set(e.value()),
                         }
@@ -545,7 +548,7 @@ pub fn AddKeyDialog(
                             flex_direction: "column",
                             gap: "8px",
                             width: "100%",
-                            box_sizing: "border_box",
+                            box_sizing: "border-box",
 
                             for (idx, entry) in stream_entries.read().iter().enumerate() {
                                 div {
@@ -565,7 +568,7 @@ pub fn AddKeyDialog(
                                         color: "{colors.text}",
                                         font_size: "12px",
                                         placeholder: "ID (*)",
-                                        box_sizing: "border_box",
+                                        box_sizing: "border-box",
                                         value: "{entry.id}",
                                         oninput: {
                                             let mut entries = stream_entries.clone();
@@ -586,7 +589,7 @@ pub fn AddKeyDialog(
                                         color: "{colors.text}",
                                         font_size: "12px",
                                         placeholder: "Field",
-                                        box_sizing: "border_box",
+                                        box_sizing: "border-box",
                                         value: "{entry.field}",
                                         oninput: {
                                             let mut entries = stream_entries.clone();
@@ -607,7 +610,7 @@ pub fn AddKeyDialog(
                                         color: "{colors.text}",
                                         font_size: "12px",
                                         placeholder: "Value",
-                                        box_sizing: "border_box",
+                                        box_sizing: "border-box",
                                         value: "{entry.value}",
                                         oninput: {
                                             let mut entries = stream_entries.clone();
@@ -679,7 +682,7 @@ pub fn AddKeyDialog(
                     border_radius: "4px",
                     color: "{colors.text}",
                     font_size: "13px",
-                    box_sizing: "border_box",
+                    box_sizing: "border-box",
                     value: "{ttl}",
                     oninput: move |e| ttl.set(e.value()),
                 }
