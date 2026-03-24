@@ -10,6 +10,7 @@ use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::export_dialog::{ExportDialog, ExportTarget};
 use crate::ui::icons::*;
+use crate::ui::pattern_delete_dialog::PatternDeleteDialog;
 use crate::ui::{
     copy_text_to_clipboard, LazyTreeNode, ResizableDivider, ToastManager, TreeState, ValueViewer,
 };
@@ -106,6 +107,7 @@ pub fn KeyBrowser(
     let mut show_add_key_dialog = use_signal(|| false);
     let db_keys_count = use_signal(HashMap::<u8, u64>::new);
     let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
+    let mut show_pattern_delete_dialog = use_signal(|| false);
     let scan_progress = use_signal(ScanProgress::default);
     let cancel_scan = use_signal(|| Arc::new(AtomicBool::new(false)));
     let key_type_cache = use_signal(HashMap::<String, KeyType>::new);
@@ -120,12 +122,14 @@ pub fn KeyBrowser(
         let mut show_add_key_dialog = show_add_key_dialog.clone();
         let mut show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
         let mut show_export_dialog = show_export_dialog.clone();
+        let mut show_pattern_delete_dialog = show_pattern_delete_dialog.clone();
 
         use_future(move || {
             let mut show_delete_dialog = show_delete_dialog.clone();
             let mut show_add_key_dialog = show_add_key_dialog.clone();
             let mut show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
             let mut show_export_dialog = show_export_dialog.clone();
+            let mut show_pattern_delete_dialog = show_pattern_delete_dialog.clone();
             async move {
                 let mut eval = dioxus::document::eval(
                     r#"
@@ -147,6 +151,8 @@ pub fn KeyBrowser(
                             show_batch_ttl_dialog.set(None);
                         } else if show_export_dialog().is_some() {
                             show_export_dialog.set(None);
+                        } else if show_pattern_delete_dialog() {
+                            show_pattern_delete_dialog.set(false);
                         }
                     }
                 }
@@ -424,7 +430,7 @@ pub fn KeyBrowser(
                         align_items: "center",
                         gap: "6px",
 
-                        button {
+button {
                             padding: "6px 10px",
                             background: COLOR_PRIMARY,
                             color: COLOR_TEXT_CONTRAST,
@@ -435,27 +441,27 @@ pub fn KeyBrowser(
                             align_items: "center",
                             gap: "6px",
                             font_size: "12px",
-                            onclick: move |_| show_add_key_dialog.set(true),
+                            onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
 
-                            IconPlus { size: Some(12) }
-                            "新增"
+                            IconRefresh { size: Some(12) }
+                            "刷新"
                         }
 
                         button {
                             padding: "6px 10px",
-                            background: COLOR_SURFACE_HIGHEST,
-                            color: COLOR_TEXT,
-                            border: "1px solid {COLOR_BORDER}",
+                            background: "rgba(255, 180, 171, 0.10)",
+                            color: "#ffb4ab",
+                            border: "1px solid rgba(255, 180, 171, 0.24)",
                             border_radius: "6px",
                             cursor: "pointer",
                             display: "flex",
                             align_items: "center",
                             gap: "6px",
                             font_size: "12px",
-                            onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
+                            onclick: move |_| show_pattern_delete_dialog.set(true),
 
-                            IconRefresh { size: Some(12) }
-                            "刷新"
+                            IconTrash { size: Some(12) }
+                            "模式删除"
                         }
 
                         if scan_progress.read().is_scanning {
@@ -876,6 +882,24 @@ pub fn KeyBrowser(
                 targets: targets.clone(),
                 colors,
                 on_close: move |_| show_export_dialog.set(None),
+            }
+        }
+
+        if show_pattern_delete_dialog() {
+            PatternDeleteDialog {
+                connection_pool: connection_pool.clone(),
+                initial_pattern: search_pattern(),
+                colors,
+                on_confirm: {
+                    let mut refresh_trigger = refresh_trigger.clone();
+                    let mut toast_manager = toast_manager.clone();
+                    move |deleted_count: usize| {
+                        show_pattern_delete_dialog.set(false);
+                        refresh_trigger.set(refresh_trigger() + 1);
+                        toast_manager.write().success(&format!("已删除 {} 个 key", deleted_count));
+                    }
+                },
+                on_cancel: move |_| show_pattern_delete_dialog.set(false),
             }
         }
     }
