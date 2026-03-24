@@ -843,6 +843,76 @@ impl ConnectionPool {
         }
     }
 
+    pub async fn stream_create_group(
+        &self,
+        key: &str,
+        group: &str,
+        id: &str,
+        mkstream: bool,
+    ) -> Result<()> {
+        self.check_write_permission("XGROUP")?;
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.xgroup_create(key, group, id, mkstream).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn stream_destroy_group(&self, key: &str, group: &str) -> Result<bool> {
+        self.check_write_permission("XGROUP")?;
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i32 = conn.xgroup_destroy(key, group).await?;
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn stream_delete_consumer(
+        &self,
+        key: &str,
+        group: &str,
+        consumer: &str,
+    ) -> Result<bool> {
+        self.check_write_permission("XGROUP")?;
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let result: i32 = conn.xgroup_delconsumer(key, group, consumer).await?;
+            Ok(result > 0)
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn stream_get_groups_raw(&self, key: &str) -> Result<redis::Value> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.xinfo_groups_raw(key).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn stream_get_consumers_raw(
+        &self,
+        key: &str,
+        group: &str,
+    ) -> Result<redis::Value> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.xinfo_consumers_raw(key, group).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
     pub async fn hash_len(&self, key: &str) -> Result<u64> {
         let mut connection = self.connection.lock().await;
 

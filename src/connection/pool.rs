@@ -331,6 +331,67 @@ impl RedisConnection {
         cmd.arg(key).arg(value);
         self.execute_cmd(&mut cmd).await
     }
+
+    pub async fn xgroup_create(
+        &mut self,
+        key: &str,
+        group: &str,
+        id: &str,
+        mkstream: bool,
+    ) -> Result<()> {
+        let mut cmd = redis::cmd("XGROUP");
+        cmd.arg("CREATE").arg(key).arg(group).arg(id);
+        if mkstream {
+            cmd.arg("MKSTREAM");
+        }
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn xgroup_destroy(&mut self, key: &str, group: &str) -> Result<i32> {
+        let mut cmd = redis::cmd("XGROUP");
+        cmd.arg("DESTROY").arg(key).arg(group);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn xgroup_delconsumer(
+        &mut self,
+        key: &str,
+        group: &str,
+        consumer: &str,
+    ) -> Result<i32> {
+        let mut cmd = redis::cmd("XGROUP");
+        cmd.arg("DELCONSUMER").arg(key).arg(group).arg(consumer);
+        self.execute_cmd(&mut cmd).await
+    }
+
+    pub async fn xinfo_groups_raw(&mut self, key: &str) -> Result<redis::Value> {
+        let mut cmd = redis::cmd("XINFO");
+        cmd.arg("GROUPS").arg(key);
+        self.execute_cmd_raw(&mut cmd).await
+    }
+
+    pub async fn xinfo_consumers_raw(&mut self, key: &str, group: &str) -> Result<redis::Value> {
+        let mut cmd = redis::cmd("XINFO");
+        cmd.arg("CONSUMERS").arg(key).arg(group);
+        self.execute_cmd_raw(&mut cmd).await
+    }
+
+    async fn execute_cmd_raw(&mut self, cmd: &mut redis::Cmd) -> Result<redis::Value> {
+        match self {
+            RedisConnection::Single(conn) => {
+                let result: redis::Value = cmd.query_async(conn).await.map_err(|e| {
+                    ConnectionError::ConnectionFailed(e.to_string())
+                })?;
+                Ok(result)
+            }
+            RedisConnection::Cluster(conn) => {
+                let result: redis::Value = cmd.query_async(conn).await.map_err(|e| {
+                    ConnectionError::ConnectionFailed(e.to_string())
+                })?;
+                Ok(result)
+            }
+        }
+    }
 }
 
 pub struct ConnectionPool {
