@@ -369,7 +369,7 @@ pub fn ConnectionForm(
                 label {
                     display: "block",
                     color: "{colors.text_secondary}",
-                    font_size: "13px",
+                    font_size: "12px",
                     margin_bottom: "8px",
 
                     "连接模式"
@@ -377,60 +377,35 @@ pub fn ConnectionForm(
 
                 div {
                     display: "flex",
-                    gap: "16px",
+                    flex_wrap: "wrap",
+                    gap: "8px",
 
-                    label {
-                        display: "flex",
-                        align_items: "center",
-                        gap: "6px",
-                        color: "{colors.text}",
-                        font_size: "13px",
-                        cursor: "pointer",
+                    for (mode_name, mode_val) in [("Direct", ConnectionMode::Direct), ("Cluster", ConnectionMode::Cluster), ("Sentinel", ConnectionMode::Sentinel)] {
+                        {
+                            let is_selected = mode() == mode_val;
+                            let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
+                            let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
+                            let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                            rsx! {
+                                div {
+                                    key: "{mode_name}",
+                                    padding: "6px 14px",
+                                    background: "{bg}",
+                                    border: "1px solid {border_color}",
+                                    border_radius: "16px",
+                                    color: "{text_color}",
+                                    font_size: "13px",
+                                    cursor: "pointer",
+                                    user_select: "none",
+                                    onclick: {
+                                        let mv = mode_val.clone();
+                                        move |_| mode.set(mv.clone())
+                                    },
 
-                        input {
-                            r#type: "radio",
-                            name: "connection_mode",
-                            checked: mode() == ConnectionMode::Direct,
-                            onchange: move |_| mode.set(ConnectionMode::Direct),
+                                    "{mode_name}"
+                                }
+                            }
                         }
-
-                        "Direct"
-                    }
-
-                    label {
-                        display: "flex",
-                        align_items: "center",
-                        gap: "6px",
-                        color: "{colors.text}",
-                        font_size: "13px",
-                        cursor: "pointer",
-
-                        input {
-                            r#type: "radio",
-                            name: "connection_mode",
-                            checked: mode() == ConnectionMode::Cluster,
-                            onchange: move |_| mode.set(ConnectionMode::Cluster),
-                        }
-
-                        "Cluster"
-                    }
-
-                    label {
-                        display: "flex",
-                        align_items: "center",
-                        gap: "6px",
-                        color: "{colors.text}",
-                        font_size: "13px",
-                        cursor: "pointer",
-
-                        input {
-                            r#type: "radio",
-                            name: "connection_mode",
-                            checked: mode() == ConnectionMode::Sentinel,
-                            onchange: move |_| mode.set(ConnectionMode::Sentinel),
-                        }
-
-                        "Sentinel"
                     }
                 }
             }
