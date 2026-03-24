@@ -54,8 +54,8 @@ impl ThemeId {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::ClassicLight => "经典亮色",
-            Self::ClassicDark => "经典暗色",
+            Self::ClassicLight => "酒红亮",
+            Self::ClassicDark => "酒红暗",
             Self::TokyoNight => "Tokyo Night",
             Self::TokyoNightLight => "Tokyo Night Light",
             Self::AtomOneLight => "Atom One Light",
@@ -374,7 +374,7 @@ impl ThemeSpec {
 
 const CLASSIC_DARK: ThemeSpec = ThemeSpec {
     id: ThemeId::ClassicDark,
-    label: "经典暗色",
+    label: "酒红暗",
     kind: ThemeKind::Dark,
     colors: ThemeColors {
         background: "#131313",
@@ -455,7 +455,7 @@ const CLASSIC_DARK: ThemeSpec = ThemeSpec {
 
 const CLASSIC_LIGHT: ThemeSpec = ThemeSpec {
     id: ThemeId::ClassicLight,
-    label: "经典亮色",
+    label: "酒红亮",
     kind: ThemeKind::Light,
     colors: ThemeColors {
         background: "#f7f2f0",
