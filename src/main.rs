@@ -15,6 +15,22 @@ use dioxus::desktop::{
 use theme::preferred_window_theme;
 use ui::App;
 
+#[cfg(target_os = "macos")]
+use dioxus::desktop::tao::platform::macos::WindowBuilderExtMacOS;
+
+#[cfg(target_os = "macos")]
+fn configure_window_builder(window_builder: WindowBuilder) -> WindowBuilder {
+    window_builder
+        .with_titlebar_transparent(true)
+        .with_title_hidden(true)
+        .with_fullsize_content_view(true)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn configure_window_builder(window_builder: WindowBuilder) -> WindowBuilder {
+    window_builder
+}
+
 fn create_menu() -> Menu {
     let menu = Menu::new();
 
@@ -78,11 +94,13 @@ fn main() {
         .and_then(|s| s.load_settings().ok())
         .unwrap_or_default();
 
-    let window_builder = WindowBuilder::new()
-        .with_title("Redis Desktop")
-        .with_inner_size(LogicalSize::new(1200, 800))
-        .with_theme(preferred_window_theme(settings.theme_preference))
-        .with_visible(true);
+    let window_builder = configure_window_builder(
+        WindowBuilder::new()
+            .with_title("Redis Desktop")
+            .with_inner_size(LogicalSize::new(1200, 800))
+            .with_theme(preferred_window_theme(settings.theme_preference))
+            .with_visible(true),
+    );
 
     dioxus::LaunchBuilder::new()
         .with_cfg(Config::new().with_menu(menu).with_window(window_builder))

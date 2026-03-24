@@ -33,6 +33,9 @@ pub enum FormMode {
     Edit(ConnectionConfig),
 }
 
+const MACOS_TITLEBAR_HEIGHT: &str = "46px";
+const MACOS_TRAFFIC_LIGHT_PADDING_LEFT: &str = "84px";
+
 fn system_theme_is_dark() -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -612,6 +615,9 @@ pub fn App() -> Element {
     let left_rail_width = use_signal(|| 280.0);
     let toast_manager = use_context_provider(|| Signal::new(ToastManager::new()));
     let desktop = use_window();
+    let desktop_for_theme = desktop.clone();
+    let desktop_for_drag = desktop.clone();
+    let desktop_for_maximize = desktop.clone();
 
     let active_theme_preference = theme_preference();
     let active_system_theme_dark = system_theme_dark();
@@ -634,7 +640,7 @@ pub fn App() -> Element {
     });
 
     use_effect(move || {
-        desktop.set_theme(preferred_window_theme(theme_preference()));
+        desktop_for_theme.set_theme(preferred_window_theme(theme_preference()));
     });
 
     use_future(move || {
@@ -736,6 +742,13 @@ await new Promise(() => {});
     let selected_conn_state = selected_connection()
         .and_then(|id| connection_states.read().get(&id).copied())
         .unwrap_or(ConnectionState::Disconnected);
+    let titlebar_context_label = selected_connection().and_then(|id| {
+        connections
+            .read()
+            .iter()
+            .find(|(conn_id, _)| *conn_id == id)
+            .map(|(_, name)| name.clone())
+    });
 
     rsx! {
                 style { {r#"
@@ -754,6 +767,46 @@ await new Promise(() => {});
                     background: COLOR_BG,
                     color: COLOR_TEXT,
                     overflow: "hidden",
+
+                    if cfg!(target_os = "macos") {
+                        div {
+                            height: MACOS_TITLEBAR_HEIGHT,
+                            flex_shrink: "0",
+                            display: "flex",
+                            align_items: "center",
+                            justify_content: "space-between",
+                            padding_left: MACOS_TRAFFIC_LIGHT_PADDING_LEFT,
+                            padding_right: "16px",
+                            background: "linear-gradient(180deg, {COLOR_BG_SECONDARY} 0%, {COLOR_BG} 100%)",
+                            border_bottom: "1px solid {COLOR_BORDER}",
+                            user_select: "none",
+                            cursor: "default",
+                            onmousedown: move |_| desktop_for_drag.drag(),
+                            ondoubleclick: move |_| desktop_for_maximize.toggle_maximized(),
+
+                            div {
+                                font_size: "13px",
+                                font_weight: "600",
+                                letter_spacing: "0.04em",
+                                color: "{COLOR_TEXT}",
+
+                                "Redis Desktop"
+                            }
+
+                            if let Some(label) = titlebar_context_label.clone() {
+                                div {
+                                    max_width: "40%",
+                                    overflow: "hidden",
+                                    text_overflow: "ellipsis",
+                                    white_space: "nowrap",
+                                    font_size: "12px",
+                                    color: "{COLOR_TEXT_SECONDARY}",
+
+                                    "{label}"
+                                }
+                            }
+                        }
+                    }
 
                     div {
                         flex: "1",
