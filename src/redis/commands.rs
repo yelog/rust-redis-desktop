@@ -1095,6 +1095,7 @@ pub struct ExportKeyData {
     pub scored_members: Option<Vec<(String, f64)>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ExportFormat {
     Json,
     Commands,

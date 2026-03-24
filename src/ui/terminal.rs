@@ -1,3 +1,4 @@
+use crate::config::{ConfigStorage, HistoryEntry};
 use crate::connection::ConnectionPool;
 use crate::redis::{find_command, find_commands, RedisCommand};
 use crate::theme::{
@@ -5,10 +6,11 @@ use crate::theme::{
     COLOR_CONTROL_BORDER, COLOR_PRIMARY, COLOR_SELECTION_BG, COLOR_TEXT, COLOR_TEXT_CONTRAST,
     COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_WARNING,
 };
+use chrono::Utc;
 use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq)]
-pub struct CommandHistory {
+pub struct TerminalHistoryEntry {
     pub command: String,
     pub result: String,
     pub timestamp: String,
@@ -124,11 +126,12 @@ fn CommandHelp(cmd: &'static RedisCommand) -> Element {
 #[component]
 pub fn Terminal(connection_pool: ConnectionPool) -> Element {
     let mut input = use_signal(String::new);
-    let mut history = use_signal(Vec::<CommandHistory>::new);
+    let mut history = use_signal(Vec::<TerminalHistoryEntry>::new);
     let mut executing = use_signal(|| false);
     let mut show_suggestions = use_signal(|| false);
     let mut show_help = use_signal(|| None::<String>);
     let mut selected_suggestion_index = use_signal(|| 0usize);
+    let config_storage = use_signal(|| ConfigStorage::new().ok());
 
     let suggestions = {
         let input = input.clone();
@@ -148,6 +151,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
 
     let execute_command = {
         let pool = connection_pool.clone();
+        let config_storage = config_storage.clone();
         move || {
             let cmd = input().trim().to_string();
             if cmd.is_empty() {
@@ -155,6 +159,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
             }
 
             let pool = pool.clone();
+            let config_storage = config_storage.clone();
             let mut show_suggestions = show_suggestions.clone();
             let mut history = history.clone();
             let mut executing = executing.clone();
@@ -163,6 +168,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                 executing.set(true);
                 show_suggestions.set(false);
 
+                let start = std::time::Instant::now();
                 let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
 
                 let result = match pool.execute_raw_command(&cmd).await {
@@ -170,11 +176,21 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                     Err(e) => format!("ERROR: {}", e),
                 };
 
-                history.write().push(CommandHistory {
+                let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                history.write().push(TerminalHistoryEntry {
                     command: cmd.clone(),
                     result,
                     timestamp,
                 });
+
+                if let Some(storage) = config_storage.read().as_ref() {
+                    let _ = storage.add_command_history(HistoryEntry {
+                        command: cmd,
+                        timestamp: Utc::now(),
+                        execution_time_ms: Some(execution_time_ms),
+                    });
+                }
 
                 input.set(String::new());
                 executing.set(false);

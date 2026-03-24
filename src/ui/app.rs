@@ -634,6 +634,18 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         dioxus.send('toggle_settings');
     }
+    if (e.key === 'n' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        dioxus.send('new_connection');
+    }
+    if (e.key === 'f' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        dioxus.send('focus_search');
+    }
+    if (e.key === 'r' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        dioxus.send('refresh_keys');
+    }
     if (e.key === 'Escape') {
         dioxus.send('escape_pressed');
     }
@@ -645,6 +657,8 @@ await new Promise(() => {});
             while let Ok(msg) = eval.recv::<String>().await {
                 if msg == "toggle_settings" {
                     show_settings.toggle();
+                } else if msg == "new_connection" {
+                    form_mode.set(Some(FormMode::New));
                 } else if msg == "escape_pressed" {
                     if show_settings() {
                         show_settings.set(false);

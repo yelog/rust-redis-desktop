@@ -13,7 +13,7 @@ tao = "0.34"
 tokio = { version = "1", features = ["full"] }
 
 # Redis
-redis = { version = "1", features = ["tokio-comp", "cluster", "cluster-async", "connection-manager"] }
+redis = { version = "1", features = ["tokio-comp", "cluster", "cluster-async", "connection-manager", "tokio-native-tls-comp"] }
 
 # SSH tunnel
 ssh2 = "0.9"

@@ -1,10 +1,60 @@
 use crate::connection::ConnectionConfig;
 use crate::theme::ThemePreference;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 use uuid::Uuid;
+
+const MAX_COMMAND_HISTORY: usize = 100;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    pub command: String,
+    pub timestamp: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_time_ms: Option<u64>,
+}
+
+impl Default for HistoryEntry {
+    fn default() -> Self {
+        Self {
+            command: String::new(),
+            timestamp: Utc::now(),
+            execution_time_ms: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CommandHistory {
+    #[serde(default)]
+    pub entries: Vec<HistoryEntry>,
+    #[serde(default)]
+    pub favorites: Vec<String>,
+}
+
+impl CommandHistory {
+    pub fn add(&mut self, entry: HistoryEntry) {
+        if self.entries.len() >= MAX_COMMAND_HISTORY {
+            self.entries.remove(0);
+        }
+        self.entries.push(entry);
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    pub fn toggle_favorite(&mut self, command: &str) {
+        if let Some(pos) = self.favorites.iter().position(|c| c == command) {
+            self.favorites.remove(pos);
+        } else {
+            self.favorites.push(command.to_string());
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -47,6 +97,8 @@ struct ConfigFile {
     connections: Vec<ConnectionConfig>,
     #[serde(default)]
     settings: AppSettings,
+    #[serde(default)]
+    command_history: CommandHistory,
 }
 
 #[derive(Clone)]
@@ -110,6 +162,29 @@ impl ConfigStorage {
         self.save_config_file(&file)
     }
 
+    pub fn load_command_history(&self) -> io::Result<CommandHistory> {
+        let file = self.load_or_create_config_file()?;
+        Ok(file.command_history)
+    }
+
+    pub fn add_command_history(&self, entry: HistoryEntry) -> io::Result<()> {
+        let mut file = self.load_or_create_config_file()?;
+        file.command_history.add(entry);
+        self.save_config_file(&file)
+    }
+
+    pub fn clear_command_history(&self) -> io::Result<()> {
+        let mut file = self.load_or_create_config_file()?;
+        file.command_history.clear();
+        self.save_config_file(&file)
+    }
+
+    pub fn toggle_favorite(&self, command: &str) -> io::Result<()> {
+        let mut file = self.load_or_create_config_file()?;
+        file.command_history.toggle_favorite(command);
+        self.save_config_file(&file)
+    }
+
     fn load_or_create_config_file(&self) -> io::Result<ConfigFile> {
         if self.config_path.exists() {
             let content = fs::read_to_string(&self.config_path)?;
@@ -119,6 +194,7 @@ impl ConfigStorage {
             Ok(ConfigFile {
                 connections: Vec::new(),
                 settings: AppSettings::default(),
+                command_history: CommandHistory::default(),
             })
         }
     }

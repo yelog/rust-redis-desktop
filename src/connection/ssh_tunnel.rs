@@ -24,6 +24,7 @@ pub struct SSHTunnel {
     local_port: u16,
     running: Arc<AtomicBool>,
     thread_handle: Option<thread::JoinHandle<()>>,
+    config: SSHTunnelConfig,
 }
 
 impl fmt::Debug for SSHTunnel {
@@ -47,6 +48,7 @@ impl SSHTunnel {
 
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
+        let config_clone = config.clone();
 
         let handle = thread::spawn(move || {
             while running_clone.load(Ordering::SeqCst) {
@@ -55,7 +57,7 @@ impl SSHTunnel {
                 match listener.accept() {
                     Ok((local_stream, _)) => {
                         let running_inner = running_clone.clone();
-                        let config_inner = config.clone();
+                        let config_inner = config_clone.clone();
 
                         thread::spawn(move || {
                             if let Err(e) =
@@ -79,11 +81,29 @@ impl SSHTunnel {
             local_port,
             running,
             thread_handle: Some(handle),
+            config,
         })
     }
 
     pub fn local_port(&self) -> u16 {
         self.local_port
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::SeqCst)
+    }
+
+    pub fn check_health(&self) -> bool {
+        if !self.is_running() {
+            return false;
+        }
+
+        if let Ok(stream) = TcpStream::connect(("127.0.0.1", self.local_port)) {
+            drop(stream);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn stop(&mut self) {

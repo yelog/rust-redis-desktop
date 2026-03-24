@@ -8,6 +8,7 @@ use crate::theme::{
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
+use crate::ui::export_dialog::{ExportDialog, ExportTarget};
 use crate::ui::icons::*;
 use crate::ui::{LazyTreeNode, ResizableDivider, TreeState, ValueViewer};
 use arboard::Clipboard;
@@ -110,16 +111,19 @@ pub fn KeyBrowser(
     let mut tree_state = use_signal(TreeState::default);
     let mut context_menu = use_signal(|| None::<(String, bool, (i32, i32))>);
     let mut key_list_width = use_signal(|| 320.0);
+    let mut show_export_dialog = use_signal(|| None::<Vec<ExportTarget>>);
 
     {
         let mut show_delete_dialog = show_delete_dialog.clone();
         let mut show_add_key_dialog = show_add_key_dialog.clone();
         let mut show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
+        let mut show_export_dialog = show_export_dialog.clone();
         
         use_future(move || {
             let mut show_delete_dialog = show_delete_dialog.clone();
             let mut show_add_key_dialog = show_add_key_dialog.clone();
             let mut show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
+            let mut show_export_dialog = show_export_dialog.clone();
             async move {
                 let mut eval = dioxus::document::eval(
                     r#"
@@ -139,6 +143,8 @@ pub fn KeyBrowser(
                             show_add_key_dialog.set(false);
                         } else if show_batch_ttl_dialog().is_some() {
                             show_batch_ttl_dialog.set(None);
+                        } else if show_export_dialog().is_some() {
+                            show_export_dialog.set(None);
                         }
                     }
                 }
@@ -762,6 +768,29 @@ pub fn KeyBrowser(
                 div {
                     padding: "8px 12px",
                     cursor: "pointer",
+                    color: COLOR_TEXT,
+                    font_size: "12px",
+                    onmouseenter: |_| {},
+                    onmouseleave: |_| {},
+
+                    onclick: {
+                        let node_path = node_path.clone();
+                        let is_leaf = is_leaf;
+                        move |_| {
+                            context_menu.set(None);
+                            show_export_dialog.set(Some(vec![ExportTarget {
+                                key: node_path.clone(),
+                                is_folder: !is_leaf,
+                            }]));
+                        }
+                    },
+
+                    "导出"
+                }
+
+                div {
+                    padding: "8px 12px",
+                    cursor: "pointer",
                     color: COLOR_ERROR,
                     font_size: "12px",
 
@@ -836,6 +865,15 @@ pub fn KeyBrowser(
                     refresh_trigger.set(refresh_trigger() + 1);
                 },
                 on_cancel: move |_| show_batch_ttl_dialog.set(None),
+            }
+        }
+
+        if let Some(targets) = show_export_dialog() {
+            ExportDialog {
+                connection_pool: connection_pool.clone(),
+                targets: targets.clone(),
+                colors,
+                on_close: move |_| show_export_dialog.set(None),
             }
         }
     }

@@ -358,8 +358,8 @@ impl ConnectionPool {
             (self.config.host.clone(), self.config.port)
         };
 
-        let mut url = String::new();
-        url.push_str("redis://");
+        let scheme = if self.config.ssl.enabled { "rediss" } else { "redis" };
+        let mut url = format!("{}://", scheme);
 
         if let Some(ref password) = self.config.password {
             if let Some(ref username) = self.config.username {
@@ -396,10 +396,16 @@ impl ConnectionPool {
             ConnectionError::InvalidConfig("Cluster configuration is required".to_string())
         })?;
 
+        let scheme = if self.config.ssl.enabled { "rediss" } else { "redis" };
+
         let nodes = if cluster_config.nodes.is_empty() {
-            vec![format!("redis://{}:{}", self.config.host, self.config.port)]
+            vec![format!("{}://{}:{}", scheme, self.config.host, self.config.port)]
         } else {
-            cluster_config.to_urls()
+            cluster_config
+                .nodes
+                .iter()
+                .map(|n| format!("{}://{}", scheme, n))
+                .collect()
         };
 
         let mut builder = ClusterClient::builder(nodes);
