@@ -1,7 +1,7 @@
 use crate::connection::ConnectionPool;
 use crate::theme::{
     COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT,
-    COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
 };
 use dioxus::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -170,7 +170,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                         button {
                             padding: "8px 16px",
                             background: COLOR_PRIMARY,
-                            color: "white",
+                            color: COLOR_TEXT_CONTRAST,
                             border: "none",
                             border_radius: "4px",
                             cursor: "pointer",
@@ -233,7 +233,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                         button {
                             padding: "8px 16px",
                             background: COLOR_PRIMARY,
-                            color: "white",
+                            color: COLOR_TEXT_CONTRAST,
                             border: "none",
                             border_radius: "4px",
                             cursor: "pointer",
