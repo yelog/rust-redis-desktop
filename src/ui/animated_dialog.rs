@@ -97,6 +97,7 @@ pub fn AnimatedDialog(
                 border_radius: "8px",
                 box_shadow: "0 4px 24px rgba(0, 0, 0, 0.5)",
                 overflow_y: "auto",
+                overflow_x: "hidden",
                 animation: "{animation_name} 0.2s ease-out forwards",
                 onclick: move |evt| evt.stop_propagation(),
 
