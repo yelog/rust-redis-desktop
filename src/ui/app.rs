@@ -6,9 +6,9 @@ use crate::theme::{
     COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
 };
 use crate::ui::{
-    ClientsPanel, ConnectionForm, FlushConfirmDialog, ImportPanel, KeyBrowser, LeftRail,
-    MonitorPanel, PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog, SlowLogPanel,
-    Terminal, ToastContainer, ToastManager,
+    ClientsPanel, ConnectionForm, DeleteConnectionConfirmDialog, FlushConfirmDialog,
+    ImportPanel, KeyBrowser, LeftRail, MonitorPanel, PubSubPanel, ResizableDivider,
+    ScriptPanel, SettingsDialog, SlowLogPanel, Terminal, ToastContainer, ToastManager,
 };
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
@@ -623,6 +623,7 @@ pub fn App() -> Element {
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
     let mut show_import_dialog = use_signal(|| None::<Uuid>);
+    let mut show_delete_connection_dialog = use_signal(|| None::<(Uuid, String)>);
     let mut current_db = use_signal(|| 0u8);
     let theme_preference = use_signal(|| load_initial_settings().theme_preference);
     let mut system_theme_dark = use_signal(system_theme_is_dark);
@@ -701,6 +702,8 @@ await new Promise(() => {});
                         form_mode.set(None);
                     } else if show_flush_dialog().is_some() {
                         show_flush_dialog.set(None);
+                    } else if show_delete_connection_dialog().is_some() {
+                        show_delete_connection_dialog.set(None);
                     }
                 }
             }
@@ -959,28 +962,15 @@ await new Promise(() => {});
                                     }
                                 }
                             },
-                            on_delete_connection: move |id: Uuid| {
-                                spawn(async move {
-                                    if let Some(storage) = config_storage.read().as_ref() {
-                                        let _ = storage.delete_connection(id);
-                                    }
-
-                                    connection_pools.write().remove(&id);
-                                    connection_manager.read().remove_connection(id).await;
-                                    connection_states.write().remove(&id);
-
-                                    if let Some(storage) = config_storage.read().as_ref() {
-                                        if let Ok(saved) = storage.load_connections() {
-                                            connections.set(saved.into_iter().map(|c| (c.id, c.name)).collect());
-                                        }
-                                    }
-
-                                    if selected_connection() == Some(id) {
-                                        selected_connection.set(None);
-                                        selected_key.set(String::new());
-                                        current_db.set(0);
-                                    }
-                                });
+on_delete_connection: move |id: Uuid| {
+                                if let Some((_, name)) = connections
+                                    .read()
+                                    .iter()
+                                    .find(|(conn_id, _)| *conn_id == id)
+                                {
+                                    show_delete_connection_dialog
+                                        .set(Some((id, name.clone())));
+                                }
                             },
                             on_flush_connection: move |id: Uuid| {
                                 show_flush_dialog.set(Some(id));
@@ -1404,6 +1394,44 @@ await new Promise(() => {});
                             on_close: move |_| show_settings.set(false),
                         }
                     }
+
+    if let Some((delete_id, delete_name)) = show_delete_connection_dialog() {
+                    DeleteConnectionConfirmDialog {
+                        connection_id: delete_id,
+                        connection_name: delete_name,
+                        colors,
+                        on_confirm: {
+                            let config_storage = config_storage.clone();
+                            move |id: Uuid| {
+                                show_delete_connection_dialog.set(None);
+                                spawn(async move {
+                                    if let Some(storage) = config_storage.read().as_ref() {
+                                        let _ = storage.delete_connection(id);
+                                    }
+
+                                    connection_pools.write().remove(&id);
+                                    connection_manager.read().remove_connection(id).await;
+                                    connection_states.write().remove(&id);
+
+                                    if let Some(storage) = config_storage.read().as_ref() {
+                                        if let Ok(saved) = storage.load_connections() {
+                                            connections.set(
+                                                saved.into_iter().map(|c| (c.id, c.name)).collect(),
+                                            );
+                                        }
+                                    }
+
+                                    if selected_connection() == Some(id) {
+                                        selected_connection.set(None);
+                                        selected_key.set(String::new());
+                                        current_db.set(0);
+                                    }
+                                });
+                            }
+                        },
+                        on_cancel: move |_| show_delete_connection_dialog.set(None),
+                    }
+                }
 
     if let Some(flush_id) = show_flush_dialog() {
                     if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
