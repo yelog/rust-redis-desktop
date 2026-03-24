@@ -891,15 +891,20 @@ pub fn ValueViewer(
                                         }
 
                                         input {
-                                            width: "60px",
+                                            width: "72px",
+                                            min_width: "72px",
+                                            max_width: "72px",
+                                            box_sizing: "border-box",
+                                            flex_shrink: "0",
                                             padding: "2px 6px",
                                             background: COLOR_BG_TERTIARY,
                                             border: "1px solid {COLOR_BORDER}",
                                             border_radius: "4px",
                                             color: COLOR_TEXT,
                                             font_size: "11px",
-                                            r#type: "number",
-                                            min: "0",
+                                            font_family: "Consolas, 'Courier New', monospace",
+                                            text_align: "center",
+                                            r#type: "text",
                                             value: "{ttl_input}",
                                             placeholder: "秒",
                                             oninput: move |event| ttl_input.set(event.value()),
@@ -1634,18 +1639,11 @@ pub fn ValueViewer(
 
                                                     "Hash Fields ({filtered_entries.len()}/{hash_val.len()})"
                                                 }
-
-                                                if !status_message.is_empty() {
-                                                    div {
-                                                        color: "{status_color}",
-                                                        font_size: "12px",
-
-                                                        "{status_message}"
-                                                    }
-                                                }
                                             }
 
                                             button {
+                                                margin_left: "auto",
+                                                flex_shrink: "0",
                                                 padding: "6px 10px",
                                                 background: "rgba(47, 133, 90, 0.16)",
                                                 color: COLOR_SUCCESS,
@@ -1662,12 +1660,10 @@ pub fn ValueViewer(
                                                         let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
                                                         match copy_value_to_clipboard(&json) {
                                                             Ok(_) => {
-                                                                hash_status_message.set("复制成功".to_string());
-                                                                hash_status_error.set(false);
+                                                                toast_manager.write().success("复制成功");
                                                             }
                                                             Err(error) => {
-                                                                hash_status_message.set(format!("复制失败：{error}"));
-                                                                hash_status_error.set(true);
+                                                                toast_manager.write().error(&format!("复制失败：{error}"));
                                                             }
                                                         }
                                                     }
@@ -2143,22 +2139,20 @@ pub fn ValueViewer(
                                                                             disabled: active_hash_action.is_some(),
                                                                             title: "复制值",
                                                                             aria_label: "复制值",
-                                                                            onclick: {
-                                                                                let value = value.clone();
-                                                                                move |_| {
-                                                                                    match copy_value_to_clipboard(&value) {
-                                                                                        Ok(_) => {
-                                                                                            hash_status_message.set("复制成功".to_string());
-                                                                                            hash_status_error.set(false);
-                                                                                        }
-                                                                                        Err(error) => {
-                                                                                            tracing::error!("Failed to copy hash value: {}", error);
-                                                                                            hash_status_message.set(format!("复制失败：{error}"));
-                                                                                            hash_status_error.set(true);
-                                                                                        }
-                                                                                    }
-                                                                                }
-                                                                            },
+onclick: {
+                                                                let value = value.clone();
+                                                                move |_| {
+                                                                    match copy_value_to_clipboard(&value) {
+                                                                        Ok(_) => {
+                                                                            toast_manager.write().success("复制成功");
+                                                                        }
+                                                                        Err(error) => {
+                                                                            tracing::error!("Failed to copy hash value: {}", error);
+                                                                            toast_manager.write().error(&format!("复制失败：{error}"));
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
 
                                                                             IconCopy { size: Some(15) }
                                                                         }
@@ -2544,6 +2538,8 @@ pub fn ValueViewer(
                                             }
 
                                             button {
+                                                margin_left: "auto",
+                                                flex_shrink: "0",
                                                 padding: "6px 10px",
                                                 background: "rgba(47, 133, 90, 0.16)",
                                                 color: COLOR_SUCCESS,
@@ -2560,12 +2556,10 @@ pub fn ValueViewer(
                                                         let json = serde_json::to_string_pretty(&list).unwrap_or_default();
                                                         match copy_value_to_clipboard(&json) {
                                                             Ok(_) => {
-                                                                list_status_message.set("复制成功".to_string());
-                                                                list_status_error.set(false);
+                                                                toast_manager.write().success("复制成功");
                                                             }
                                                             Err(error) => {
-                                                                list_status_message.set(format!("复制失败：{error}"));
-                                                                list_status_error.set(true);
+                                                                toast_manager.write().error(&format!("复制失败：{error}"));
                                                             }
                                                         }
                                                     }
@@ -2804,12 +2798,10 @@ pub fn ValueViewer(
                                                                                 move |_| {
                                                                                     match copy_value_to_clipboard(&value) {
                                                                                         Ok(_) => {
-                                                                                            list_status_message.set("复制成功".to_string());
-                                                                                            list_status_error.set(false);
+                                                                                            toast_manager.write().success("复制成功");
                                                                                         }
                                                                                         Err(error) => {
-                                                                                            list_status_message.set(format!("复制失败：{error}"));
-                                                                                            list_status_error.set(true);
+                                                                                            toast_manager.write().error(&format!("复制失败：{error}"));
                                                                                         }
                                                                                     }
                                                                                 }
@@ -3026,6 +3018,8 @@ pub fn ValueViewer(
                                             }
 
                                             button {
+                                                margin_left: "auto",
+                                                flex_shrink: "0",
                                                 padding: "6px 10px",
                                                 background: "rgba(47, 133, 90, 0.16)",
                                                 color: COLOR_SUCCESS,
@@ -3042,12 +3036,10 @@ pub fn ValueViewer(
                                                         let json = serde_json::to_string_pretty(&set).unwrap_or_default();
                                                         match copy_value_to_clipboard(&json) {
                                                             Ok(_) => {
-                                                                set_status_message.set("复制成功".to_string());
-                                                                set_status_error.set(false);
+                                                                toast_manager.write().success("复制成功");
                                                             }
                                                             Err(error) => {
-                                                                set_status_message.set(format!("复制失败：{error}"));
-                                                                set_status_error.set(true);
+                                                                toast_manager.write().error(&format!("复制失败：{error}"));
                                                             }
                                                         }
                                                     }
@@ -3315,12 +3307,10 @@ pub fn ValueViewer(
                                                                                 move |_| {
                                                                                     match copy_value_to_clipboard(&member) {
                                                                                         Ok(_) => {
-                                                                                            set_status_message.set("复制成功".to_string());
-                                                                                            set_status_error.set(false);
+                                                                                            toast_manager.write().success("复制成功");
                                                                                         }
                                                                                         Err(error) => {
-                                                                                            set_status_message.set(format!("复制失败：{error}"));
-                                                                                            set_status_error.set(true);
+                                                                                            toast_manager.write().error(&format!("复制失败：{error}"));
                                                                                         }
                                                                                     }
                                                                                 }
@@ -3560,6 +3550,8 @@ pub fn ValueViewer(
                                             }
 
                                             button {
+                                                margin_left: "auto",
+                                                flex_shrink: "0",
                                                 padding: "6px 10px",
                                                 background: "rgba(47, 133, 90, 0.16)",
                                                 color: COLOR_SUCCESS,
@@ -3576,12 +3568,10 @@ pub fn ValueViewer(
                                                         let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
                                                         match copy_value_to_clipboard(&json) {
                                                             Ok(_) => {
-                                                                zset_status_message.set("复制成功".to_string());
-                                                                zset_status_error.set(false);
+                                                                toast_manager.write().success("复制成功");
                                                             }
                                                             Err(error) => {
-                                                                zset_status_message.set(format!("复制失败：{error}"));
-                                                                zset_status_error.set(true);
+                                                                toast_manager.write().error(&format!("复制失败：{error}"));
                                                             }
                                                         }
                                                     }
@@ -3857,12 +3847,10 @@ pub fn ValueViewer(
                                                                                 move |_| {
                                                                                     match copy_value_to_clipboard(&member) {
                                                                                         Ok(_) => {
-                                                                                            zset_status_message.set("复制成功".to_string());
-                                                                                            zset_status_error.set(false);
+                                                                                            toast_manager.write().success("复制成功");
                                                                                         }
                                                                                         Err(error) => {
-                                                                                            zset_status_message.set(format!("复制失败：{error}"));
-                                                                                            zset_status_error.set(true);
+                                                                                            toast_manager.write().error(&format!("复制失败：{error}"));
                                                                                         }
                                                                                     }
                                                                                 }
@@ -4024,6 +4012,8 @@ pub fn ValueViewer(
                                             }
 
                                             button {
+                                                margin_left: "auto",
+                                                flex_shrink: "0",
                                                 padding: "6px 10px",
                                                 background: "rgba(47, 133, 90, 0.16)",
                                                 color: COLOR_SUCCESS,
@@ -4040,12 +4030,10 @@ pub fn ValueViewer(
                                                         let json = serde_json::to_string_pretty(&stream).unwrap_or_default();
                                                         match copy_value_to_clipboard(&json) {
                                                             Ok(_) => {
-                                                                stream_status_message.set("复制成功".to_string());
-                                                                stream_status_error.set(false);
+                                                                toast_manager.write().success("复制成功");
                                                             }
                                                             Err(error) => {
-                                                                stream_status_message.set(format!("复制失败：{error}"));
-                                                                stream_status_error.set(true);
+                                                                toast_manager.write().error(&format!("复制失败：{error}"));
                                                             }
                                                         }
                                                     }
