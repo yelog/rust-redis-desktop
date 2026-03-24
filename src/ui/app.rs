@@ -1314,15 +1314,15 @@ await new Promise(() => {});
                         settings: app_settings.read().clone(),
                         colors,
                         resolved_theme_id,
-                        on_save: {
+                        on_change: {
                             let mut save_settings = save_settings.clone();
                             move |settings: AppSettings| {
                                 save_settings(settings);
-                        }
-                    },
-                    on_close: move |_| show_settings.set(false),
+                            }
+                        },
+                        on_close: move |_| show_settings.set(false),
+                    }
                 }
-            }
 
 if let Some(flush_id) = show_flush_dialog() {
                 if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {

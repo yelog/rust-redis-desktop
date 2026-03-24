@@ -1,6 +1,7 @@
 use crate::config::AppSettings;
 use crate::theme::{ThemeColors, ThemeId, ThemePreference};
 use crate::ui::animated_dialog::AnimatedDialog;
+use crate::ui::icons::IconX;
 use dioxus::prelude::*;
 
 #[component]
@@ -8,7 +9,7 @@ pub fn SettingsDialog(
     settings: AppSettings,
     colors: ThemeColors,
     resolved_theme_id: ThemeId,
-    on_save: EventHandler<AppSettings>,
+    on_change: EventHandler<AppSettings>,
     on_close: EventHandler<()>,
 ) -> Element {
     let mut auto_refresh_interval = use_signal(|| settings.auto_refresh_interval);
@@ -20,10 +21,18 @@ pub fn SettingsDialog(
             .unwrap_or(resolved_theme_id)
     });
 
-    let current_theme_label = if use_system_theme() {
-        format!("跟随系统，当前解析为 {}", resolved_theme_id.label())
-    } else {
-        format!("手动选择：{}", manual_theme().label())
+    let apply_settings = {
+        let on_change = on_change.clone();
+        move || {
+            on_change.call(AppSettings {
+                auto_refresh_interval: auto_refresh_interval(),
+                theme_preference: if use_system_theme() {
+                    ThemePreference::System
+                } else {
+                    ThemePreference::Manual(manual_theme())
+                },
+            });
+        }
     };
 
     rsx! {
@@ -31,22 +40,40 @@ pub fn SettingsDialog(
             is_open: true,
             on_close: on_close.clone(),
             colors,
-            width: "400px".to_string(),
+            width: "420px".to_string(),
 
-            h2 {
-                color: "{colors.text}",
+            div {
+                display: "flex",
+                justify_content: "space_between",
+                align_items: "center",
                 margin_bottom: "24px",
-                font_size: "20px",
 
-                "设置"
+                h2 {
+                    color: "{colors.text}",
+                    font_size: "20px",
+
+                    "设置"
+                }
+
+                button {
+                    padding: "4px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "{colors.text_secondary}",
+                    onclick: move |_| on_close.call(()),
+
+                    IconX { size: Some(18) }
+                }
             }
 
             div {
-                margin_bottom: "24px",
+                margin_bottom: "20px",
 
-                div {
+                label {
+                    display: "block",
                     color: "{colors.text_secondary}",
-                    font_size: "13px",
+                    font_size: "12px",
                     margin_bottom: "8px",
 
                     "主题模式"
@@ -54,72 +81,87 @@ pub fn SettingsDialog(
 
                 div {
                     display: "flex",
-                    align_items: "center",
-                    gap: "12px",
+                    flex_wrap: "wrap",
+                    gap: "8px",
 
-                    select {
-                        flex: "1",
-                        padding: "8px 12px",
-                        background: "{colors.background_tertiary}",
-                        border: "1px solid {colors.border}",
-                        border_radius: "4px",
-                        color: "{colors.text}",
-                        font_size: "13px",
-                        onchange: move |e| {
-                            use_system_theme.set(e.value() == "system");
-                        },
+                    for (value, label) in [(true, "跟随系统"), (false, "手动选择")] {
+                        {
+                            let is_selected = use_system_theme() == value;
+                            let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
+                            let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
+                            let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                            rsx! {
+                                div {
+                                    key: "{label}",
+                                    padding: "6px 14px",
+                                    background: "{bg}",
+                                    border: "1px solid {border_color}",
+                                    border_radius: "16px",
+                                    color: "{text_color}",
+                                    font_size: "13px",
+                                    cursor: "pointer",
+                                    user_select: "none",
+                                    onclick: {
+                                        let apply = apply_settings.clone();
+                                        move |_| {
+                                            use_system_theme.set(value);
+                                            apply();
+                                        }
+                                    },
 
-                        option {
-                            value: "system",
-                            selected: use_system_theme(),
-                            "跟随系统"
+                                    "{label}"
+                                }
+                            }
                         }
-                        option {
-                            value: "manual",
-                            selected: !use_system_theme(),
-                            "手动选择"
-                        }
-                    }
-
-                    span {
-                        color: "{colors.accent}",
-                        font_size: "12px",
-
-                        "{current_theme_label}"
                     }
                 }
 
                 if !use_system_theme() {
                     div {
-                        margin_top: "12px",
+                        margin_top: "16px",
 
-                        div {
+                        label {
+                            display: "block",
                             color: "{colors.text_secondary}",
-                            font_size: "13px",
+                            font_size: "12px",
                             margin_bottom: "8px",
 
                             "手动主题"
                         }
 
-                        select {
-                            width: "100%",
-                            padding: "8px 12px",
-                            background: "{colors.background_tertiary}",
-                            border: "1px solid {colors.border}",
-                            border_radius: "4px",
-                            color: "{colors.text}",
-                            font_size: "13px",
-                            onchange: move |e| {
-                                if let Some(theme_id) = ThemeId::from_str(&e.value()) {
-                                    manual_theme.set(theme_id);
-                                }
-                            },
+                        div {
+                            display: "flex",
+                            flex_wrap: "wrap",
+                            gap: "8px",
 
                             for theme_id in ThemeId::MANUAL_OPTIONS {
-                                option {
-                                    value: "{theme_id.as_str()}",
-                                    selected: manual_theme() == theme_id,
-                                    "{theme_id.label()}"
+                                {
+                                    let is_selected = manual_theme() == theme_id;
+                                    let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
+                                    let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
+                                    let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                                    rsx! {
+                                        div {
+                                            key: "{theme_id.as_str()}",
+                                            padding: "6px 14px",
+                                            background: "{bg}",
+                                            border: "1px solid {border_color}",
+                                            border_radius: "16px",
+                                            color: "{text_color}",
+                                            font_size: "13px",
+                                            cursor: "pointer",
+                                            user_select: "none",
+                                            onclick: {
+                                                let apply = apply_settings.clone();
+                                                move |_| {
+                                                    manual_theme.set(theme_id);
+                                                    apply();
+                                                }
+                                            },
+
+                                            "{theme_id.label()}"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -128,11 +170,12 @@ pub fn SettingsDialog(
             }
 
             div {
-                margin_bottom: "24px",
+                margin_bottom: "20px",
 
-                div {
+                label {
+                    display: "block",
                     color: "{colors.text_secondary}",
-                    font_size: "13px",
+                    font_size: "12px",
                     margin_bottom: "8px",
 
                     "服务器信息自动刷新"
@@ -140,83 +183,41 @@ pub fn SettingsDialog(
 
                 div {
                     display: "flex",
-                    align_items: "center",
-                    gap: "12px",
+                    flex_wrap: "wrap",
+                    gap: "8px",
 
-                    select {
-                        flex: "1",
-                        padding: "8px 12px",
-                        background: "{colors.background_tertiary}",
-                        border: "1px solid {colors.border}",
-                        border_radius: "4px",
-                        color: "{colors.text}",
-                        font_size: "13px",
-                        onchange: move |e| {
-                            if let Ok(v) = e.value().parse() {
-                                auto_refresh_interval.set(v);
+                    for (value, label) in [(0, "关闭"), (5, "5秒"), (10, "10秒"), (30, "30秒"), (60, "60秒")] {
+                        {
+                            let is_selected = auto_refresh_interval() == value;
+                            let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
+                            let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
+                            let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                            rsx! {
+                                div {
+                                    key: "{value}",
+                                    padding: "6px 14px",
+                                    background: "{bg}",
+                                    border: "1px solid {border_color}",
+                                    border_radius: "16px",
+                                    color: "{text_color}",
+                                    font_size: "13px",
+                                    cursor: "pointer",
+                                    user_select: "none",
+                                    onclick: {
+                                        let apply = apply_settings.clone();
+                                        move |_| {
+                                            auto_refresh_interval.set(value);
+                                            apply();
+                                        }
+                                    },
+
+                                    "{label}"
+                                }
                             }
-                        },
-
-                        option { value: "0", selected: auto_refresh_interval() == 0, "关闭" }
-                        option { value: "5", selected: auto_refresh_interval() == 5, "5 秒" }
-                        option { value: "10", selected: auto_refresh_interval() == 10, "10 秒" }
-                        option { value: "30", selected: auto_refresh_interval() == 30, "30 秒" }
-                        option { value: "60", selected: auto_refresh_interval() == 60, "60 秒" }
-                    }
-
-                    if auto_refresh_interval() > 0 {
-                        span {
-                            color: "{colors.accent}",
-                            font_size: "12px",
-
-                            "每 {auto_refresh_interval} 秒刷新"
                         }
                     }
                 }
             }
-
-            div {
-                    display: "flex",
-                    justify_content: "flex_end",
-                    gap: "12px",
-                    margin_top: "20px",
-
-                    button {
-                        padding: "8px 16px",
-                        background: "{colors.background_tertiary}",
-                        color: "{colors.text}",
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "13px",
-                        onclick: move |_| on_close.call(()),
-
-                        "取消"
-                    }
-
-                    button {
-                        padding: "8px 16px",
-                        background: "{colors.primary}",
-                        color: "{colors.primary_text}",
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "13px",
-                        onclick: move |_| {
-                            on_save.call(AppSettings {
-                                auto_refresh_interval: auto_refresh_interval(),
-                                theme_preference: if use_system_theme() {
-                                    ThemePreference::System
-                                } else {
-                                    ThemePreference::Manual(manual_theme())
-                                },
-                            });
-                            on_close.call(());
-                        },
-
-                        "保存"
-                    }
-                }
         }
     }
 }
