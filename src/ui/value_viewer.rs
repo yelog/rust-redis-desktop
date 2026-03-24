@@ -600,7 +600,7 @@ pub fn ValueViewer(
     use_effect(move || {
         if let Some(info) = key_info() {
             let key = info.name.clone();
-            ttl_input.set(info.ttl.map(|ttl| ttl.to_string()).unwrap_or_default());
+            ttl_input.set(info.ttl.map(|ttl| ttl.to_string()).unwrap_or_else(|| "-1".to_string()));
 
             let pool = pool_for_meta.clone();
             spawn(async move {
@@ -925,9 +925,9 @@ pub fn ValueViewer(
                                                     }
 
                                                     let ttl = match ttl_text.parse::<i64>() {
-                                                        Ok(ttl) if ttl > 0 => ttl,
+                                                        Ok(ttl) if ttl > 0 || ttl == -1 => ttl,
                                                         _ => {
-                                                            toast_manager.write().error("TTL 必须大于 0");
+                                                            toast_manager.write().error("TTL 必须大于 0 或 -1 表示永久");
                                                             return;
                                                         }
                                                     };
@@ -937,32 +937,63 @@ pub fn ValueViewer(
                                                     spawn(async move {
                                                         ttl_processing.set(true);
 
-                                                        match pool.set_ttl(&key, ttl).await {
-                                                            Ok(_) => {
-                                                                toast_manager.write().success("TTL 已更新");
-                                                                if let Err(error) = load_key_data(
-                                                                    pool.clone(),
-                                                                    key.clone(),
-                                                                    key_info,
-                                                                    string_value,
-                                                                    hash_value,
-                                                                    list_value,
-                                                                    set_value,
-                                                                    zset_value,
-                                                                    stream_value,
-                                                                    is_binary,
-                                                                    binary_format,
-                                                                    serialization_data,
-                                                                    bitmap_info,
-                                                                    loading,
-                                                                ).await {
-                                                                    tracing::error!("{error}");
-                                                                } else {
-                                                                    on_refresh.call(());
+                                                        if ttl == -1 {
+                                                            match pool.remove_ttl(&key).await {
+                                                                Ok(_) => {
+                                                                    toast_manager.write().success("已设为永久");
+                                                                    if let Err(error) = load_key_data(
+                                                                        pool.clone(),
+                                                                        key.clone(),
+                                                                        key_info,
+                                                                        string_value,
+                                                                        hash_value,
+                                                                        list_value,
+                                                                        set_value,
+                                                                        zset_value,
+                                                                        stream_value,
+                                                                        is_binary,
+                                                                        binary_format,
+                                                                        serialization_data,
+                                                                        bitmap_info,
+                                                                        loading,
+                                                                    ).await {
+                                                                        tracing::error!("{error}");
+                                                                    } else {
+                                                                        on_refresh.call(());
+                                                                    }
+                                                                }
+                                                                Err(error) => {
+                                                                    toast_manager.write().error(&format!("设置失败：{error}"));
                                                                 }
                                                             }
-                                                            Err(error) => {
-                                                                toast_manager.write().error(&format!("TTL 更新失败：{error}"));
+                                                        } else {
+                                                            match pool.set_ttl(&key, ttl).await {
+                                                                Ok(_) => {
+                                                                    toast_manager.write().success("TTL 已更新");
+                                                                    if let Err(error) = load_key_data(
+                                                                        pool.clone(),
+                                                                        key.clone(),
+                                                                        key_info,
+                                                                        string_value,
+                                                                        hash_value,
+                                                                        list_value,
+                                                                        set_value,
+                                                                        zset_value,
+                                                                        stream_value,
+                                                                        is_binary,
+                                                                        binary_format,
+                                                                        serialization_data,
+                                                                        bitmap_info,
+                                                                        loading,
+                                                                    ).await {
+                                                                        tracing::error!("{error}");
+                                                                    } else {
+                                                                        on_refresh.call(());
+                                                                    }
+                                                                }
+                                                                Err(error) => {
+                                                                    toast_manager.write().error(&format!("TTL 更新失败：{error}"));
+                                                                }
                                                             }
                                                         }
 
@@ -972,57 +1003,6 @@ pub fn ValueViewer(
                                             },
 
                                             if ttl_processing() { "..." } else { "✓" }
-                                        }
-
-                                        button {
-                                            padding: "2px 6px",
-                                            background: "transparent",
-                                            color: COLOR_TEXT_SECONDARY,
-                                            border: "1px solid {COLOR_BORDER}",
-                                            border_radius: "4px",
-                                            cursor: "pointer",
-                                            font_size: "10px",
-                                            onclick: {
-                                                let pool = connection_pool.clone();
-                                                let key = display_key.clone();
-                                                move |_| {
-                                                    let pool = pool.clone();
-                                                    let key = key.clone();
-                                                    spawn(async move {
-                                                        match pool.remove_ttl(&key).await {
-                                                            Ok(_) => {
-                                                                toast_manager.write().success("已设为永久");
-                                                                ttl_input.set(String::new());
-                                                                if let Err(error) = load_key_data(
-                                                                    pool.clone(),
-                                                                    key.clone(),
-                                                                    key_info,
-                                                                    string_value,
-                                                                    hash_value,
-                                                                    list_value,
-                                                                    set_value,
-                                                                    zset_value,
-                                                                    stream_value,
-                                                                    is_binary,
-                                                                    binary_format,
-                                                                    serialization_data,
-                                                                    bitmap_info,
-                                                                    loading,
-                                                                ).await {
-                                                                    tracing::error!("{error}");
-                                                                } else {
-                                                                    on_refresh.call(());
-                                                                }
-                                                            }
-                                                            Err(error) => {
-                                                                toast_manager.write().error(&format!("设置失败：{error}"));
-                                                            }
-                                                        }
-                                                    });
-                                                }
-                                            },
-
-                                            "∞"
                                         }
                                     }
                                 }
