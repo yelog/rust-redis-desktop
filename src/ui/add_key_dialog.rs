@@ -74,16 +74,34 @@ pub fn AddKeyDialog(
             width: "500px".to_string(),
             max_height: "80vh".to_string(),
 
-            h3 {
-                color: "{colors.accent}",
-                margin_bottom: "16px",
-                display: "flex",
-                align_items: "center",
-                gap: "8px",
-                font_size: "18px",
+            div {
+                position: "relative",
 
-                "➕ 新增 Key"
-            }
+                button {
+                    position: "absolute",
+                    top: "-8px",
+                    right: "-8px",
+                    z_index: "10",
+                    padding: "4px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "{colors.text_secondary}",
+                    onclick: move |_| on_cancel.call(()),
+
+                    IconX { size: Some(18) }
+                }
+
+                h3 {
+                    color: "{colors.accent}",
+                    margin_bottom: "16px",
+                    display: "flex",
+                    align_items: "center",
+                    gap: "8px",
+                    font_size: "18px",
+
+                    "➕ 新增 Key"
+                }
 
             if let Some(err) = error_msg() {
                 div {
@@ -668,26 +686,8 @@ pub fn AddKeyDialog(
             }
 
             div {
-                display: "flex",
-                gap: "8px",
-
                 button {
-                    flex: "1",
-                    padding: "8px",
-                    background: "{colors.background_tertiary}",
-                    color: "{colors.text}",
-                    border: "1px solid {colors.border}",
-                    border_radius: "4px",
-                    cursor: "pointer",
-                    font_size: "13px",
-                    disabled: processing(),
-                    onclick: move |_| on_cancel.call(()),
-
-                    "取消"
-                }
-
-                button {
-                    flex: "1",
+                    width: "100%",
                     padding: "8px",
                     background: "{colors.primary}",
                     color: "{colors.primary_text}",
@@ -766,6 +766,7 @@ pub fn AddKeyDialog(
                         "✓ 保存"
                     }
                 }
+            }
             }
         }
     }
