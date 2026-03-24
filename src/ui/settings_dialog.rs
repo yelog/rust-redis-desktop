@@ -40,7 +40,7 @@ pub fn SettingsDialog(
             is_open: true,
             on_close: on_close.clone(),
             colors,
-            width: "420px".to_string(),
+            width: "520px".to_string(),
 
             div {
                 position: "relative",
