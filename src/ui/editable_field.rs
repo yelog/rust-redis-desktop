@@ -33,7 +33,9 @@ pub fn EditableField(
 
     rsx! {
         div {
-            margin_bottom: "12px",
+            height: "100%",
+            display: "flex",
+            flex_direction: "column",
 
             if is_editing() {
                 div {
@@ -95,17 +97,19 @@ pub fn EditableField(
                 }
             } else {
                 div {
-                    // 工具栏
                     display: "flex",
                     justify_content: "space_between",
                     align_items: "center",
                     margin_bottom: "8px",
+                    flex_shrink: "0",
 
-                    label {
-                        color: COLOR_TEXT_SECONDARY,
-                        font_size: "12px",
+                    if !label.is_empty() {
+                        label {
+                            color: COLOR_TEXT_SECONDARY,
+                            font_size: "12px",
 
-                        "{label}"
+                            "{label}"
+                        }
                     }
 
                     div {
@@ -161,13 +165,14 @@ pub fn EditableField(
                 }
 
                 div {
+                    flex: "1",
+                    min_height: "0",
                     padding: "8px",
                     background: COLOR_BG,
                     border_radius: "4px",
                     color: COLOR_TEXT,
                     font_family: if multiline { "Consolas, monospace" } else { "inherit" },
-                    overflow: if multiline { "auto" } else { "hidden" },
-                    text_overflow: if multiline { "unset" } else { "ellipsis" },
+                    overflow: "auto",
                     white_space: if multiline { "pre-wrap" } else { "nowrap" },
                     word_break: if multiline { "break-all" } else { "normal" },
 

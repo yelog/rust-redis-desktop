@@ -199,6 +199,7 @@ async fn load_key_data(
     mut list_value: Signal<Vec<String>>,
     mut set_value: Signal<Vec<String>>,
     mut zset_value: Signal<Vec<(String, f64)>>,
+    mut stream_value: Signal<Vec<(String, Vec<(String, String)>)>>,
     mut is_binary: Signal<bool>,
     mut binary_format: Signal<BinaryFormat>,
     mut serialization_data: Signal<Option<(SerializationFormat, Vec<u8>)>>,
@@ -212,6 +213,7 @@ async fn load_key_data(
         list_value.set(Vec::new());
         set_value.set(Vec::new());
         zset_value.set(Vec::new());
+        stream_value.set(Vec::new());
         is_binary.set(false);
         serialization_data.set(None);
         bitmap_info.set(None);
@@ -340,6 +342,22 @@ async fn load_key_data(
                 hash_value.set(HashMap::new());
                 list_value.set(Vec::new());
                 set_value.set(Vec::new());
+                stream_value.set(Vec::new());
+                is_binary.set(false);
+                serialization_data.set(None);
+            }
+            KeyType::Stream => {
+                let entries = pool
+                    .stream_range(&key, "-", "+")
+                    .await
+                    .map_err(|e| format!("读取 stream 数据失败: {e}"))?;
+                tracing::info!("Stream loaded: {} entries", entries.len());
+                stream_value.set(entries);
+                string_value.set(String::new());
+                hash_value.set(HashMap::new());
+                list_value.set(Vec::new());
+                set_value.set(Vec::new());
+                zset_value.set(Vec::new());
                 is_binary.set(false);
                 serialization_data.set(None);
             }
@@ -350,6 +368,7 @@ async fn load_key_data(
                 list_value.set(Vec::new());
                 set_value.set(Vec::new());
                 zset_value.set(Vec::new());
+                stream_value.set(Vec::new());
                 is_binary.set(false);
                 serialization_data.set(None);
             }
@@ -366,6 +385,7 @@ async fn load_key_data(
         list_value.set(Vec::new());
         set_value.set(Vec::new());
         zset_value.set(Vec::new());
+        stream_value.set(Vec::new());
         is_binary.set(false);
         serialization_data.set(None);
     }
@@ -386,6 +406,7 @@ pub fn ValueViewer(
     let list_value = use_signal(Vec::new);
     let set_value = use_signal(Vec::new);
     let zset_value = use_signal(Vec::new);
+    let stream_value = use_signal(Vec::new);
     let loading = use_signal(|| false);
     let mut saving = use_signal(|| false);
     let mut is_binary = use_signal(|| false);
@@ -429,6 +450,11 @@ pub fn ValueViewer(
     let mut deleting_zset_member = use_signal(|| None::<String>);
     let mut editing_zset_member = use_signal(|| None::<String>);
     let mut editing_zset_score = use_signal(String::new);
+
+    let mut stream_status_message = use_signal(String::new);
+    let mut stream_status_error = use_signal(|| false);
+    let mut stream_search = use_signal(String::new);
+    let mut deleting_stream_entry = use_signal(|| None::<String>);
 
     let mut list_page = use_signal(|| 0usize);
     let mut list_total = use_signal(|| 0usize);
@@ -527,6 +553,7 @@ pub fn ValueViewer(
                 list_value,
                 set_value,
                 zset_value,
+                stream_value,
                 is_binary,
                 binary_format,
                 serialization_data,
@@ -926,6 +953,7 @@ pub fn ValueViewer(
                                                                 list_value,
                                                                 set_value,
                                                                 zset_value,
+                                                                stream_value,
                                                                 is_binary,
                                                                 binary_format,
                                                                 serialization_data,
@@ -980,6 +1008,7 @@ pub fn ValueViewer(
                                                                 list_value,
                                                                 set_value,
                                                                 zset_value,
+                                                                stream_value,
                                                                 is_binary,
                                                                 binary_format,
                                                                 serialization_data,
@@ -1531,9 +1560,378 @@ match info.key_type {
                                                                     "点击 \"Bitmap\" 按钮加载可视化数据"
                                                                 }
                                                             }
+}
+                                }
+                             KeyType::Stream => {
+                                let stream_val = stream_value.read().clone();
+                                let filtered_entries: Vec<_> = if stream_search.read().is_empty() {
+                                    stream_val.clone()
+                                } else {
+                                    stream_val.iter().filter(|(id, fields)| {
+                                        id.to_lowercase().contains(&stream_search.read().to_lowercase()) ||
+                                        fields.iter().any(|(k, v)| {
+                                            k.to_lowercase().contains(&stream_search.read().to_lowercase()) ||
+                                            v.to_lowercase().contains(&stream_search.read().to_lowercase())
+                                        })
+                                    }).cloned().collect()
+                                };
+
+                                rsx! {
+                                    div {
+                                        display: "flex",
+                                        justify_content: "space_between",
+                                        align_items: "center",
+                                        gap: "12px",
+                                        margin_bottom: "12px",
+                                        flex_wrap: "wrap",
+
+                                        div {
+                                            display: "flex",
+                                            gap: "8px",
+                                            align_items: "center",
+                                            flex_wrap: "wrap",
+
+                                            input {
+                                                width: "200px",
+                                                padding: "8px 10px",
+                                                background: COLOR_BG_TERTIARY,
+                                                border: "1px solid {COLOR_BORDER}",
+                                                border_radius: "6px",
+                                                color: COLOR_TEXT,
+                                                value: "{stream_search}",
+                                                placeholder: "搜索 ID 或字段",
+                                                oninput: move |event| stream_search.set(event.value()),
+                                            }
+
+                                            if stream_search.read().is_empty() {
+                                                div {
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "Stream Entries ({stream_val.len()})"
+                                                }
+                                            } else {
+                                                div {
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "Stream Entries ({filtered_entries.len()}/{stream_val.len()})"
+                                                }
+                                            }
+                                        }
+
+                                        button {
+                                            padding: "6px 10px",
+                                            background: "rgba(47, 133, 90, 0.16)",
+                                            color: COLOR_SUCCESS,
+                                            border: "1px solid rgba(104, 211, 145, 0.28)",
+                                            border_radius: "6px",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "4px",
+                                            title: "复制",
+                                            onclick: {
+                                                let stream = stream_val.clone();
+                                                move |_| {
+                                                    let json = serde_json::to_string_pretty(&stream).unwrap_or_default();
+                                                    match copy_value_to_clipboard(&json) {
+                                                        Ok(_) => {
+                                                            stream_status_message.set("复制成功".to_string());
+                                                            stream_status_error.set(false);
+                                                        }
+                                                        Err(error) => {
+                                                            stream_status_message.set(format!("复制失败：{error}"));
+                                                            stream_status_error.set(true);
                                                         }
                                                     }
-                                                    _ => {
+                                                }
+                                            },
+
+                                            IconCopy { size: Some(14) }
+                                            "复制"
+                                        }
+                                    }
+
+                                    if !stream_status_message.read().is_empty() {
+                                        div {
+                                            margin_bottom: "12px",
+                                            padding: "8px 12px",
+                                            background: if stream_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
+                                            border_radius: "6px",
+                                            color: if stream_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
+                                            font_size: "13px",
+
+                                            "{stream_status_message}"
+                                        }
+                                    }
+
+                                    div {
+                                        overflow_x: "auto",
+                                        overflow_y: "auto",
+                                        max_height: "calc(100vh - 350px)",
+                                        border: "1px solid {COLOR_BORDER}",
+                                        border_radius: "8px",
+                                        background: COLOR_BG_SECONDARY,
+
+                                        table {
+                                            width: "100%",
+                                            border_collapse: "collapse",
+
+                                            thead {
+                                                tr {
+                                                    background: COLOR_BG_TERTIARY,
+                                                    border_bottom: "1px solid {COLOR_BORDER}",
+
+                                                    th {
+                                                        width: "200px",
+                                                        padding: "12px",
+                                                        color: COLOR_TEXT_SECONDARY,
+                                                        font_size: "12px",
+                                                        font_weight: "600",
+                                                        text_align: "left",
+
+                                                        "Entry ID"
+                                                    }
+
+                                                    th {
+                                                        padding: "12px",
+                                                        color: COLOR_TEXT_SECONDARY,
+                                                        font_size: "12px",
+                                                        font_weight: "600",
+                                                        text_align: "left",
+
+                                                        "Fields"
+                                                    }
+
+                                                    th {
+                                                        width: "60px",
+                                                        padding: "12px",
+                                                        color: COLOR_TEXT_SECONDARY,
+                                                        font_size: "12px",
+                                                        font_weight: "600",
+                                                        text_align: "center",
+
+                                                        ""
+                                                    }
+                                                }
+                                            }
+
+                                            tbody {
+                                                for (idx, (entry_id, fields)) in filtered_entries.iter().enumerate() {
+                                                    tr {
+                                                        border_bottom: "1px solid {COLOR_BORDER}",
+                                                        onmouseenter: move |_| {},
+                                                        onmouseleave: move |_| {},
+
+                                                        td {
+                                                            padding: "10px 12px",
+                                                            color: COLOR_TEXT,
+                                                            font_size: "12px",
+                                                            font_family: "Consolas, monospace",
+
+                                                            "{entry_id}"
+                                                        }
+
+                                                        td {
+                                                            padding: "10px 12px",
+
+                                                            div {
+                                                                display: "flex",
+                                                                flex_wrap: "wrap",
+                                                                gap: "8px",
+
+                                                                for (field_key, field_value) in fields.iter() {
+                                                                    div {
+                                                                        padding: "4px 8px",
+                                                                        background: COLOR_BG_TERTIARY,
+                                                                        border_radius: "4px",
+                                                                        font_size: "11px",
+
+                                                                        span {
+                                                                            color: "#818cf8",
+                                                                            font_family: "Consolas, monospace",
+
+                                                                            "{field_key}:"
+                                                                        }
+                                                                        span {
+                                                                            color: COLOR_TEXT,
+                                                                            margin_left: "4px",
+
+                                                                            "{field_value}"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+
+                                                        td {
+                                                            padding: "10px 12px",
+                                                            text_align: "center",
+
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: "transparent",
+                                                                color: COLOR_ERROR,
+                                                                border: "none",
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                opacity: 0.7,
+                                                                onmouseenter: move |_| {},
+                                                                onmouseleave: move |_| {},
+                                                                onclick: {
+                                                                    let entry_id = entry_id.clone();
+                                                                    move |_| {
+                                                                        deleting_stream_entry.set(Some(entry_id.clone()));
+                                                                    }
+                                                                },
+
+                                                                IconTrash { size: Some(15) }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                if filtered_entries.is_empty() {
+                                                    tr {
+                                                        td {
+                                                            colspan: 3,
+                                                            padding: "32px",
+                                                            text_align: "center",
+                                                            color: COLOR_TEXT_SECONDARY,
+
+                                                            if stream_search.read().is_empty() {
+                                                                "暂无数据"
+                                                            } else {
+                                                                "未找到匹配的条目"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if let Some(entry_id) = deleting_stream_entry.read().clone() {
+                                        div {
+                                            position: "fixed",
+                                            top: "0",
+                                            left: "0",
+                                            right: "0",
+                                            bottom: "0",
+                                            background: "rgba(0, 0, 0, 0.5)",
+                                            display: "flex",
+                                            align_items: "center",
+                                            justify_content: "center",
+                                            z_index: "1000",
+
+                                            div {
+                                                padding: "24px",
+                                                background: COLOR_BG_SECONDARY,
+                                                border_radius: "12px",
+                                                max_width: "400px",
+                                                width: "90%",
+
+                                                h3 {
+                                                    margin_bottom: "16px",
+                                                    color: COLOR_TEXT,
+                                                    font_size: "16px",
+                                                    font_weight: "600",
+
+                                                    "删除 Stream Entry"
+                                                }
+
+                                                p {
+                                                    margin_bottom: "24px",
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "14px",
+
+                                                    "确定要删除 entry \"{entry_id}\" 吗？"
+                                                }
+
+                                                div {
+                                                    display: "flex",
+                                                    gap: "12px",
+                                                    justify_content: "flex_end",
+
+                                                    button {
+                                                        padding: "8px 16px",
+                                                        background: COLOR_BG_TERTIARY,
+                                                        color: COLOR_TEXT,
+                                                        border: "1px solid {COLOR_BORDER}",
+                                                        border_radius: "6px",
+                                                        cursor: "pointer",
+                                                        onclick: move |_| {
+                                                            deleting_stream_entry.set(None);
+                                                        },
+
+                                                        "取消"
+                                                    }
+
+                                                    button {
+                                                        padding: "8px 16px",
+                                                        background: COLOR_ERROR,
+                                                        color: COLOR_TEXT_CONTRAST,
+                                                        border: "none",
+                                                        border_radius: "6px",
+                                                        cursor: "pointer",
+                                                        onclick: {
+                                                            let pool = connection_pool.clone();
+                                                            let key = display_key.clone();
+                                                            let entry_id = entry_id.clone();
+                                                            move |_| {
+                                                                let pool = pool.clone();
+                                                                let key = key.clone();
+                                                                let entry_id = entry_id.clone();
+                                                                spawn(async move {
+                                                                    match pool.stream_delete(&key, &entry_id).await {
+                                                                        Ok(true) => {
+                                                                            stream_status_message.set("删除成功".to_string());
+                                                                            stream_status_error.set(false);
+                                                                            deleting_stream_entry.set(None);
+                                                                            if let Err(error) = load_key_data(
+                                                                                pool.clone(),
+                                                                                key.clone(),
+                                                                                key_info,
+                                                                                string_value,
+                                                                                hash_value,
+                                                                                list_value,
+                                                                                set_value,
+                                                                                zset_value,
+                                                                                stream_value,
+                                                                                is_binary,
+                                                                                binary_format,
+                                                                                serialization_data,
+                                                                                bitmap_info,
+                                                                                loading,
+                                                                            ).await {
+                                                                                tracing::error!("{error}");
+                                                                            } else {
+                                                                                on_refresh.call(());
+                                                                            }
+                                                                        }
+                                                                        Ok(false) => {
+                                                                            stream_status_message.set("Entry 不存在".to_string());
+                                                                            stream_status_error.set(true);
+                                                                        }
+                                                                        Err(error) => {
+                                                                            stream_status_message.set(format!("删除失败：{error}"));
+                                                                            stream_status_error.set(true);
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }
+                                                        },
+
+                                                        "删除"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
                                                         rsx! {
                                                             EditableField {
                                                                 label: String::new(),
@@ -1870,6 +2268,7 @@ match info.key_type {
                                                                                             list_value,
                                                                                             set_value,
                                                                                             zset_value,
+                                                                                            stream_value,
                                                                                             is_binary,
                                                                                             binary_format,
                                                                                             serialization_data,
@@ -2043,6 +2442,7 @@ match info.key_type {
                                                                                                 list_value,
                                                                                                 set_value,
                                                                                                 zset_value,
+                                                                                                stream_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
@@ -2358,6 +2758,7 @@ match info.key_type {
                                                                                             list_value,
                                                                                             set_value,
                                                                                             zset_value,
+                                                                                            stream_value,
                                                                                             is_binary,
                                                                                             binary_format,
                                                                                             serialization_data,
@@ -2463,6 +2864,7 @@ match info.key_type {
                                                                         list_value,
                                                                         set_value,
                                                                         zset_value,
+                                                                        stream_value,
                                                                         is_binary,
                                                                         binary_format,
                                                                         serialization_data,
@@ -2524,6 +2926,7 @@ match info.key_type {
                                                                         list_value,
                                                                         set_value,
                                                                         zset_value,
+                                                                        stream_value,
                                                                         is_binary,
                                                                         binary_format,
                                                                         serialization_data,
@@ -2729,6 +3132,7 @@ match info.key_type {
                                                                                                 list_value,
                                                                                                 set_value,
                                                                                                 zset_value,
+                                                                                                stream_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
@@ -2888,6 +3292,7 @@ match info.key_type {
                                                                                                 list_value,
                                                                                                 set_value,
                                                                                                 zset_value,
+                                                                                                stream_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
@@ -2999,6 +3404,7 @@ match info.key_type {
                                                                         list_value,
                                                                         set_value,
                                                                         zset_value,
+                                                                        stream_value,
                                                                         is_binary,
                                                                         binary_format,
                                                                         serialization_data,
@@ -3235,6 +3641,7 @@ match info.key_type {
                                                                                                 list_value,
                                                                                                 set_value,
                                                                                                 zset_value,
+                                                                                                stream_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
@@ -3398,6 +3805,7 @@ match info.key_type {
                                                                                                 list_value,
                                                                                                 set_value,
                                                                                                 zset_value,
+                                                                                                stream_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
@@ -3534,6 +3942,7 @@ match info.key_type {
                                                                         list_value,
                                                                         set_value,
                                                                         zset_value,
+                                                                        stream_value,
                                                                         is_binary,
                                                                         binary_format,
                                                                         serialization_data,
@@ -3767,6 +4176,7 @@ match info.key_type {
                                                                                                 list_value,
                                                                                                 set_value,
                                                                                                 zset_value,
+                                                                                                stream_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,
@@ -3937,6 +4347,7 @@ match info.key_type {
                                                                                                 list_value,
                                                                                                 set_value,
                                                                                                 zset_value,
+                                                                                                stream_value,
                                                                                                 is_binary,
                                                                                                 binary_format,
                                                                                                 serialization_data,

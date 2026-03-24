@@ -64,7 +64,7 @@ services:
       - redis-cluster-node-4
       - redis-cluster-node-5
       - redis-cluster-node-6
-    command: sh -c "sleep 3 && redis-cli --cluster create host.docker.internal:7000 host.docker.internal:7001 host.docker.internal:7002 host.docker.internal:7003 host.docker.internal:7004 host.docker.internal:7005 --cluster-replicas 1 --cluster-yes"
+    command: sh -c "sleep 3 && redis-cli --cluster create redis-cluster-1:7000 redis-cluster-2:7001 redis-cluster-3:7002 redis-cluster-4:7003 redis-cluster-5:7004 redis-cluster-6:7005 --cluster-replicas 1 --cluster-yes"
 
   redis-master:
     image: redis:7-alpine
