@@ -141,6 +141,11 @@ pub fn ConnectionForm(
         };
         config.db = 0;
         config.mode = mode.clone();
+        config.connection_timeout = if mode == ConnectionMode::Cluster {
+            15000
+        } else {
+            5000
+        };
 
         if enable_ssh {
             config.ssh = Some(SSHConfig {
