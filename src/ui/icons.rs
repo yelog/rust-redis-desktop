@@ -654,3 +654,26 @@ pub fn IconDownload(size: Option<i32>, color: Option<String>) -> Element {
         }
     }
 }
+
+#[component]
+pub fn IconUpload(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            path { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }
+            polyline { points: "17 8 12 3 7 8" }
+            line { x1: "12", y1: "3", x2: "12", y2: "15" }
+        }
+    }
+}

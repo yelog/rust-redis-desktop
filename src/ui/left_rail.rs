@@ -5,7 +5,9 @@ use crate::theme::{
     COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
     COLOR_WARNING,
 };
-use crate::ui::icons::{IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconX};
+use crate::ui::icons::{
+    IconAlert, IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconUpload, IconX,
+};
 use crate::ui::status_indicator::StatusIndicatorWithLabel;
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -187,32 +189,40 @@ pub fn LeftRail(
                                 IconTrash { size: Some(13) }
                                 "删除"
                             }
-                        }
 
-                        button {
-                            padding: "7px 10px",
-                            background: "transparent",
-                            color: COLOR_TEXT_SECONDARY,
-                            border: "1px dashed {COLOR_OUTLINE_VARIANT}",
-                            border_radius: "6px",
-                            cursor: "pointer",
-                            font_size: "12px",
-                            onclick: move |_| on_flush_connection.call(id),
+                            button {
+                                padding: "7px 10px",
+                                background: "rgba(255, 180, 171, 0.08)",
+                                color: COLOR_ERROR,
+                                border: "1px solid {COLOR_ERROR}",
+                                border_radius: "6px",
+                                cursor: "pointer",
+                                font_size: "12px",
+                                display: "flex",
+                                align_items: "center",
+                                gap: "6px",
+                                onclick: move |_| on_flush_connection.call(id),
 
-                            "清空当前数据库"
-                        }
+                                IconAlert { size: Some(13) }
+                                "清空"
+                            }
 
-                        button {
-                            padding: "7px 10px",
-                            background: "transparent",
-                            color: COLOR_TEXT_SECONDARY,
-                            border: "1px dashed {COLOR_OUTLINE_VARIANT}",
-                            border_radius: "6px",
-                            cursor: "pointer",
-                            font_size: "12px",
-                            onclick: move |_| on_import_connection.call(id),
+                            button {
+                                padding: "7px 10px",
+                                background: COLOR_SURFACE_HIGH,
+                                color: COLOR_TEXT,
+                                border: "1px solid {COLOR_BORDER}",
+                                border_radius: "6px",
+                                cursor: "pointer",
+                                font_size: "12px",
+                                display: "flex",
+                                align_items: "center",
+                                gap: "6px",
+                                onclick: move |_| on_import_connection.call(id),
 
-                            "导入数据"
+                                IconUpload { size: Some(13) }
+                                "导入"
+                            }
                         }
                     }
                 }
