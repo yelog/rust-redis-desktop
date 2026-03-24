@@ -62,21 +62,6 @@ pub struct AppSettings {
     pub auto_refresh_interval: u32,
     #[serde(default, alias = "theme_mode")]
     pub theme_preference: ThemePreference,
-    #[serde(default = "default_window_width")]
-    pub window_width: u32,
-    #[serde(default = "default_window_height")]
-    pub window_height: u32,
-    #[serde(default)]
-    pub window_x: Option<i32>,
-    #[serde(default)]
-    pub window_y: Option<i32>,
-}
-
-fn default_window_width() -> u32 {
-    1200
-}
-fn default_window_height() -> u32 {
-    800
 }
 
 impl Default for AppSettings {
@@ -84,10 +69,6 @@ impl Default for AppSettings {
         Self {
             auto_refresh_interval: 0,
             theme_preference: ThemePreference::default(),
-            window_width: 1200,
-            window_height: 800,
-            window_x: None,
-            window_y: None,
         }
     }
 }

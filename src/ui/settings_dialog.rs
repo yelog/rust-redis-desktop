@@ -210,10 +210,6 @@ pub fn SettingsDialog(
                                 } else {
                                     ThemePreference::Manual(manual_theme())
                                 },
-                                window_width: settings.window_width,
-                                window_height: settings.window_height,
-                                window_x: settings.window_x,
-                                window_y: settings.window_y,
                             });
                             on_close.call(());
                         },

@@ -11,7 +11,7 @@ use dioxus::desktop::{
     muda::{accelerator::Accelerator, Menu, MenuItem, PredefinedMenuItem, Submenu},
     Config, WindowBuilder,
 };
-use dioxus::desktop::tao::dpi::{LogicalPosition, LogicalSize};
+use dioxus::desktop::tao::dpi::LogicalSize;
 use ui::App;
 
 fn create_menu() -> Menu {
@@ -72,28 +72,15 @@ fn main() {
 
     let menu = create_menu();
 
-    let settings = ConfigStorage::new()
+    let _settings = ConfigStorage::new()
         .ok()
         .and_then(|s| s.load_settings().ok())
         .unwrap_or_default();
 
-    let width = if settings.window_width < 400 { 1200 } else { settings.window_width };
-    let height = if settings.window_height < 300 { 800 } else { settings.window_height };
-
-    tracing::info!("Window settings: {}x{} at ({:?}, {:?})", 
-        width, height, 
-        settings.window_x, settings.window_y);
-
     let window_builder = WindowBuilder::new()
         .with_title("Redis Desktop")
-        .with_inner_size(LogicalSize::new(width, height))
+        .with_inner_size(LogicalSize::new(1200, 800))
         .with_visible(true);
-
-    let window_builder = if let (Some(x), Some(y)) = (settings.window_x, settings.window_y) {
-        window_builder.with_position(LogicalPosition::new(x, y))
-    } else {
-        window_builder
-    };
 
     dioxus::LaunchBuilder::new()
         .with_cfg(
