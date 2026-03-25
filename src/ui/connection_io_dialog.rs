@@ -29,7 +29,42 @@ pub fn ConnectionExportDialog(
     colors: ThemeColors,
     on_close: EventHandler<()>,
 ) -> Element {
-    let mut state = use_signal(|| ExportState::Idle);
+    let mut state = use_signal(|| ExportState::Exporting);
+    let mut started = use_signal(|| false);
+
+    use_effect({
+        let config_storage = config_storage.clone();
+        move || {
+            if !started() {
+                started.set(true);
+                let config_storage = config_storage.clone();
+                spawn(async move {
+                    let result = async {
+                        let connections = config_storage
+                            .load_connections()
+                            .map_err(|e| format!("Failed to load: {}", e))?;
+
+                        let exported = ExportedConnections {
+                            version: "1.0".to_string(),
+                            exported_at: chrono::Utc::now()
+                                .format("%Y-%m-%d %H:%M:%S")
+                                .to_string(),
+                            connections,
+                        };
+
+                        serde_json::to_string_pretty(&exported)
+                            .map_err(|e| format!("Serialization failed: {}", e))
+                    }
+                    .await;
+
+                    state.set(match result {
+                        Ok(json) => ExportState::Success(json),
+                        Err(e) => ExportState::Error(e),
+                    });
+                });
+            }
+        }
+    });
 
     rsx! {
         AnimatedDialog {
@@ -80,79 +115,7 @@ pub fn ConnectionExportDialog(
                         "{e}"
                     }
                 },
-                ExportState::Idle => rsx! {
-                    div {
-                        color: "{colors.text_secondary}",
-                        margin_bottom: "16px",
-                        font_size: "13px",
-
-                        "Export all connection configurations as JSON format for backup or migration."
-                    }
-
-                    div {
-                        display: "flex",
-                        gap: "8px",
-
-                        button {
-                            flex: "1",
-                            padding: "10px",
-                            background: "{colors.primary}",
-                            color: "{colors.primary_text}",
-                            border: "none",
-                            border_radius: "4px",
-                            cursor: "pointer",
-                            font_size: "13px",
-                            onclick: {
-                                let config_storage = config_storage.clone();
-                                move |_| {
-                                    let config_storage = config_storage.clone();
-                                    state.set(ExportState::Exporting);
-
-                                    spawn(async move {
-                                        let result = async {
-                                            let connections = config_storage
-                                                .load_connections()
-                                                .map_err(|e| format!("Failed to load: {}", e))?;
-
-                                            let exported = ExportedConnections {
-                                                version: "1.0".to_string(),
-                                                exported_at: chrono::Utc::now()
-                                                    .format("%Y-%m-%d %H:%M:%S")
-                                                    .to_string(),
-                                                connections,
-                                            };
-
-                                            serde_json::to_string_pretty(&exported)
-                                                .map_err(|e| format!("Serialization failed: {}", e))
-                                        }
-                                        .await;
-
-                                        state.set(match result {
-                                            Ok(json) => ExportState::Success(json),
-                                            Err(e) => ExportState::Error(e),
-                                        });
-                                    });
-                                }
-                            },
-
-                            "Export"
-                        }
-
-                        button {
-                            flex: "1",
-                            padding: "10px",
-                            background: "{colors.background_tertiary}",
-                            color: "{colors.text}",
-                            border: "1px solid {colors.border}",
-                            border_radius: "4px",
-                            cursor: "pointer",
-                            font_size: "13px",
-                            onclick: move |_| on_close.call(()),
-
-                            "Cancel"
-                        }
-                    }
-                },
+                ExportState::Idle => rsx! {},
             }
         }
     }
