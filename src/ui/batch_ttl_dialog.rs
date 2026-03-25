@@ -8,16 +8,19 @@ use dioxus::prelude::*;
 pub fn BatchTtlDialog(
     connection_pool: ConnectionPool,
     keys: Vec<String>,
+    current_ttl: Option<i64>,
     colors: ThemeColors,
     on_confirm: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
-    let mut ttl_value = use_signal(|| String::from("-1"));
+    let default_ttl = current_ttl.unwrap_or(-1);
+    let mut ttl_value = use_signal(|| default_ttl.to_string());
     let mut processing = use_signal(|| false);
     let mut status_message = use_signal(String::new);
     let mut status_error = use_signal(|| false);
 
     let keys_count = keys.len();
+    let is_single = keys_count == 1;
     let display_keys: Vec<String> = keys.iter().take(10).cloned().collect();
     let remaining = keys.len().saturating_sub(10);
 
@@ -37,7 +40,11 @@ pub fn BatchTtlDialog(
                 font_size: "18px",
 
                 IconRefresh { size: Some(16) }
-                " 批量设置 TTL"
+                if is_single {
+                    " 设置 TTL"
+                } else {
+                    " 批量设置 TTL"
+                }
             }
 
             div {
@@ -45,7 +52,11 @@ pub fn BatchTtlDialog(
                 margin_bottom: "16px",
                 font_size: "13px",
 
-                "将为 {keys_count} 个 key 设置过期时间"
+                if is_single {
+                    "为以下 key 设置过期时间"
+                } else {
+                    "将为 {keys_count} 个 key 设置过期时间"
+                }
             }
 
             div {

@@ -75,6 +75,22 @@ fn collect_leaf_keys_by_node_id(nodes: &[TreeNode], node_id: &str) -> Vec<String
     }
 }
 
+fn find_node_ttl_by_path(nodes: &[TreeNode], path: &str) -> Option<i64> {
+    fn find_node<'a>(nodes: &'a [TreeNode], path: &str) -> Option<&'a TreeNode> {
+        for node in nodes {
+            if node.path == path {
+                return Some(node);
+            }
+            if let found @ Some(_) = find_node(&node.children, path) {
+                return found;
+            }
+        }
+        None
+    }
+
+    find_node(nodes, path).and_then(|node| node.key_info.as_ref()?.ttl)
+}
+
 fn key_match_pattern(search_pattern: &str) -> String {
     if search_pattern.trim().is_empty() {
         "*".to_string()
@@ -108,7 +124,7 @@ pub fn KeyBrowser(
     let mut show_delete_dialog = use_signal(|| None::<Vec<DeleteTarget>>);
     let mut show_add_key_dialog = use_signal(|| false);
     let db_keys_count = use_signal(HashMap::<u8, u64>::new);
-    let mut show_batch_ttl_dialog = use_signal(|| None::<Vec<String>>);
+    let mut show_batch_ttl_dialog = use_signal(|| None::<(Vec<String>, Option<i64>)>);
     let mut show_pattern_delete_dialog = use_signal(|| false);
     let mut show_memory_analysis_dialog = use_signal(|| false);
     let scan_progress = use_signal(ScanProgress::default);
@@ -624,7 +640,7 @@ pub fn KeyBrowser(
                                         disabled: selected_count == 0,
                                         onclick: {
                                             let keys: Vec<String> = tree_state.read().selected_keys.iter().cloned().collect();
-                                            move |_| show_batch_ttl_dialog.set(Some(keys.clone()))
+                                            move |_| show_batch_ttl_dialog.set(Some((keys.clone(), None)))
                                         },
 
                                         "TTL"
@@ -828,7 +844,8 @@ pub fn KeyBrowser(
                                     let node_path = node_path.clone();
                                     move |_| {
                                         context_menu.set(None);
-                                        show_batch_ttl_dialog.set(Some(vec![node_path.clone()]));
+                                        let current_ttl = find_node_ttl_by_path(&tree_nodes(), &node_path);
+                                        show_batch_ttl_dialog.set(Some((vec![node_path.clone()], current_ttl)));
                                     }
                                 },
                             }
@@ -901,10 +918,11 @@ pub fn KeyBrowser(
                 }
             }
 
-            if let Some(keys) = show_batch_ttl_dialog() {
+            if let Some((keys, current_ttl)) = show_batch_ttl_dialog() {
                 BatchTtlDialog {
                     connection_pool: connection_pool.clone(),
                     keys: keys.clone(),
+                    current_ttl,
                     colors,
                     on_confirm: move |_| {
                         show_batch_ttl_dialog.set(None);
