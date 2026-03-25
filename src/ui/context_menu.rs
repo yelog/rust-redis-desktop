@@ -82,12 +82,14 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
         let my_version = *my_close_version.read();
         if current_version != my_version && *visibility.read() == VisibilityState::Visible {
             visibility.set(VisibilityState::Hidden);
+            mounted.set(false);
             set_context_menu_open(false);
         }
     });
 
     use_future(move || {
         let mut visibility = visibility.clone();
+        let mut mounted = mounted.clone();
         let mut my_close_version = my_close_version.clone();
         async move {
             loop {
@@ -96,6 +98,7 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
                 let my_version = *my_close_version.read();
                 if current_version != my_version && *visibility.read() == VisibilityState::Visible {
                     visibility.set(VisibilityState::Hidden);
+                    mounted.set(false);
                     set_context_menu_open(false);
                 }
             }
