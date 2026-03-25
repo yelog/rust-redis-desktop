@@ -1053,6 +1053,81 @@ impl ConnectionPool {
         }
     }
 
+    pub async fn hash_scan_match(
+        &self,
+        key: &str,
+        pattern: &str,
+        cursor: u64,
+        count: usize,
+    ) -> Result<(u64, Vec<(String, String)>)> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(
+                &mut redis::cmd("HSCAN")
+                    .arg(key)
+                    .arg(cursor)
+                    .arg("MATCH")
+                    .arg(pattern)
+                    .arg("COUNT")
+                    .arg(count),
+            )
+            .await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn zset_scan_match(
+        &self,
+        key: &str,
+        pattern: &str,
+        cursor: u64,
+        count: usize,
+    ) -> Result<(u64, Vec<(String, f64)>)> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(
+                &mut redis::cmd("ZSCAN")
+                    .arg(key)
+                    .arg(cursor)
+                    .arg("MATCH")
+                    .arg(pattern)
+                    .arg("COUNT")
+                    .arg(count),
+            )
+            .await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_scan_match(
+        &self,
+        key: &str,
+        pattern: &str,
+        cursor: u64,
+        count: usize,
+    ) -> Result<(u64, Vec<String>)> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd(
+                &mut redis::cmd("SSCAN")
+                    .arg(key)
+                    .arg(cursor)
+                    .arg("MATCH")
+                    .arg(pattern)
+                    .arg("COUNT")
+                    .arg(count),
+            )
+            .await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
     pub async fn memory_usage(&self, key: &str) -> Result<Option<u64>> {
         let mut connection = self.connection.lock().await;
 

@@ -19,6 +19,8 @@ use dioxus::prelude::*;
 use serde_json;
 use std::collections::HashMap;
 
+const PAGE_SIZE: usize = 100;
+
 const LARGE_KEY_THRESHOLD: usize = 1000;
 const STATUS_SUCCESS_BG: &str = COLOR_SUCCESS_BG;
 const STATUS_ERROR_BG: &str = COLOR_ERROR_BG;
@@ -198,6 +200,7 @@ fn value_metric_label(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn load_key_data(
     pool: ConnectionPool,
     key: String,
@@ -213,6 +216,17 @@ async fn load_key_data(
     mut serialization_data: Signal<Option<(SerializationFormat, Vec<u8>)>>,
     mut bitmap_info: Signal<Option<crate::redis::BitmapInfo>>,
     mut loading: Signal<bool>,
+    mut hash_cursor: Signal<u64>,
+    mut hash_total: Signal<usize>,
+    mut hash_has_more: Signal<bool>,
+    mut list_has_more: Signal<bool>,
+    mut list_total: Signal<usize>,
+    mut set_cursor: Signal<u64>,
+    mut set_total: Signal<usize>,
+    mut set_has_more: Signal<bool>,
+    mut zset_cursor: Signal<u64>,
+    mut zset_total: Signal<usize>,
+    mut zset_has_more: Signal<bool>,
 ) -> Result<(), String> {
     if key.is_empty() {
         key_info.set(None);
@@ -300,62 +314,135 @@ async fn load_key_data(
                 list_value.set(Vec::new());
                 set_value.set(Vec::new());
                 zset_value.set(Vec::new());
+                hash_cursor.set(0);
+                hash_total.set(0);
+                hash_has_more.set(false);
+                list_has_more.set(false);
+                list_total.set(0);
+                set_cursor.set(0);
+                set_total.set(0);
+                set_has_more.set(false);
+                zset_cursor.set(0);
+                zset_total.set(0);
+                zset_has_more.set(false);
             }
             KeyType::Hash => {
-                let fields = pool
-                    .get_hash_all(&key)
+                let total = pool
+                    .hash_len(&key)
+                    .await
+                    .map_err(|e| format!("获取 hash 长度失败: {e}"))?;
+                let (cursor, items) = pool
+                    .get_hash_page(&key, 0, PAGE_SIZE)
                     .await
                     .map_err(|e| format!("读取 hash 数据失败: {e}"))?;
-                tracing::info!("Hash loaded: {} fields", fields.len());
+                let fields: HashMap<String, String> = items.into_iter().collect();
+                tracing::info!("Hash loaded: {} fields (total: {})", fields.len(), total);
                 hash_value.set(fields);
+                hash_cursor.set(cursor);
+                hash_total.set(total as usize);
+                hash_has_more.set(cursor != 0);
                 string_value.set(String::new());
                 list_value.set(Vec::new());
                 set_value.set(Vec::new());
                 zset_value.set(Vec::new());
+                list_has_more.set(false);
+                list_total.set(0);
+                set_cursor.set(0);
+                set_total.set(0);
+                set_has_more.set(false);
+                zset_cursor.set(0);
+                zset_total.set(0);
+                zset_has_more.set(false);
                 is_binary.set(false);
                 serialization_data.set(None);
             }
             KeyType::List => {
+                let total = pool
+                    .list_len(&key)
+                    .await
+                    .map_err(|e| format!("获取 list 长度失败: {e}"))?;
+                let count = PAGE_SIZE.min(total as usize);
                 let items = pool
-                    .get_list_range(&key, 0, -1)
+                    .get_list_range(&key, 0, (count - 1) as i64)
                     .await
                     .map_err(|e| format!("读取 list 数据失败: {e}"))?;
-                tracing::info!("List loaded: {} items", items.len());
-                list_value.set(items);
+                tracing::info!("List loaded: {} items (total: {})", items.len(), total);
+                list_value.set(items.clone());
+                list_has_more.set(items.len() == PAGE_SIZE && items.len() < total as usize);
+                list_total.set(total as usize);
                 string_value.set(String::new());
                 hash_value.set(HashMap::new());
                 set_value.set(Vec::new());
                 zset_value.set(Vec::new());
+                hash_cursor.set(0);
+                hash_total.set(0);
+                hash_has_more.set(false);
+                set_cursor.set(0);
+                set_total.set(0);
+                set_has_more.set(false);
+                zset_cursor.set(0);
+                zset_total.set(0);
+                zset_has_more.set(false);
                 is_binary.set(false);
                 serialization_data.set(None);
             }
             KeyType::Set => {
-                let members = pool
-                    .get_set_members(&key)
+                let total = pool
+                    .set_len(&key)
+                    .await
+                    .map_err(|e| format!("获取 set 长度失败: {e}"))?;
+                let (cursor, items) = pool
+                    .get_set_page(&key, 0, PAGE_SIZE)
                     .await
                     .map_err(|e| format!("读取 set 数据失败: {e}"))?;
-                tracing::info!("Set loaded: {} members", members.len());
-                set_value.set(members);
+                tracing::info!("Set loaded: {} members (total: {})", items.len(), total);
+                set_value.set(items);
+                set_cursor.set(cursor);
+                set_total.set(total as usize);
+                set_has_more.set(cursor != 0);
                 string_value.set(String::new());
                 hash_value.set(HashMap::new());
                 list_value.set(Vec::new());
                 zset_value.set(Vec::new());
                 stream_value.set(Vec::new());
+                hash_cursor.set(0);
+                hash_total.set(0);
+                hash_has_more.set(false);
+                list_has_more.set(false);
+                list_total.set(0);
+                zset_cursor.set(0);
+                zset_total.set(0);
+                zset_has_more.set(false);
                 is_binary.set(false);
                 serialization_data.set(None);
             }
             KeyType::ZSet => {
-                let members = pool
-                    .get_zset_range(&key, 0, -1)
+                let total = pool
+                    .zset_card(&key)
+                    .await
+                    .map_err(|e| format!("获取 zset 长度失败: {e}"))?;
+                let (cursor, items) = pool
+                    .get_zset_page(&key, 0, PAGE_SIZE)
                     .await
                     .map_err(|e| format!("读取 zset 数据失败: {e}"))?;
-                tracing::info!("ZSet loaded: {} members", members.len());
-                zset_value.set(members);
+                tracing::info!("ZSet loaded: {} members (total: {})", items.len(), total);
+                zset_value.set(items);
+                zset_cursor.set(cursor);
+                zset_total.set(total as usize);
+                zset_has_more.set(cursor != 0);
                 string_value.set(String::new());
                 hash_value.set(HashMap::new());
                 list_value.set(Vec::new());
                 set_value.set(Vec::new());
                 stream_value.set(Vec::new());
+                hash_cursor.set(0);
+                hash_total.set(0);
+                hash_has_more.set(false);
+                list_has_more.set(false);
+                list_total.set(0);
+                set_cursor.set(0);
+                set_total.set(0);
+                set_has_more.set(false);
                 is_binary.set(false);
                 serialization_data.set(None);
             }
@@ -405,6 +492,238 @@ async fn load_key_data(
 
     loading.set(false);
     load_result
+}
+
+async fn load_more_hash(
+    pool: ConnectionPool,
+    key: String,
+    mut hash_value: Signal<HashMap<String, String>>,
+    cursor: u64,
+    mut hash_cursor: Signal<u64>,
+    mut hash_has_more: Signal<bool>,
+    mut hash_loading_more: Signal<bool>,
+    mut hash_total: Signal<usize>,
+) {
+    if hash_loading_more() || !hash_has_more() {
+        return;
+    }
+
+    hash_loading_more.set(true);
+
+    match pool.get_hash_page(&key, cursor, PAGE_SIZE).await {
+        Ok((new_cursor, items)) => {
+            let mut current = hash_value();
+            for (field, value) in items {
+                current.insert(field, value);
+            }
+            hash_value.set(current);
+            hash_cursor.set(new_cursor);
+            hash_has_more.set(new_cursor != 0);
+            hash_loading_more.set(false);
+        }
+        Err(e) => {
+            tracing::error!("加载更多 hash 数据失败: {}", e);
+            hash_loading_more.set(false);
+        }
+    }
+}
+
+async fn load_more_zset(
+    pool: ConnectionPool,
+    key: String,
+    mut zset_value: Signal<Vec<(String, f64)>>,
+    cursor: u64,
+    mut zset_cursor: Signal<u64>,
+    mut zset_has_more: Signal<bool>,
+    mut zset_loading_more: Signal<bool>,
+) {
+    if zset_loading_more() || !zset_has_more() {
+        return;
+    }
+
+    zset_loading_more.set(true);
+
+    match pool.get_zset_page(&key, cursor, PAGE_SIZE).await {
+        Ok((new_cursor, items)) => {
+            let mut current = zset_value();
+            current.extend(items);
+            zset_value.set(current);
+            zset_cursor.set(new_cursor);
+            zset_has_more.set(new_cursor != 0);
+            zset_loading_more.set(false);
+        }
+        Err(e) => {
+            tracing::error!("加载更多 zset 数据失败: {}", e);
+            zset_loading_more.set(false);
+        }
+    }
+}
+
+async fn load_more_set(
+    pool: ConnectionPool,
+    key: String,
+    mut set_value: Signal<Vec<String>>,
+    cursor: u64,
+    mut set_cursor: Signal<u64>,
+    mut set_has_more: Signal<bool>,
+    mut set_loading_more: Signal<bool>,
+) {
+    if set_loading_more() || !set_has_more() {
+        return;
+    }
+
+    set_loading_more.set(true);
+
+    match pool.get_set_page(&key, cursor, PAGE_SIZE).await {
+        Ok((new_cursor, items)) => {
+            let mut current = set_value();
+            current.extend(items);
+            set_value.set(current);
+            set_cursor.set(new_cursor);
+            set_has_more.set(new_cursor != 0);
+            set_loading_more.set(false);
+        }
+        Err(e) => {
+            tracing::error!("加载更多 set 数据失败: {}", e);
+            set_loading_more.set(false);
+        }
+    }
+}
+
+async fn load_more_list(
+    pool: ConnectionPool,
+    key: String,
+    mut list_value: Signal<Vec<String>>,
+    mut list_has_more: Signal<bool>,
+    mut list_loading_more: Signal<bool>,
+    total: usize,
+) {
+    if list_loading_more() || !list_has_more() {
+        return;
+    }
+
+    list_loading_more.set(true);
+    let offset = list_value().len() as i64;
+
+    match pool
+        .get_list_range(&key, offset, offset + PAGE_SIZE as i64 - 1)
+        .await
+    {
+        Ok(items) => {
+            let mut current = list_value();
+            current.extend(items.clone());
+            list_value.set(current);
+            list_has_more.set(items.len() == PAGE_SIZE && list_value().len() < total);
+            list_loading_more.set(false);
+        }
+        Err(e) => {
+            tracing::error!("加载更多 list 数据失败: {}", e);
+            list_loading_more.set(false);
+        }
+    }
+}
+
+async fn search_hash_server(
+    pool: ConnectionPool,
+    key: String,
+    pattern: String,
+    mut hash_value: Signal<HashMap<String, String>>,
+    mut hash_cursor: Signal<u64>,
+    mut hash_has_more: Signal<bool>,
+    mut hash_loading_more: Signal<bool>,
+) {
+    hash_loading_more.set(true);
+
+    let redis_pattern = if pattern.is_empty() {
+        "*".to_string()
+    } else {
+        format!("*{}*", pattern)
+    };
+
+    match pool
+        .hash_scan_match(&key, &redis_pattern, 0, PAGE_SIZE)
+        .await
+    {
+        Ok((cursor, items)) => {
+            let result: HashMap<String, String> = items.into_iter().collect();
+            hash_value.set(result);
+            hash_cursor.set(cursor);
+            hash_has_more.set(cursor != 0);
+            hash_loading_more.set(false);
+        }
+        Err(e) => {
+            tracing::error!("搜索 hash 数据失败: {}", e);
+            hash_loading_more.set(false);
+        }
+    }
+}
+
+async fn search_zset_server(
+    pool: ConnectionPool,
+    key: String,
+    pattern: String,
+    mut zset_value: Signal<Vec<(String, f64)>>,
+    mut zset_cursor: Signal<u64>,
+    mut zset_has_more: Signal<bool>,
+    mut zset_loading_more: Signal<bool>,
+) {
+    zset_loading_more.set(true);
+
+    let redis_pattern = if pattern.is_empty() {
+        "*".to_string()
+    } else {
+        format!("*{}*", pattern)
+    };
+
+    match pool
+        .zset_scan_match(&key, &redis_pattern, 0, PAGE_SIZE)
+        .await
+    {
+        Ok((cursor, items)) => {
+            zset_value.set(items);
+            zset_cursor.set(cursor);
+            zset_has_more.set(cursor != 0);
+            zset_loading_more.set(false);
+        }
+        Err(e) => {
+            tracing::error!("搜索 zset 数据失败: {}", e);
+            zset_loading_more.set(false);
+        }
+    }
+}
+
+async fn search_set_server(
+    pool: ConnectionPool,
+    key: String,
+    pattern: String,
+    mut set_value: Signal<Vec<String>>,
+    mut set_cursor: Signal<u64>,
+    mut set_has_more: Signal<bool>,
+    mut set_loading_more: Signal<bool>,
+) {
+    set_loading_more.set(true);
+
+    let redis_pattern = if pattern.is_empty() {
+        "*".to_string()
+    } else {
+        format!("*{}*", pattern)
+    };
+
+    match pool
+        .set_scan_match(&key, &redis_pattern, 0, PAGE_SIZE)
+        .await
+    {
+        Ok((cursor, items)) => {
+            set_value.set(items);
+            set_cursor.set(cursor);
+            set_has_more.set(cursor != 0);
+            set_loading_more.set(false);
+        }
+        Err(e) => {
+            tracing::error!("搜索 set 数据失败: {}", e);
+            set_loading_more.set(false);
+        }
+    }
 }
 
 #[component]
@@ -466,10 +785,23 @@ pub fn ValueViewer(
 
     let mut list_page = use_signal(|| 0usize);
     let mut list_total = use_signal(|| 0usize);
+    let mut list_cursor = use_signal(|| 0u64);
+    let mut list_has_more = use_signal(|| false);
+    let mut list_loading_more = use_signal(|| false);
     let mut set_page = use_signal(|| 0usize);
     let mut set_total = use_signal(|| 0usize);
+    let mut set_cursor = use_signal(|| 0u64);
+    let mut set_has_more = use_signal(|| false);
+    let mut set_loading_more = use_signal(|| false);
     let mut zset_page = use_signal(|| 0usize);
     let mut zset_total = use_signal(|| 0usize);
+    let mut zset_cursor = use_signal(|| 0u64);
+    let mut zset_has_more = use_signal(|| false);
+    let mut zset_loading_more = use_signal(|| false);
+    let mut hash_cursor = use_signal(|| 0u64);
+    let mut hash_total = use_signal(|| 0usize);
+    let mut hash_has_more = use_signal(|| false);
+    let mut hash_loading_more = use_signal(|| false);
     let mut show_large_key_warning = use_signal(|| false);
     let mut memory_usage = use_signal(|| None::<u64>);
     let mut ttl_input = use_signal(String::new);
@@ -569,6 +901,17 @@ pub fn ValueViewer(
                 serialization_data,
                 bitmap_info,
                 loading,
+                hash_cursor,
+                hash_total,
+                hash_has_more,
+                list_has_more,
+                list_total,
+                set_cursor,
+                set_total,
+                set_has_more,
+                zset_cursor,
+                zset_total,
+                zset_has_more,
             )
             .await
             {
@@ -965,6 +1308,17 @@ pub fn ValueViewer(
                                                                             serialization_data,
                                                                             bitmap_info,
                                                                             loading,
+                                                                            hash_cursor,
+                                                                            hash_total,
+                                                                            hash_has_more,
+                                                                            list_has_more,
+                                                                            list_total,
+                                                                            set_cursor,
+                                                                            set_total,
+                                                                            set_has_more,
+                                                                            zset_cursor,
+                                                                            zset_total,
+                                                                            zset_has_more,
                                                                         ).await {
                                                                             tracing::error!("{error}");
                                                                         } else {
@@ -994,6 +1348,17 @@ pub fn ValueViewer(
                                                                             serialization_data,
                                                                             bitmap_info,
                                                                             loading,
+                                                                            hash_cursor,
+                                                                            hash_total,
+                                                                            hash_has_more,
+                                                                            list_has_more,
+                                                                            list_total,
+                                                                            set_cursor,
+                                                                            set_total,
+                                                                            set_has_more,
+                                                                            zset_cursor,
+                                                                            zset_total,
+                                                                            zset_has_more,
                                                                         ).await {
                                                                             tracing::error!("{error}");
                                                                         } else {
@@ -1614,7 +1979,49 @@ pub fn ValueViewer(
                                                         color: COLOR_TEXT,
                                                         value: "{search_value}",
                                                         placeholder: "搜索 key 或 value",
-                                                        oninput: move |event| hash_search.set(event.value()),
+                                                        oninput: {
+                                                            let pool = connection_pool.clone();
+                                                            let key = display_key.clone();
+                                                            move |event| {
+                                                                let value = event.value();
+                                                                hash_search.set(value.clone());
+                                                            }
+                                                        },
+                                                    }
+
+                                                    if hash_total() > PAGE_SIZE {
+                                                        button {
+                                                            padding: "6px 10px",
+                                                            background: if hash_search().len() >= 2 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if hash_search().len() >= 2 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT_SECONDARY },
+                                                            border: "1px solid {COLOR_BORDER}",
+                                                            border_radius: "6px",
+                                                            cursor: if hash_search().len() >= 2 { "pointer" } else { "not-allowed" },
+                                                            font_size: "12px",
+                                                            disabled: hash_search().len() < 2 || hash_loading_more(),
+                                                            onclick: {
+                                                                let pool = connection_pool.clone();
+                                                                let key = display_key.clone();
+                                                                move |_| {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    let pattern = hash_search();
+                                                                    spawn(async move {
+                                                                        search_hash_server(
+                                                                            pool,
+                                                                            key,
+                                                                            pattern,
+                                                                            hash_value,
+                                                                            hash_cursor,
+                                                                            hash_has_more,
+                                                                            hash_loading_more,
+                                                                        ).await;
+                                                                    });
+                                                                }
+                                                            },
+
+                                                            if hash_loading_more() { "搜索中..." } else { "服务端搜索" }
+                                                        }
                                                     }
 
                                                     button {
@@ -1643,7 +2050,7 @@ pub fn ValueViewer(
                                                         color: COLOR_TEXT_SECONDARY,
                                                         font_size: "13px",
 
-                                                        "Hash Fields ({filtered_entries.len()}/{hash_val.len()})"
+                                                        "Hash Fields ({hash_val.len()}/{hash_total()})"
                                                     }
                                                 }
 
@@ -1687,6 +2094,34 @@ pub fn ValueViewer(
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
+                                                onscroll: {
+                                                    let pool = connection_pool.clone();
+                                                    let key = display_key.clone();
+                                                    move |e| {
+                                                        let scroll_top = e.data().scroll_top() as i32;
+                                                        let scroll_height = e.data().scroll_height() as i32;
+                                                        let client_height = e.data().client_height() as i32;
+                                                        
+                                                        if hash_has_more() && !hash_loading_more() && scroll_height - scroll_top - client_height < 200 {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let cursor = hash_cursor();
+                                                            let total = hash_total();
+                                                            spawn(async move {
+                                                                load_more_hash(
+                                                                    pool,
+                                                                    key,
+                                                                    hash_value,
+                                                                    cursor,
+                                                                    hash_cursor,
+                                                                    hash_has_more,
+                                                                    hash_loading_more,
+                                                                    hash_total,
+                                                                ).await;
+                                                            });
+                                                        }
+                                                    }
+                                                },
 
                                                 table {
                                                     width: "100%",
@@ -1845,24 +2280,35 @@ pub fn ValueViewer(
                                                                                                 new_hash_value.set(String::new());
                                                                                                 hash_status_message.set("新增成功".to_string());
                                                                                                 hash_status_error.set(false);
-                                                                                                if let Err(error) = load_key_data(
-                                                                                                    pool.clone(),
-                                                                                                    key.clone(),
-                                                                                                    key_info,
-                                                                                                    string_value,
-                                                                                                    hash_value,
-                                                                                                    list_value,
-                                                                                                    set_value,
-                                                                                                    zset_value,
-                                                                                                    stream_value,
-                                                                                                    is_binary,
-                                                                                                    binary_format,
-                                                                                                    serialization_data,
-                                                                                                    bitmap_info,
-                                                                                                    loading,
-                                                                                                )
-                                                                                                .await
-                                                                                                {
+if let Err(error) = load_key_data(
+                                                                                                     pool.clone(),
+                                                                                                     key.clone(),
+                                                                                                     key_info,
+                                                                                                     string_value,
+                                                                                                     hash_value,
+                                                                                                     list_value,
+                                                                                                     set_value,
+                                                                                                     zset_value,
+                                                                                                     stream_value,
+                                                                                                     is_binary,
+                                                                                                     binary_format,
+                                                                                                     serialization_data,
+                                                                                                     bitmap_info,
+                                                                                                     loading,
+                                                                                                     hash_cursor,
+                                                                                                     hash_total,
+                                                                                                     hash_has_more,
+                                                                                                     list_has_more,
+                                                                                                     list_total,
+                                                                                                     set_cursor,
+                                                                                                     set_total,
+                                                                                                     set_has_more,
+                                                                                                     zset_cursor,
+                                                                                                     zset_total,
+                                                                                                     zset_has_more,
+                                                                                                 )
+                                                                                                 .await
+                                                                                                 {
                                                                                                     tracing::error!("{error}");
                                                                                                     hash_status_message.set(error);
                                                                                                     hash_status_error.set(true);
@@ -2019,24 +2465,35 @@ pub fn ValueViewer(
                                                                                                     editing_hash_value.set(String::new());
                                                                                                     hash_status_message.set("保存成功".to_string());
                                                                                                     hash_status_error.set(false);
-                                                                                                    if let Err(error) = load_key_data(
-                                                                                                        pool.clone(),
-                                                                                                        key.clone(),
-                                                                                                        key_info,
-                                                                                                        string_value,
-                                                                                                        hash_value,
-                                                                                                        list_value,
-                                                                                                        set_value,
-                                                                                                        zset_value,
-                                                                                                        stream_value,
-                                                                                                        is_binary,
-                                                                                                        binary_format,
-                                                                                                        serialization_data,
-                                                                                                        bitmap_info,
-                                                                                                        loading,
-                                                                                                    )
-                                                                                                    .await
-                                                                                                    {
+if let Err(error) = load_key_data(
+                                                                                                         pool.clone(),
+                                                                                                         key.clone(),
+                                                                                                         key_info,
+                                                                                                         string_value,
+                                                                                                         hash_value,
+                                                                                                         list_value,
+                                                                                                         set_value,
+                                                                                                         zset_value,
+                                                                                                         stream_value,
+                                                                                                         is_binary,
+                                                                                                         binary_format,
+                                                                                                         serialization_data,
+                                                                                                         bitmap_info,
+                                                                                                         loading,
+                                                                                                         hash_cursor,
+                                                                                                         hash_total,
+                                                                                                         hash_has_more,
+                                                                                                         list_has_more,
+                                                                                                         list_total,
+                                                                                                         set_cursor,
+                                                                                                         set_total,
+                                                                                                         set_has_more,
+                                                                                                         zset_cursor,
+                                                                                                         zset_total,
+                                                                                                         zset_has_more,
+                                                                                                     )
+                                                                                                     .await
+                                                                                                     {
                                                                                                         tracing::error!("{error}");
                                                                                                         hash_status_message.set(error);
                                                                                                         hash_status_error.set(true);
@@ -2331,26 +2788,37 @@ pub fn ValueViewer(
                                                                                         editing_hash_key.set(String::new());
                                                                                         editing_hash_value.set(String::new());
                                                                                     }
-                                                                                    hash_status_message.set("删除成功".to_string());
-                                                                                    hash_status_error.set(false);
+hash_status_message.set("删除成功".to_string());
+                    hash_status_error.set(false);
             if let Err(error) = load_key_data(
-                                                                                                    pool.clone(),
-                                                                                                    key.clone(),
-                                                                                                    key_info,
-                                                                                                    string_value,
-                                                                                                    hash_value,
-                                                                                                    list_value,
-                                                                                                    set_value,
-                                                                                                    zset_value,
-                                                                                                    stream_value,
-                                                                                                    is_binary,
-                                                                                                    binary_format,
-                                                                                                    serialization_data,
-                                                                                                    bitmap_info,
-                                                                                                    loading,
-                                                                                                )
-                                                                                    .await
-                                                                                    {
+                                                                                                     pool.clone(),
+                                                                                                     key.clone(),
+                                                                                                     key_info,
+                                                                                                     string_value,
+                                                                                                     hash_value,
+                                                                                                     list_value,
+                                                                                                     set_value,
+                                                                                                     zset_value,
+                                                                                                     stream_value,
+                                                                                                     is_binary,
+                                                                                                     binary_format,
+                                                                                                     serialization_data,
+                                                                                                     bitmap_info,
+                                                                                                     loading,
+                                                                                                     hash_cursor,
+                                                                                                     hash_total,
+                                                                                                     hash_has_more,
+                                                                                                     list_has_more,
+                                                                                                     list_total,
+                                                                                                     set_cursor,
+                                                                                                     set_total,
+                                                                                                     set_has_more,
+                                                                                                     zset_cursor,
+                                                                                                     zset_total,
+                                                                                                     zset_has_more,
+                                                                                                 )
+                                                                                     .await
+                                                                                     {
                                                                                         tracing::error!("{error}");
                                                                                         hash_status_message.set(error);
                                                                                         hash_status_error.set(true);
@@ -2378,6 +2846,28 @@ pub fn ValueViewer(
                                                             }
                                                         }
                                                     }
+                                                }
+                                            }
+
+                                            if hash_loading_more() {
+                                                div {
+                                                    padding: "12px",
+                                                    text_align: "center",
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "加载中..."
+                                                }
+                                            }
+
+                                            if hash_has_more() && !hash_loading_more() {
+                                                div {
+                                                    padding: "8px",
+                                                    text_align: "center",
+                                                    color: COLOR_TEXT_SUBTLE,
+                                                    font_size: "12px",
+
+                                                    "向下滚动加载更多..."
                                                 }
                                             }
                                         }
@@ -2454,6 +2944,17 @@ pub fn ValueViewer(
                                                                                 serialization_data,
                                                                                 bitmap_info,
                                                                                 loading,
+                                                                                hash_cursor,
+                                                                                hash_total,
+                                                                                hash_has_more,
+                                                                                list_has_more,
+                                                                                list_total,
+                                                                                set_cursor,
+                                                                                set_total,
+                                                                                set_has_more,
+                                                                                zset_cursor,
+                                                                                zset_total,
+                                                                                zset_has_more,
                                                                             ).await {
                                                                                 tracing::error!("{error}");
                                                                             } else {
@@ -2516,6 +3017,17 @@ pub fn ValueViewer(
                                                                                 serialization_data,
                                                                                 bitmap_info,
                                                                                 loading,
+                                                                                hash_cursor,
+                                                                                hash_total,
+                                                                                hash_has_more,
+                                                                                list_has_more,
+                                                                                list_total,
+                                                                                set_cursor,
+                                                                                set_total,
+                                                                                set_has_more,
+                                                                                zset_cursor,
+                                                                                zset_total,
+                                                                                zset_has_more,
                                                                             ).await {
                                                                                 tracing::error!("{error}");
                                                                             } else {
@@ -2539,7 +3051,7 @@ pub fn ValueViewer(
                                                         color: COLOR_TEXT_SECONDARY,
                                                         font_size: "13px",
 
-                                                        "List Items ({list_val.len()})"
+                                                        "List Items ({list_val.len()}/{list_total()})"
                                                     }
                                                 }
 
@@ -2604,6 +3116,31 @@ pub fn ValueViewer(
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
+                                                onscroll: {
+                                                    let pool = connection_pool.clone();
+                                                    let key = display_key.clone();
+                                                    move |e| {
+                                                        let scroll_top = e.data().scroll_top() as i32;
+                                                        let scroll_height = e.data().scroll_height() as i32;
+                                                        let client_height = e.data().client_height() as i32;
+                                                        
+                                                        if list_has_more() && !list_loading_more() && scroll_height - scroll_top - client_height < 200 {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let total = list_total();
+                                                            spawn(async move {
+                                                                load_more_list(
+                                                                    pool,
+                                                                    key,
+                                                                    list_value,
+                                                                    list_has_more,
+                                                                    list_loading_more,
+                                                                    total,
+                                                                ).await;
+                                                            });
+                                                        }
+                                                    }
+                                                },
 
                                                 table {
                                                     width: "100%",
@@ -2707,22 +3244,33 @@ pub fn ValueViewer(
                                                                                                     editing_list_index.set(None);
                                                                                                     list_status_message.set("修改成功".to_string());
                                                                                                     list_status_error.set(false);
-                                                                                                    if let Err(error) = load_key_data(
-                                                                                                        pool.clone(),
-                                                                                                        key.clone(),
-                                                                                                        key_info,
-                                                                                                        string_value,
-                                                                                                        hash_value,
-                                                                                                        list_value,
-                                                                                                        set_value,
-                                                                                                        zset_value,
-                                                                                                        stream_value,
-                                                                                                        is_binary,
-                                                                                                        binary_format,
-                                                                                                        serialization_data,
-                                                                                                        bitmap_info,
-                                                                                                        loading,
-                                                                                                    ).await {
+if let Err(error) = load_key_data(
+                                                                                                         pool.clone(),
+                                                                                                         key.clone(),
+                                                                                                         key_info,
+                                                                                                         string_value,
+                                                                                                         hash_value,
+                                                                                                         list_value,
+                                                                                                         set_value,
+                                                                                                         zset_value,
+                                                                                                         stream_value,
+                                                                                                         is_binary,
+                                                                                                         binary_format,
+                                                                                                         serialization_data,
+                                                                                                         bitmap_info,
+                                                                                                         loading,
+                                                                                                         hash_cursor,
+                                                                                                         hash_total,
+                                                                                                         hash_has_more,
+                                                                                                         list_has_more,
+                                                                                                         list_total,
+                                                                                                         set_cursor,
+                                                                                                         set_total,
+                                                                                                         set_has_more,
+                                                                                                         zset_cursor,
+                                                                                                         zset_total,
+                                                                                                         zset_has_more,
+                                                                                                     ).await {
                                                                                                         tracing::error!("{error}");
                                                                                                     } else {
                                                                                                         on_refresh.call(());
@@ -2865,22 +3413,33 @@ pub fn ValueViewer(
                                                                                                 Ok(_) => {
                                                                                                     list_status_message.set("删除成功".to_string());
                                                                                                     list_status_error.set(false);
-                                                                                                    if let Err(error) = load_key_data(
-                                                                                                        pool.clone(),
-                                                                                                        key.clone(),
-                                                                                                        key_info,
-                                                                                                        string_value,
-                                                                                                        hash_value,
-                                                                                                        list_value,
-                                                                                                        set_value,
-                                                                                                        zset_value,
-                                                                                                        stream_value,
-                                                                                                        is_binary,
-                                                                                                        binary_format,
-                                                                                                        serialization_data,
-                                                                                                        bitmap_info,
-                                                                                                        loading,
-                                                                                                    ).await {
+if let Err(error) = load_key_data(
+                                                                                                         pool.clone(),
+                                                                                                         key.clone(),
+                                                                                                         key_info,
+                                                                                                         string_value,
+                                                                                                         hash_value,
+                                                                                                         list_value,
+                                                                                                         set_value,
+                                                                                                         zset_value,
+                                                                                                         stream_value,
+                                                                                                         is_binary,
+                                                                                                         binary_format,
+                                                                                                         serialization_data,
+                                                                                                         bitmap_info,
+                                                                                                         loading,
+                                                                                                         hash_cursor,
+                                                                                                         hash_total,
+                                                                                                         hash_has_more,
+                                                                                                         list_has_more,
+                                                                                                         list_total,
+                                                                                                         set_cursor,
+                                                                                                         set_total,
+                                                                                                         set_has_more,
+                                                                                                         zset_cursor,
+                                                                                                         zset_total,
+                                                                                                         zset_has_more,
+                                                                                                     ).await {
                                                                                                         tracing::error!("{error}");
                                                                                                     } else {
                                                                                                         on_refresh.call(());
@@ -2932,6 +3491,41 @@ pub fn ValueViewer(
                                                         value: "{set_search}",
                                                         placeholder: "搜索成员",
                                                         oninput: move |event| set_search.set(event.value()),
+                                                    }
+
+                                                    if set_total() > PAGE_SIZE {
+                                                        button {
+                                                            padding: "6px 10px",
+                                                            background: if set_search().len() >= 2 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if set_search().len() >= 2 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT_SECONDARY },
+                                                            border: "1px solid {COLOR_BORDER}",
+                                                            border_radius: "6px",
+                                                            cursor: if set_search().len() >= 2 { "pointer" } else { "not-allowed" },
+                                                            font_size: "12px",
+                                                            disabled: set_search().len() < 2 || set_loading_more(),
+                                                            onclick: {
+                                                                let pool = connection_pool.clone();
+                                                                let key = display_key.clone();
+                                                                move |_| {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    let pattern = set_search();
+                                                                    spawn(async move {
+                                                                        search_set_server(
+                                                                            pool,
+                                                                            key,
+                                                                            pattern,
+                                                                            set_value,
+                                                                            set_cursor,
+                                                                            set_has_more,
+                                                                            set_loading_more,
+                                                                        ).await;
+                                                                    });
+                                                                }
+                                                            },
+
+                                                            if set_loading_more() { "搜索中..." } else { "服务端搜索" }
+                                                        }
                                                     }
 
                                                     input {
@@ -2992,6 +3586,17 @@ pub fn ValueViewer(
                                                                                 serialization_data,
                                                                                 bitmap_info,
                                                                                 loading,
+                                                                                hash_cursor,
+                                                                                hash_total,
+                                                                                hash_has_more,
+                                                                                list_has_more,
+                                                                                list_total,
+                                                                                set_cursor,
+                                                                                set_total,
+                                                                                set_has_more,
+                                                                                zset_cursor,
+                                                                                zset_total,
+                                                                                zset_has_more,
                                                                             ).await {
                                                                                 tracing::error!("{error}");
                                                                             } else {
@@ -3019,7 +3624,7 @@ pub fn ValueViewer(
                                                         color: COLOR_TEXT_SECONDARY,
                                                         font_size: "13px",
 
-                                                        "Set Members ({filtered_set_members.len()}/{set_val.len()})"
+                                                        "Set Members ({set_val.len()}/{set_total()})"
                                                     }
                                                 }
 
@@ -3084,6 +3689,32 @@ pub fn ValueViewer(
                                                 background: COLOR_BG_SECONDARY,
                                                 max_height: "calc(100vh - 400px)",
                                                 overflow_y: "auto",
+                                                onscroll: {
+                                                    let pool = connection_pool.clone();
+                                                    let key = display_key.clone();
+                                                    move |e| {
+                                                        let scroll_top = e.data().scroll_top() as i32;
+                                                        let scroll_height = e.data().scroll_height() as i32;
+                                                        let client_height = e.data().client_height() as i32;
+                                                        
+                                                        if set_has_more() && !set_loading_more() && scroll_height - scroll_top - client_height < 200 {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let cursor = set_cursor();
+                                                            spawn(async move {
+                                                                load_more_set(
+                                                                    pool,
+                                                                    key,
+                                                                    set_value,
+                                                                    cursor,
+                                                                    set_cursor,
+                                                                    set_has_more,
+                                                                    set_loading_more,
+                                                                ).await;
+                                                            });
+                                                        }
+                                                    }
+                                                },
 
                                                 table {
                                                     width: "100%",
@@ -3214,22 +3845,33 @@ pub fn ValueViewer(
                                                                                                     editing_set_member_value.set(String::new());
                                                                                                     set_status_message.set("修改成功".to_string());
                                                                                                     set_status_error.set(false);
-                                                                                                    if let Err(error) = load_key_data(
-                                                                                                        pool.clone(),
-                                                                                                        key.clone(),
-                                                                                                        key_info,
-                                                                                                        string_value,
-                                                                                                        hash_value,
-                                                                                                        list_value,
-                                                                                                        set_value,
-                                                                                                        zset_value,
-                                                                                                        stream_value,
-                                                                                                        is_binary,
-                                                                                                        binary_format,
-                                                                                                        serialization_data,
-                                                                                                        bitmap_info,
-                                                                                                        loading,
-                                                                                                    ).await {
+if let Err(error) = load_key_data(
+                                                                                                         pool.clone(),
+                                                                                                         key.clone(),
+                                                                                                         key_info,
+                                                                                                         string_value,
+                                                                                                         hash_value,
+                                                                                                         list_value,
+                                                                                                         set_value,
+                                                                                                         zset_value,
+                                                                                                         stream_value,
+                                                                                                         is_binary,
+                                                                                                         binary_format,
+                                                                                                         serialization_data,
+                                                                                                         bitmap_info,
+                                                                                                         loading,
+                                                                                                         hash_cursor,
+                                                                                                         hash_total,
+                                                                                                         hash_has_more,
+                                                                                                         list_has_more,
+                                                                                                         list_total,
+                                                                                                         set_cursor,
+                                                                                                         set_total,
+                                                                                                         set_has_more,
+                                                                                                         zset_cursor,
+                                                                                                         zset_total,
+                                                                                                         zset_has_more,
+                                                                                                     ).await {
                                                                                                         tracing::error!("{error}");
                                                                                                     } else {
                                                                                                         on_refresh.call(());
@@ -3376,22 +4018,33 @@ pub fn ValueViewer(
                                                                                                 Ok(_) => {
                                                                                                     set_status_message.set("删除成功".to_string());
                                                                                                     set_status_error.set(false);
-                                                                                                    if let Err(error) = load_key_data(
-                                                                                                        pool.clone(),
-                                                                                                        key.clone(),
-                                                                                                        key_info,
-                                                                                                        string_value,
-                                                                                                        hash_value,
-                                                                                                        list_value,
-                                                                                                        set_value,
-                                                                                                        zset_value,
-                                                                                                        stream_value,
-                                                                                                        is_binary,
-                                                                                                        binary_format,
-                                                                                                        serialization_data,
-                                                                                                        bitmap_info,
-                                                                                                        loading,
-                                                                                                    ).await {
+if let Err(error) = load_key_data(
+                                                                                                         pool.clone(),
+                                                                                                         key.clone(),
+                                                                                                         key_info,
+                                                                                                         string_value,
+                                                                                                         hash_value,
+                                                                                                         list_value,
+                                                                                                         set_value,
+                                                                                                         zset_value,
+                                                                                                         stream_value,
+                                                                                                         is_binary,
+                                                                                                         binary_format,
+                                                                                                         serialization_data,
+                                                                                                         bitmap_info,
+                                                                                                         loading,
+                                                                                                         hash_cursor,
+                                                                                                         hash_total,
+                                                                                                         hash_has_more,
+                                                                                                         list_has_more,
+                                                                                                         list_total,
+                                                                                                         set_cursor,
+                                                                                                         set_total,
+                                                                                                         set_has_more,
+                                                                                                         zset_cursor,
+                                                                                                         zset_total,
+                                                                                                         zset_has_more,
+                                                                                                     ).await {
                                                                                                         tracing::error!("{error}");
                                                                                                     } else {
                                                                                                         on_refresh.call(());
@@ -3415,6 +4068,28 @@ pub fn ValueViewer(
                                                             }
                                                         }
                                                     }
+                                                }
+                                            }
+
+                                            if set_loading_more() {
+                                                div {
+                                                    padding: "12px",
+                                                    text_align: "center",
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "加载中..."
+                                                }
+                                            }
+
+                                            if set_has_more() && !set_loading_more() {
+                                                div {
+                                                    padding: "8px",
+                                                    text_align: "center",
+                                                    color: COLOR_TEXT_SUBTLE,
+                                                    font_size: "12px",
+
+                                                    "向下滚动加载更多..."
                                                 }
                                             }
                                         }
@@ -3445,6 +4120,41 @@ pub fn ValueViewer(
                                                         value: "{zset_search}",
                                                         placeholder: "搜索成员",
                                                         oninput: move |event| zset_search.set(event.value()),
+                                                    }
+
+                                                    if zset_total() > PAGE_SIZE {
+                                                        button {
+                                                            padding: "6px 10px",
+                                                            background: if zset_search().len() >= 2 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                            color: if zset_search().len() >= 2 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT_SECONDARY },
+                                                            border: "1px solid {COLOR_BORDER}",
+                                                            border_radius: "6px",
+                                                            cursor: if zset_search().len() >= 2 { "pointer" } else { "not-allowed" },
+                                                            font_size: "12px",
+                                                            disabled: zset_search().len() < 2 || zset_loading_more(),
+                                                            onclick: {
+                                                                let pool = connection_pool.clone();
+                                                                let key = display_key.clone();
+                                                                move |_| {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    let pattern = zset_search();
+                                                                    spawn(async move {
+                                                                        search_zset_server(
+                                                                            pool,
+                                                                            key,
+                                                                            pattern,
+                                                                            zset_value,
+                                                                            zset_cursor,
+                                                                            zset_has_more,
+                                                                            zset_loading_more,
+                                                                        ).await;
+                                                                    });
+                                                                }
+                                                            },
+
+                                                            if zset_loading_more() { "搜索中..." } else { "服务端搜索" }
+                                                        }
                                                     }
 
                                                     input {
@@ -3528,6 +4238,17 @@ pub fn ValueViewer(
                                                                                 serialization_data,
                                                                                 bitmap_info,
                                                                                 loading,
+                                                                                hash_cursor,
+                                                                                hash_total,
+                                                                                hash_has_more,
+                                                                                list_has_more,
+                                                                                list_total,
+                                                                                set_cursor,
+                                                                                set_total,
+                                                                                set_has_more,
+                                                                                zset_cursor,
+                                                                                zset_total,
+                                                                                zset_has_more,
                                                                             ).await {
                                                                                 tracing::error!("{error}");
                                                                             } else {
@@ -3551,7 +4272,7 @@ pub fn ValueViewer(
                                                         color: COLOR_TEXT_SECONDARY,
                                                         font_size: "13px",
 
-                                                        "ZSet Members ({filtered_zset_members.len()}/{zset_val.len()})"
+                                                        "ZSet Members ({zset_val.len()}/{zset_total()})"
                                                     }
                                                 }
 
@@ -3616,6 +4337,32 @@ pub fn ValueViewer(
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
+                                                onscroll: {
+                                                    let pool = connection_pool.clone();
+                                                    let key = display_key.clone();
+                                                    move |e| {
+                                                        let scroll_top = e.data().scroll_top() as i32;
+                                                        let scroll_height = e.data().scroll_height() as i32;
+                                                        let client_height = e.data().client_height() as i32;
+                                                        
+                                                        if zset_has_more() && !zset_loading_more() && scroll_height - scroll_top - client_height < 200 {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let cursor = zset_cursor();
+                                                            spawn(async move {
+                                                                load_more_zset(
+                                                                    pool,
+                                                                    key,
+                                                                    zset_value,
+                                                                    cursor,
+                                                                    zset_cursor,
+                                                                    zset_has_more,
+                                                                    zset_loading_more,
+                                                                ).await;
+                                                            });
+                                                        }
+                                                    }
+                                                },
 
                                                 table {
                                                     width: "100%",
@@ -3747,22 +4494,33 @@ pub fn ValueViewer(
                                                                                                     editing_zset_member.set(None);
                                                                                                     zset_status_message.set("修改成功".to_string());
                                                                                                     zset_status_error.set(false);
-                                                                                                    if let Err(error) = load_key_data(
-                                                                                                        pool.clone(),
-                                                                                                        key.clone(),
-                                                                                                        key_info,
-                                                                                                        string_value,
-                                                                                                        hash_value,
-                                                                                                        list_value,
-                                                                                                        set_value,
-                                                                                                        zset_value,
-                                                                                                        stream_value,
-                                                                                                        is_binary,
-                                                                                                        binary_format,
-                                                                                                        serialization_data,
-                                                                                                        bitmap_info,
-                                                                                                        loading,
-                                                                                                    ).await {
+if let Err(error) = load_key_data(
+                                                                                                         pool.clone(),
+                                                                                                         key.clone(),
+                                                                                                         key_info,
+                                                                                                         string_value,
+                                                                                                         hash_value,
+                                                                                                         list_value,
+                                                                                                         set_value,
+                                                                                                         zset_value,
+                                                                                                         stream_value,
+                                                                                                         is_binary,
+                                                                                                         binary_format,
+                                                                                                         serialization_data,
+                                                                                                         bitmap_info,
+                                                                                                         loading,
+                                                                                                         hash_cursor,
+                                                                                                         hash_total,
+                                                                                                         hash_has_more,
+                                                                                                         list_has_more,
+                                                                                                         list_total,
+                                                                                                         set_cursor,
+                                                                                                         set_total,
+                                                                                                         set_has_more,
+                                                                                                         zset_cursor,
+                                                                                                         zset_total,
+                                                                                                         zset_has_more,
+                                                                                                     ).await {
                                                                                                         tracing::error!("{error}");
                                                                                                     } else {
                                                                                                         on_refresh.call(());
@@ -3916,22 +4674,33 @@ pub fn ValueViewer(
                                                                                                 Ok(_) => {
                                                                                                     zset_status_message.set("删除成功".to_string());
                                                                                                     zset_status_error.set(false);
-                                                                                                    if let Err(error) = load_key_data(
-                                                                                                        pool.clone(),
-                                                                                                        key.clone(),
-                                                                                                        key_info,
-                                                                                                        string_value,
-                                                                                                        hash_value,
-                                                                                                        list_value,
-                                                                                                        set_value,
-                                                                                                        zset_value,
-                                                                                                        stream_value,
-                                                                                                        is_binary,
-                                                                                                        binary_format,
-                                                                                                        serialization_data,
-                                                                                                        bitmap_info,
-                                                                                                        loading,
-                                                                                                    ).await {
+if let Err(error) = load_key_data(
+                                                                                                         pool.clone(),
+                                                                                                         key.clone(),
+                                                                                                         key_info,
+                                                                                                         string_value,
+                                                                                                         hash_value,
+                                                                                                         list_value,
+                                                                                                         set_value,
+                                                                                                         zset_value,
+                                                                                                         stream_value,
+                                                                                                         is_binary,
+                                                                                                         binary_format,
+                                                                                                         serialization_data,
+                                                                                                         bitmap_info,
+                                                                                                         loading,
+                                                                                                         hash_cursor,
+                                                                                                         hash_total,
+                                                                                                         hash_has_more,
+                                                                                                         list_has_more,
+                                                                                                         list_total,
+                                                                                                         set_cursor,
+                                                                                                         set_total,
+                                                                                                         set_has_more,
+                                                                                                         zset_cursor,
+                                                                                                         zset_total,
+                                                                                                         zset_has_more,
+                                                                                                     ).await {
                                                                                                         tracing::error!("{error}");
                                                                                                     } else {
                                                                                                         on_refresh.call(());
@@ -3955,6 +4724,28 @@ pub fn ValueViewer(
                                                             }
                                                         }
                                                     }
+                                                }
+                                            }
+
+                                            if zset_loading_more() {
+                                                div {
+                                                    padding: "12px",
+                                                    text_align: "center",
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "13px",
+
+                                                    "加载中..."
+                                                }
+                                            }
+
+                                            if zset_has_more() && !zset_loading_more() {
+                                                div {
+                                                    padding: "8px",
+                                                    text_align: "center",
+                                                    color: COLOR_TEXT_SUBTLE,
+                                                    font_size: "12px",
+
+                                                    "向下滚动加载更多..."
                                                 }
                                             }
                                         }
@@ -4063,13 +4854,41 @@ pub fn ValueViewer(
                                                 }
                                             }
 
-                                            div {
+div {
                                                 overflow_x: "auto",
                                                 overflow_y: "auto",
-                                                max_height: "calc(100vh - 350px)",
+                                                max_height: "calc(100vh - 400px)",
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
+                                                onscroll: {
+                                                    let pool = connection_pool.clone();
+                                                    let key = display_key.clone();
+                                                    move |e| {
+                                                        let scroll_top = e.data().scroll_top() as i32;
+                                                        let scroll_height = e.data().scroll_height() as i32;
+                                                        let client_height = e.data().client_height() as i32;
+                                                        
+                                                        if hash_has_more() && !hash_loading_more() && scroll_height - scroll_top - client_height < 200 {
+                                                            let pool = pool.clone();
+                                                            let key = key.clone();
+                                                            let cursor = hash_cursor();
+                                                            let total = hash_total();
+                                                            spawn(async move {
+                                                                load_more_hash(
+                                                                    pool,
+                                                                    key,
+                                                                    hash_value,
+                                                                    cursor,
+                                                                    hash_cursor,
+                                                                    hash_has_more,
+                                                                    hash_loading_more,
+                                                                    hash_total,
+                                                                ).await;
+                                                            });
+                                                        }
+                                                    }
+                                                },
 
                                                 table {
                                                     width: "100%",
@@ -4282,22 +5101,33 @@ pub fn ValueViewer(
                                                                                     stream_status_message.set("删除成功".to_string());
                                                                                     stream_status_error.set(false);
                                                                                     deleting_stream_entry.set(None);
-                                                                                    if let Err(error) = load_key_data(
-                                                                                        pool.clone(),
-                                                                                        key.clone(),
-                                                                                        key_info,
-                                                                                        string_value,
-                                                                                        hash_value,
-                                                                                        list_value,
-                                                                                        set_value,
-                                                                                        zset_value,
-                                                                                        stream_value,
-                                                                                        is_binary,
-                                                                                        binary_format,
-                                                                                        serialization_data,
-                                                                                        bitmap_info,
-                                                                                        loading,
-                                                                                    ).await {
+if let Err(error) = load_key_data(
+                                                                                         pool.clone(),
+                                                                                         key.clone(),
+                                                                                         key_info,
+                                                                                         string_value,
+                                                                                         hash_value,
+                                                                                         list_value,
+                                                                                         set_value,
+                                                                                         zset_value,
+                                                                                         stream_value,
+                                                                                         is_binary,
+                                                                                         binary_format,
+                                                                                         serialization_data,
+                                                                                         bitmap_info,
+                                                                                         loading,
+                                                                                         hash_cursor,
+                                                                                         hash_total,
+                                                                                         hash_has_more,
+                                                                                         list_has_more,
+                                                                                         list_total,
+                                                                                         set_cursor,
+                                                                                         set_total,
+                                                                                         set_has_more,
+                                                                                         zset_cursor,
+                                                                                         zset_total,
+                                                                                         zset_has_more,
+                                                                                     ).await {
                                                                                         tracing::error!("{error}");
                                                                                     } else {
                                                                                         on_refresh.call(());
