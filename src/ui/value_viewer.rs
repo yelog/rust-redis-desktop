@@ -816,6 +816,7 @@ pub fn ValueViewer(
     let mut new_hash_key = use_signal(String::new);
     let mut new_hash_value = use_signal(String::new);
     let mut deleting_hash_field = use_signal(|| None::<HashDeleteTarget>);
+    let mut deleting_hash_field_exiting = use_signal(|| false);
     let mut hash_action = use_signal(|| None::<String>);
 
     let mut list_status_message = use_signal(String::new);
@@ -879,6 +880,7 @@ pub fn ValueViewer(
     let mut stream_status_error = use_signal(|| false);
     let mut stream_search = use_signal(String::new);
     let mut deleting_stream_entry = use_signal(|| None::<String>);
+    let mut deleting_stream_entry_exiting = use_signal(|| false);
 
     let pool = connection_pool.clone();
     let pool_for_edit = connection_pool.clone();
@@ -2788,7 +2790,7 @@ if let Err(error) = load_key_data(
                                                 }
                                             }
 
-                                            if let Some(target) = delete_target {
+                                            if let Some(target) = deleting_hash_field() {
                                                 div {
                                                     position: "fixed",
                                                     top: "0",
@@ -2800,6 +2802,28 @@ if let Err(error) = load_key_data(
                                                     align_items: "center",
                                                     justify_content: "center",
                                                     z_index: "1000",
+                                                    animation: if deleting_hash_field_exiting() { "backdropFadeOut 0.2s ease-out forwards" } else { "backdropFadeIn 0.2s ease-out" },
+
+                                                    style {
+                                                        r#"
+                                                        @keyframes backdropFadeIn {{
+                                                            from {{ opacity: 0; }}
+                                                            to {{ opacity: 1; }}
+                                                        }}
+                                                        @keyframes backdropFadeOut {{
+                                                            from {{ opacity: 1; }}
+                                                            to {{ opacity: 0; }}
+                                                        }}
+                                                        @keyframes modalFadeIn {{
+                                                            from {{ opacity: 0; transform: scale(0.9); }}
+                                                            to {{ opacity: 1; transform: scale(1); }}
+                                                        }}
+                                                        @keyframes modalFadeOut {{
+                                                            from {{ opacity: 1; transform: scale(1); }}
+                                                            to {{ opacity: 0; transform: scale(0.9); }}
+                                                        }}
+                                                        "#
+                                                    }
 
                                                     div {
                                                         width: "420px",
@@ -2808,6 +2832,7 @@ if let Err(error) = load_key_data(
                                                         border: "1px solid {COLOR_BORDER}",
                                                         border_radius: "10px",
                                                         padding: "20px",
+                                                        animation: if deleting_hash_field_exiting() { "modalFadeOut 0.2s ease-out forwards" } else { "modalFadeIn 0.2s ease-out" },
 
                                                         h3 {
                                                             color: COLOR_TEXT,
@@ -2839,7 +2864,20 @@ if let Err(error) = load_key_data(
                                                                 border_radius: "6px",
                                                                 cursor: "pointer",
                                                                 disabled: active_hash_action.is_some(),
-                                                                onclick: move |_| deleting_hash_field.set(None),
+                                                                onclick: {
+                                                                    let mut deleting_hash_field = deleting_hash_field.clone();
+                                                                    let mut deleting_hash_field_exiting = deleting_hash_field_exiting.clone();
+                                                                    move |_| {
+                                                                        deleting_hash_field_exiting.set(true);
+                                                                        let mut dhf = deleting_hash_field.clone();
+                                                                        let mut dhfe = deleting_hash_field_exiting.clone();
+                                                                        spawn(async move {
+                                                                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                                                                            dhf.set(None);
+                                                                            dhfe.set(false);
+                                                                        });
+                                                                    }
+                                                                },
 
                                                                 "取消"
                                                             }
@@ -2857,6 +2895,8 @@ if let Err(error) = load_key_data(
                                                                     let key = display_key.clone();
                                                                     let field = target.field.clone();
                                                                     let delete_action = format!("delete:{}", target.field);
+                                                                    let mut deleting_hash_field = deleting_hash_field.clone();
+                                                                    let mut deleting_hash_field_exiting = deleting_hash_field_exiting.clone();
                                                                     move |_| {
                                                                         let pool = pool.clone();
                                                                         let key = key.clone();
@@ -2869,7 +2909,9 @@ if let Err(error) = load_key_data(
 
                                                                             match pool.hash_delete_field(&key, &field).await {
                                                                                 Ok(_) => {
-                                                                                    deleting_hash_field.set(None);
+                                                                                    deleting_hash_field_exiting.set(true);
+                                                                                    let mut dhf = deleting_hash_field.clone();
+                                                                                    let mut dhfe = deleting_hash_field_exiting.clone();
                                                                                     if editing_hash_field().as_deref() == Some(field.as_str()) {
                                                                                         editing_hash_field.set(None);
                                                                                         editing_hash_key.set(String::new());
@@ -2877,6 +2919,9 @@ if let Err(error) = load_key_data(
                                                                                     }
 hash_status_message.set("删除成功".to_string());
                     hash_status_error.set(false);
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    dhf.set(None);
+                    dhfe.set(false);
             if let Err(error) = load_key_data(
                                                                                                      pool.clone(),
                                                                                                      key.clone(),
@@ -5211,6 +5256,28 @@ div {
                                                     align_items: "center",
                                                     justify_content: "center",
                                                     z_index: "1000",
+                                                    animation: if deleting_stream_entry_exiting() { "backdropFadeOut 0.2s ease-out forwards" } else { "backdropFadeIn 0.2s ease-out" },
+
+                                                    style {
+                                                        r#"
+                                                        @keyframes backdropFadeIn {{
+                                                            from {{ opacity: 0; }}
+                                                            to {{ opacity: 1; }}
+                                                        }}
+                                                        @keyframes backdropFadeOut {{
+                                                            from {{ opacity: 1; }}
+                                                            to {{ opacity: 0; }}
+                                                        }}
+                                                        @keyframes modalFadeIn {{
+                                                            from {{ opacity: 0; transform: scale(0.95); }}
+                                                            to {{ opacity: 1; transform: scale(1); }}
+                                                        }}
+                                                        @keyframes modalFadeOut {{
+                                                            from {{ opacity: 1; transform: scale(1); }}
+                                                            to {{ opacity: 0; transform: scale(0.95); }}
+                                                        }}
+                                                        "#
+                                                    }
 
                                                     div {
                                                         padding: "24px",
@@ -5218,6 +5285,7 @@ div {
                                                         border_radius: "12px",
                                                         max_width: "400px",
                                                         width: "90%",
+                                                        animation: if deleting_stream_entry_exiting() { "modalFadeOut 0.2s ease-out forwards" } else { "modalFadeIn 0.2s ease-out" },
 
                                                         h3 {
                                                             margin_bottom: "16px",
@@ -5248,8 +5316,19 @@ div {
                                                                 border: "1px solid {COLOR_BORDER}",
                                                                 border_radius: "6px",
                                                                 cursor: "pointer",
-                                                                onclick: move |_| {
-                                                                    deleting_stream_entry.set(None);
+                                                                onclick: {
+                                                                    let mut deleting_stream_entry = deleting_stream_entry.clone();
+                                                                    let mut deleting_stream_entry_exiting = deleting_stream_entry_exiting.clone();
+                                                                    move |_| {
+                                                                        deleting_stream_entry_exiting.set(true);
+                                                                        let mut dse = deleting_stream_entry.clone();
+                                                                        let mut dsee = deleting_stream_entry_exiting.clone();
+                                                                        spawn(async move {
+                                                                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                                                                            dse.set(None);
+                                                                            dsee.set(false);
+                                                                        });
+                                                                    }
                                                                 },
 
                                                                 "取消"
@@ -5266,6 +5345,8 @@ div {
                                                                     let pool = connection_pool.clone();
                                                                     let key = display_key.clone();
                                                                     let entry_id = entry_id.clone();
+                                                                    let mut deleting_stream_entry = deleting_stream_entry.clone();
+                                                                    let mut deleting_stream_entry_exiting = deleting_stream_entry_exiting.clone();
                                                                     move |_| {
                                                                         let pool = pool.clone();
                                                                         let key = key.clone();
@@ -5275,7 +5356,10 @@ div {
                                                                                 Ok(true) => {
                                                                                     stream_status_message.set("删除成功".to_string());
                                                                                     stream_status_error.set(false);
+                                                                                    deleting_stream_entry_exiting.set(true);
+                                                                                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                                                                                     deleting_stream_entry.set(None);
+                                                                                    deleting_stream_entry_exiting.set(false);
 if let Err(error) = load_key_data(
                                                                                          pool.clone(),
                                                                                          key.clone(),

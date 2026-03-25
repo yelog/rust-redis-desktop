@@ -97,6 +97,16 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
             background: COLOR_BG,
             border_radius: "8px",
             overflow: "hidden",
+            animation: "modalFadeIn 0.2s ease-out",
+
+            style {
+                r#"
+                @keyframes modalFadeIn {{
+                    from {{ opacity: 0; transform: scale(0.95); }}
+                    to {{ opacity: 1; transform: scale(1); }}
+                }}
+                "#
+            }
 
             div {
                 display: "flex",

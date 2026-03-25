@@ -6,11 +6,35 @@ use std::time::Duration;
 const EXIT_ANIMATION_DURATION_MS: u64 = 200;
 
 #[derive(Clone, Copy, PartialEq, Default)]
-enum VisibilityState {
+pub enum VisibilityState {
     #[default]
     Hidden,
     Visible,
     Exiting,
+}
+
+pub fn use_exit_animation(is_open: Signal<bool>) -> (bool, bool) {
+    let mut visibility = use_signal(VisibilityState::default);
+
+    {
+        let current = *visibility.read();
+        if is_open() && current == VisibilityState::Hidden {
+            visibility.set(VisibilityState::Visible);
+        } else if !is_open() && current == VisibilityState::Visible {
+            visibility.set(VisibilityState::Exiting);
+            let mut vis = visibility.clone();
+            spawn(async move {
+                tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                vis.set(VisibilityState::Hidden);
+            });
+        }
+    }
+
+    let state = *visibility.read();
+    let should_show = is_open() || state == VisibilityState::Exiting;
+    let is_exiting = state == VisibilityState::Exiting;
+
+    (should_show, is_exiting)
 }
 
 #[component]
@@ -408,6 +432,104 @@ pub fn DialogFooter(
                         "{confirm}"
                     }
                 }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn SimpleAnimatedModal(
+    is_open: Signal<bool>,
+    on_close: EventHandler<()>,
+    width: Option<String>,
+    children: Element,
+) -> Element {
+    let width_val = width.unwrap_or_else(|| "420px".to_string());
+    let mut visibility = use_signal(VisibilityState::default);
+
+    {
+        let current = *visibility.read();
+        if is_open() && current == VisibilityState::Hidden {
+            visibility.set(VisibilityState::Visible);
+        } else if !is_open() && current == VisibilityState::Visible {
+            visibility.set(VisibilityState::Exiting);
+            let mut vis = visibility.clone();
+            spawn(async move {
+                tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                vis.set(VisibilityState::Hidden);
+            });
+        }
+    }
+
+    let state = *visibility.read();
+    if state == VisibilityState::Hidden {
+        return rsx! {};
+    }
+
+    let is_exiting = state == VisibilityState::Exiting;
+    let backdrop_animation = if is_exiting { "backdropFadeOut" } else { "backdropFadeIn" };
+    let modal_animation = if is_exiting { "modalFadeOut" } else { "modalFadeIn" };
+
+    rsx! {
+        div {
+            position: "fixed",
+            top: "0",
+            left: "0",
+            right: "0",
+            bottom: "0",
+            background: "rgba(0, 0, 0, 0.7)",
+            display: "flex",
+            align_items: "center",
+            justify_content: "center",
+            z_index: "1000",
+            animation: "{backdrop_animation} 0.2s ease-out forwards",
+            onclick: {
+                let mut visibility = visibility.clone();
+                move |_| {
+                    if *visibility.read() == VisibilityState::Visible {
+                        visibility.set(VisibilityState::Exiting);
+                        let mut vis = visibility.clone();
+                        let mut is_open_sig = is_open.clone();
+                        spawn(async move {
+                            tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                            vis.set(VisibilityState::Hidden);
+                            is_open_sig.set(false);
+                            on_close.call(());
+                        });
+                    }
+                }
+            },
+
+            style {
+                r#"
+                @keyframes backdropFadeIn {{
+                    from {{ opacity: 0; }}
+                    to {{ opacity: 1; }}
+                }}
+                @keyframes backdropFadeOut {{
+                    from {{ opacity: 1; }}
+                    to {{ opacity: 0; }}
+                }}
+                @keyframes modalFadeIn {{
+                    from {{ opacity: 0; transform: scale(0.9); }}
+                    to {{ opacity: 1; transform: scale(1); }}
+                }}
+                @keyframes modalFadeOut {{
+                    from {{ opacity: 1; transform: scale(1); }}
+                    to {{ opacity: 0; transform: scale(0.9); }}
+                }}
+                "#
+            }
+
+            div {
+                width: "{width_val}",
+                background: "#1e1e1e",
+                border_radius: "10px",
+                padding: "20px",
+                animation: "{modal_animation} 0.2s ease-out forwards",
+                onclick: move |e| e.stop_propagation(),
+
+                {children}
             }
         }
     }

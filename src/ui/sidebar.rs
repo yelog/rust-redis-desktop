@@ -3,7 +3,10 @@ use crate::theme::ThemeColors;
 use crate::ui::icons::*;
 use dioxus::prelude::*;
 use std::collections::HashMap;
+use std::time::Duration;
 use uuid::Uuid;
+
+const EXIT_ANIMATION_DURATION_MS: u64 = 100;
 
 #[component]
 pub fn Sidebar(
@@ -22,6 +25,7 @@ pub fn Sidebar(
     on_open_settings: EventHandler<()>,
 ) -> Element {
     let mut context_menu = use_signal(|| None::<(Uuid, (i32, i32))>);
+    let context_menu_exiting = use_signal(|| false);
     let mut hover_edit = use_signal(|| false);
     let mut hover_delete = use_signal(|| false);
     let mut hover_reconnect = use_signal(|| false);
@@ -210,159 +214,234 @@ pub fn Sidebar(
         }
 
         if let Some((menu_id, (x, y))) = context_menu() {
-            div {
-                position: "fixed",
-                left: "{x}px",
-                top: "{y}px",
-                background: "{colors.background_secondary}",
-                border: "1px solid {colors.border}",
-                border_radius: "4px",
-                box_shadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
-                z_index: "1000",
-                min_width: "120px",
-                padding: "4px 0",
+            if !context_menu_exiting() {
+                div {
+                    position: "fixed",
+                    left: "{x}px",
+                    top: "{y}px",
+                    background: "{colors.background_secondary}",
+                    border: "1px solid {colors.border}",
+                    border_radius: "4px",
+                    box_shadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
+                    z_index: "1000",
+                    min_width: "120px",
+                    padding: "4px 0",
+                    transform_origin: "top left",
+                    animation: "contextMenuFadeIn 0.15s ease-out",
+
+                    style {
+                        r#"
+                        @keyframes contextMenuFadeIn {{
+                            from {{ opacity: 0; transform: scale(0.9); }}
+                            to {{ opacity: 1; transform: scale(1); }}
+                        }}
+                        @keyframes contextMenuFadeOut {{
+                            from {{ opacity: 1; transform: scale(1); }}
+                            to {{ opacity: 0; transform: scale(0.95); }}
+                        }}
+                        "#
+                    }
+
+                    div {
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        background: if hover_reconnect() { colors.success } else { "transparent" },
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
+
+                        onmouseenter: move |_| hover_reconnect.set(true),
+                        onmouseleave: move |_| hover_reconnect.set(false),
+
+                        onclick: {
+                            let menu_id = menu_id;
+                            let mut context_menu = context_menu.clone();
+                            let mut context_menu_exiting = context_menu_exiting.clone();
+                            move |_| {
+                                context_menu_exiting.set(true);
+                                let mut cm = context_menu.clone();
+                                let mut cme = context_menu_exiting.clone();
+                                spawn(async move {
+                                    tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                    cm.set(None);
+                                    cme.set(false);
+                                });
+                                on_reconnect_connection.call(menu_id);
+                            }
+                        },
+
+                        IconRefresh { size: Some(14) }
+                        "Reconnect"
+                    }
+
+                    div {
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        background: if hover_close() { colors.warning } else { "transparent" },
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
+
+                        onmouseenter: move |_| hover_close.set(true),
+                        onmouseleave: move |_| hover_close.set(false),
+
+                        onclick: {
+                            let menu_id = menu_id;
+                            let mut context_menu = context_menu.clone();
+                            let mut context_menu_exiting = context_menu_exiting.clone();
+                            move |_| {
+                                context_menu_exiting.set(true);
+                                let mut cm = context_menu.clone();
+                                let mut cme = context_menu_exiting.clone();
+                                spawn(async move {
+                                    tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                    cm.set(None);
+                                    cme.set(false);
+                                });
+                                on_close_connection.call(menu_id);
+                            }
+                        },
+
+                        IconX { size: Some(14) }
+                        "Close"
+                    }
+
+                    div {
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        color: "{colors.error}",
+                        font_size: "13px",
+                        background: if hover_flush() { colors.error } else { "transparent" },
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
+
+                        onmouseenter: move |_| hover_flush.set(true),
+                        onmouseleave: move |_| hover_flush.set(false),
+
+                        onclick: {
+                            let menu_id = menu_id;
+                            let mut context_menu = context_menu.clone();
+                            let mut context_menu_exiting = context_menu_exiting.clone();
+                            move |_| {
+                                context_menu_exiting.set(true);
+                                let mut cm = context_menu.clone();
+                                let mut cme = context_menu_exiting.clone();
+                                spawn(async move {
+                                    tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                    cm.set(None);
+                                    cme.set(false);
+                                });
+                                on_flush_connection.call(menu_id);
+                            }
+                        },
+
+                        IconAlert { size: Some(14) }
+                        "FlushDB"
+                    }
+
+                    div {
+                        height: "1px",
+                        background: "{colors.border}",
+                        margin: "4px 0",
+                    }
+
+                    div {
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        background: if hover_edit() { colors.primary } else { "transparent" },
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
+
+                        onmouseenter: move |_| hover_edit.set(true),
+                        onmouseleave: move |_| hover_edit.set(false),
+
+                        onclick: {
+                            let menu_id = menu_id;
+                            let mut context_menu = context_menu.clone();
+                            let mut context_menu_exiting = context_menu_exiting.clone();
+                            move |_| {
+                                context_menu_exiting.set(true);
+                                let mut cm = context_menu.clone();
+                                let mut cme = context_menu_exiting.clone();
+                                spawn(async move {
+                                    tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                    cm.set(None);
+                                    cme.set(false);
+                                });
+                                on_edit_connection.call(menu_id);
+                            }
+                        },
+
+                        IconEdit { size: Some(14) }
+                        "Edit"
+                    }
+
+                    div {
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        background: if hover_delete() { colors.error } else { "transparent" },
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
+
+                        onmouseenter: move |_| hover_delete.set(true),
+                        onmouseleave: move |_| hover_delete.set(false),
+
+                        onclick: {
+                            let menu_id = menu_id;
+                            let mut context_menu = context_menu.clone();
+                            let mut context_menu_exiting = context_menu_exiting.clone();
+                            move |_| {
+                                context_menu_exiting.set(true);
+                                let mut cm = context_menu.clone();
+                                let mut cme = context_menu_exiting.clone();
+                                spawn(async move {
+                                    tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                    cm.set(None);
+                                    cme.set(false);
+                                });
+                                on_delete_connection.call(menu_id);
+                            }
+                        },
+
+                        IconTrash { size: Some(14) }
+                        "Delete"
+                    }
+                }
 
                 div {
-                    padding: "8px 12px",
-                    cursor: "pointer",
-                    color: "{colors.text}",
-                    font_size: "13px",
-                    background: if hover_reconnect() { colors.success } else { "transparent" },
-                    display: "flex",
-                    align_items: "center",
-                    gap: "6px",
-
-                    onmouseenter: move |_| hover_reconnect.set(true),
-                    onmouseleave: move |_| hover_reconnect.set(false),
+                    position: "fixed",
+                    top: "0",
+                    left: "0",
+                    right: "0",
+                    bottom: "0",
+                    z_index: "999",
 
                     onclick: {
-                        let menu_id = menu_id;
+                        let mut context_menu = context_menu.clone();
+                        let mut context_menu_exiting = context_menu_exiting.clone();
                         move |_| {
-                            context_menu.set(None);
-                            on_reconnect_connection.call(menu_id);
+                            context_menu_exiting.set(true);
+                            let mut cm = context_menu.clone();
+                            let mut cme = context_menu_exiting.clone();
+                            spawn(async move {
+                                tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                cm.set(None);
+                                cme.set(false);
+                            });
                         }
                     },
-
-                    IconRefresh { size: Some(14) }
-                    "Reconnect"
                 }
-
-                div {
-                    padding: "8px 12px",
-                    cursor: "pointer",
-                    color: "{colors.text}",
-                    font_size: "13px",
-                    background: if hover_close() { colors.warning } else { "transparent" },
-                    display: "flex",
-                    align_items: "center",
-                    gap: "6px",
-
-                    onmouseenter: move |_| hover_close.set(true),
-                    onmouseleave: move |_| hover_close.set(false),
-
-                    onclick: {
-                        let menu_id = menu_id;
-                        move |_| {
-                            context_menu.set(None);
-                            on_close_connection.call(menu_id);
-                        }
-                    },
-
-                    IconX { size: Some(14) }
-                    "Close"
-                }
-
-                div {
-                    padding: "8px 12px",
-                    cursor: "pointer",
-                    color: "{colors.error}",
-                    font_size: "13px",
-                    background: if hover_flush() { colors.error } else { "transparent" },
-                    display: "flex",
-                    align_items: "center",
-                    gap: "6px",
-
-                    onmouseenter: move |_| hover_flush.set(true),
-                    onmouseleave: move |_| hover_flush.set(false),
-
-                    onclick: {
-                        let menu_id = menu_id;
-                        move |_| {
-                            context_menu.set(None);
-                            on_flush_connection.call(menu_id);
-                        }
-                    },
-
-                    IconAlert { size: Some(14) }
-                    "FlushDB"
-                }
-
-                div {
-                    height: "1px",
-                    background: "{colors.border}",
-                    margin: "4px 0",
-                }
-
-                div {
-                    padding: "8px 12px",
-                    cursor: "pointer",
-                    color: "{colors.text}",
-                    font_size: "13px",
-                    background: if hover_edit() { colors.primary } else { "transparent" },
-                    display: "flex",
-                    align_items: "center",
-                    gap: "6px",
-
-                    onmouseenter: move |_| hover_edit.set(true),
-                    onmouseleave: move |_| hover_edit.set(false),
-
-                    onclick: {
-                        let menu_id = menu_id;
-                        move |_| {
-                            context_menu.set(None);
-                            on_edit_connection.call(menu_id);
-                        }
-                    },
-
-                    IconEdit { size: Some(14) }
-                    "Edit"
-                }
-
-                div {
-                    padding: "8px 12px",
-                    cursor: "pointer",
-                    color: "{colors.text}",
-                    font_size: "13px",
-                    background: if hover_delete() { colors.error } else { "transparent" },
-                    display: "flex",
-                    align_items: "center",
-                    gap: "6px",
-
-                    onmouseenter: move |_| hover_delete.set(true),
-                    onmouseleave: move |_| hover_delete.set(false),
-
-                    onclick: {
-                        let menu_id = menu_id;
-                        move |_| {
-                            context_menu.set(None);
-                            on_delete_connection.call(menu_id);
-                        }
-                    },
-
-                    IconTrash { size: Some(14) }
-                    "Delete"
-                }
-            }
-
-            div {
-                position: "fixed",
-                top: "0",
-                left: "0",
-                right: "0",
-                bottom: "0",
-                z_index: "999",
-
-                onclick: move |_| context_menu.set(None),
             }
         }
     }
