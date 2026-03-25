@@ -131,16 +131,18 @@ fn parse_php_string(rest: &str) -> Result<(PhpValue, &str), String> {
     }
     let rest = &rest[1..];
 
-    if rest.len() < len + 1 {
+    let byte_slice = rest.as_bytes();
+    if byte_slice.len() < len + 1 {
         return Err(format!(
             "字符串数据不完整: 需要 {} 字节, 剩余 {} 字节",
             len,
-            rest.len()
+            byte_slice.len()
         ));
     }
 
-    let value = &rest[..len];
-    let rest = &rest[len..];
+    let value =
+        std::str::from_utf8(&byte_slice[..len]).map_err(|_| "无效的 UTF-8 字符串".to_string())?;
+    let rest = std::str::from_utf8(&byte_slice[len..]).map_err(|_| "剩余数据无效".to_string())?;
 
     if !rest.starts_with("\";") {
         return Err("字符串缺少结束引号和分号".to_string());
@@ -488,5 +490,24 @@ mod tests {
         let json = php_to_json(result);
         assert_eq!(json["__class__"], serde_json::json!("stdClass"));
         assert_eq!(json["foo"], serde_json::json!("bar"));
+    }
+
+    #[test]
+    fn test_parse_nested_array() {
+        let data = b"a:2:{s:4:\"user\";a:3:{s:2:\"id\";i:1;s:4:\"name\";s:4:\"John\";s:5:\"email\";s:13:\"john@test.com\";}s:6:\"status\";s:6:\"active\";}";
+        let result = parse_php_serialization(data);
+        match &result {
+            Ok(val) => {
+                let json = php_to_json(val.clone());
+                println!(
+                    "Parsed JSON: {}",
+                    serde_json::to_string_pretty(&json).unwrap()
+                );
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+            }
+        }
+        assert!(result.is_ok());
     }
 }

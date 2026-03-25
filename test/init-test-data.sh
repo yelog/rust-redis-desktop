@@ -21,7 +21,7 @@ redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} SET "test:php:array" 'a:2:{s:3:"foo"
 
 redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} SET "test:php:object" 'O:8:"stdClass":2:{s:4:"name";s:4:"test";s:5:"value";i:123;}'
 
-redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} SET "test:php:nested" 'a:2:{s:4:"user";a:3:{s:2:"id";i:1;s:4:"name";s:4:"John";s:5:"email";s:14:"john@test.com";}s:6:"status";s:6:"active";}'
+redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} SET "test:php:nested" 'a:2:{s:4:"user";a:3:{s:2:"id";i:1;s:4:"name";s:4:"John";s:5:"email";s:13:"john@test.com";}s:6:"status";s:6:"active";}'
 
 # ============================================
 # MessagePack Test Data
