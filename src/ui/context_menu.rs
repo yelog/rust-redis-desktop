@@ -23,13 +23,16 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
             position: "fixed",
             left: "{x}px",
             top: "{y}px",
-            background: "#2d2d2d",
-            border: "1px solid #3c3c3c",
-            border_radius: "4px",
-            box_shadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
-            padding: "4px 0",
+            background: crate::theme::COLOR_BG,
+            border: "1px solid {crate::theme::COLOR_BORDER}",
+            border_radius: "8px",
+            box_shadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            padding: "6px",
             z_index: "1000",
-            min_width: "150px",
+            min_width: "160px",
+            display: "flex",
+            flex_direction: "column",
+            gap: "2px",
 
             {children}
         }
@@ -41,25 +44,45 @@ pub fn ContextMenuItem(
     icon: Option<Element>,
     label: String,
     danger: bool,
+    disabled: bool,
     onclick: EventHandler<()>,
 ) -> Element {
     let mut hover = use_signal(|| false);
 
     rsx! {
-        div {
+        button {
             padding: "8px 12px",
             display: "flex",
             align_items: "center",
             gap: "8px",
-            cursor: "pointer",
-            color: if danger { "#f87171" } else { "#cccccc" },
+            cursor: if disabled { "default" } else { "pointer" },
+            color: if disabled {
+                crate::theme::COLOR_TEXT_SUBTLE
+            } else if danger {
+                crate::theme::COLOR_ERROR
+            } else {
+                crate::theme::COLOR_TEXT
+            },
             font_size: "13px",
-            background: if hover() { "#094771" } else { "transparent" },
+            background: if hover() && !disabled {
+                if danger { "rgba(239, 68, 68, 0.1)" } else { crate::theme::COLOR_BG_TERTIARY }
+            } else {
+                "transparent"
+            },
+            border: "none",
+            border_radius: "6px",
+            width: "100%",
+            text_align: "left",
+            disabled: disabled,
 
             onmouseenter: move |_| hover.set(true),
             onmouseleave: move |_| hover.set(false),
 
-            onclick: move |_| onclick.call(()),
+            onclick: move |_| {
+                if !disabled {
+                    onclick.call(());
+                }
+            },
 
             if let Some(icon_el) = icon {
                 {icon_el}

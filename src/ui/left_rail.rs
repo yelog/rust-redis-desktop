@@ -5,6 +5,7 @@ use crate::theme::{
     COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
     COLOR_WARNING,
 };
+use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::icons::{
     IconAlert, IconDownload, IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconUpload,
     IconX,
@@ -43,6 +44,7 @@ pub fn LeftRail(
     on_import_connections: EventHandler<()>,
     on_open_settings: EventHandler<()>,
 ) -> Element {
+    let mut context_menu = use_signal(|| None::<(Uuid, i32, i32)>);
     let has_connections = !connections.is_empty();
     let selected_name = selected_connection.and_then(|id| {
         connections
@@ -368,6 +370,13 @@ pub fn LeftRail(
                                 flex_direction: "column",
                                 gap: "6px",
                                 onclick: move |_| on_select_connection.call(id),
+                                oncontextmenu: {
+                                    let id = id;
+                                    move |e| {
+                                        e.prevent_default();
+                                        context_menu.set(Some((id, e.client_coordinates().x as i32, e.client_coordinates().y as i32)));
+                                    }
+                                },
 
                                 div {
                                     display: "flex",
@@ -437,6 +446,96 @@ pub fn LeftRail(
 
                     IconSettings { size: Some(14) }
                     "设置"
+                }
+            }
+
+            if let Some((ctx_id, x, y)) = context_menu() {
+                {
+                    let state = connection_states
+                        .get(&ctx_id)
+                        .copied()
+                        .unwrap_or(ConnectionState::Disconnected);
+                    let is_connected = matches!(state, ConnectionState::Connected);
+                    let is_connecting = matches!(state, ConnectionState::Connecting);
+                    let is_disconnected = matches!(state, ConnectionState::Disconnected);
+
+                    rsx! {
+                        ContextMenu {
+                            x: x,
+                            y: y,
+                            on_close: move |_| context_menu.set(None),
+
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconEdit { size: Some(14) } }),
+                                label: "编辑".to_string(),
+                                danger: false,
+                                disabled: false,
+                                onclick: {
+                                    let ctx_id = ctx_id;
+                                    move |_| {
+                                        context_menu.set(None);
+                                        on_edit_connection.call(ctx_id);
+                                    }
+                                },
+                            }
+
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconRefresh { size: Some(14) } }),
+                                label: "重连".to_string(),
+                                danger: false,
+                                disabled: is_connecting,
+                                onclick: {
+                                    let ctx_id = ctx_id;
+                                    move |_| {
+                                        context_menu.set(None);
+                                        on_reconnect_connection.call(ctx_id);
+                                    }
+                                },
+                            }
+
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconX { size: Some(14) } }),
+                                label: "断开".to_string(),
+                                danger: false,
+                                disabled: !is_connected,
+                                onclick: {
+                                    let ctx_id = ctx_id;
+                                    move |_| {
+                                        context_menu.set(None);
+                                        on_close_connection.call(ctx_id);
+                                    }
+                                },
+                            }
+
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconTrash { size: Some(14) } }),
+                                label: "删除".to_string(),
+                                danger: true,
+                                disabled: is_connecting || is_connected,
+                                onclick: {
+                                    let ctx_id = ctx_id;
+                                    move |_| {
+                                        context_menu.set(None);
+                                        on_delete_connection.call(ctx_id);
+                                    }
+                                },
+                            }
+
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconAlert { size: Some(14) } }),
+                                label: "清空数据".to_string(),
+                                danger: true,
+                                disabled: !is_connected,
+                                onclick: {
+                                    let ctx_id = ctx_id;
+                                    move |_| {
+                                        context_menu.set(None);
+                                        on_flush_connection.call(ctx_id);
+                                    }
+                                },
+                            }
+                        }
+                    }
                 }
             }
         }
