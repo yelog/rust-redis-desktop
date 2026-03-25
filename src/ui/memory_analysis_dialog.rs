@@ -148,6 +148,7 @@ pub fn MemoryAnalysisDialog(
             colors,
             width: "760px".to_string(),
             max_height: "85vh".to_string(),
+            title: "内存分析".to_string(),
 
             div {
                 display: "flex",
@@ -155,55 +156,11 @@ pub fn MemoryAnalysisDialog(
                 gap: "16px",
 
                 div {
-                    display: "flex",
-                    flex_direction: "column",
-                    gap: "10px",
-                    padding_right: "44px",
+                    color: "{colors.text_secondary}",
+                    font_size: "13px",
+                    line_height: "1.5",
 
-                    div {
-                        display: "flex",
-                        align_items: "center",
-                        gap: "12px",
-
-                        div {
-                            width: "38px",
-                            height: "38px",
-                            flex_shrink: "0",
-                            display: "flex",
-                            align_items: "center",
-                            justify_content: "center",
-                            background: "{colors.background_secondary}",
-                            border: "1px solid {colors.border}",
-                            border_radius: "10px",
-
-                            IconSearch { size: Some(18), color: Some(colors.accent.to_string()) }
-                        }
-
-                        div {
-                            display: "flex",
-                            flex_direction: "column",
-                            gap: "4px",
-
-                            h3 {
-                                margin: "0",
-                                color: "{colors.text}",
-                                font_size: "22px",
-                                font_weight: "700",
-                                line_height: "1.2",
-
-                                "Memory Analysis"
-                            }
-
-                            p {
-                                margin: "0",
-                                color: "{colors.text_secondary}",
-                                font_size: "13px",
-                                line_height: "1.5",
-
-                                "Scan keys by pattern, filter out small values, and jump directly to the selected result."
-                            }
-                        }
-                    }
+                    "Scan keys by pattern, filter out small values, and jump directly to the selected result."
                 }
 
                 div {

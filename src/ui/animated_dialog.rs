@@ -20,11 +20,14 @@ pub fn AnimatedDialog(
     colors: ThemeColors,
     width: Option<String>,
     max_height: Option<String>,
+    title: Option<String>,
     show_close_button: Option<bool>,
     children: Element,
 ) -> Element {
     let width_val = width.unwrap_or_else(|| "450px".to_string());
     let max_height_val = max_height.unwrap_or_else(|| "90vh".to_string());
+    let title_text = title.unwrap_or_default();
+    let has_title = !title_text.is_empty();
     let show_close = show_close_button.unwrap_or(true);
 
     let mut visibility = use_signal(VisibilityState::default);
@@ -128,14 +131,14 @@ pub fn AnimatedDialog(
             div {
                 width: "{width_val}",
                 max_height: "{max_height_val}",
-                padding: "24px",
                 background: "{colors.background}",
                 border_radius: "8px",
                 box_shadow: "0 4px 24px rgba(0, 0, 0, 0.5)",
-                overflow_y: "auto",
-                overflow_x: "hidden",
+                overflow: "hidden",
                 animation: "{animation_name} 0.2s ease-out forwards",
                 position: "relative",
+                display: "flex",
+                flex_direction: "column",
                 onclick: move |evt| evt.stop_propagation(),
 
                 style {
@@ -163,7 +166,67 @@ pub fn AnimatedDialog(
                     "#
                 }
 
-                if show_close {
+                if has_title {
+                    div {
+                        padding: "18px 24px 16px 24px",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "space_between",
+                        gap: "16px",
+                        border_bottom: "1px solid {colors.border}",
+
+                        h2 {
+                            flex: "1",
+                            min_width: "0",
+                            margin: "0",
+                            color: "{colors.text}",
+                            font_size: "22px",
+                            font_weight: "700",
+                            line_height: "1.2",
+                            white_space: "nowrap",
+                            text_overflow: "ellipsis",
+                            overflow: "hidden",
+
+                            "{title_text}"
+                        }
+
+                        if show_close {
+                            button {
+                                width: "30px",
+                                height: "30px",
+                                display: "flex",
+                                align_items: "center",
+                                justify_content: "center",
+                                flex_shrink: "0",
+                                padding: "0",
+                                background: "{colors.background_secondary}",
+                                border: "1px solid {colors.border}",
+                                border_radius: "8px",
+                                box_shadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
+                                cursor: "pointer",
+                                onclick: {
+                                    let mut visibility = visibility.clone();
+                                    let on_close = on_close.clone();
+                                    move |_| {
+                                        let current = *visibility.read();
+                                        if current == VisibilityState::Visible {
+                                            visibility.set(VisibilityState::Exiting);
+                                            let mut vis = visibility.clone();
+                                            let on_close = on_close.clone();
+                                            spawn(async move {
+                                                tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                                vis.set(VisibilityState::Hidden);
+                                                on_close.call(());
+                                            });
+                                        }
+                                    }
+                                },
+
+                                IconX { size: Some(16), color: Some(colors.text_secondary.to_string()) }
+                            }
+                        }
+                    }
+                } else if show_close {
                     button {
                         position: "absolute",
                         top: "14px",
@@ -202,7 +265,15 @@ pub fn AnimatedDialog(
                     }
                 }
 
-                {children}
+                div {
+                    padding: if has_title { "20px 24px 24px 24px" } else { "24px" },
+                    overflow_y: "auto",
+                    overflow_x: "hidden",
+                    flex: "1",
+                    min_height: "0",
+
+                    {children}
+                }
             }
         }
     }
@@ -213,8 +284,10 @@ pub fn DialogHeader(title: String, colors: ThemeColors, icon: Option<String>) ->
     rsx! {
         h2 {
             color: "{colors.text}",
-            margin_bottom: "20px",
-            font_size: "20px",
+            margin: "0",
+            font_size: "22px",
+            font_weight: "700",
+            line_height: "1.2",
             display: "flex",
             align_items: "center",
             gap: "8px",

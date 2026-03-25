@@ -73,99 +73,90 @@ pub fn AddKeyDialog(
             colors,
             width: "500px".to_string(),
             max_height: "80vh".to_string(),
+            title: "新增 Key".to_string(),
 
             div {
-                h3 {
-                    color: "{colors.accent}",
-                    margin_bottom: "16px",
-                    display: "flex",
-                    align_items: "center",
-                    gap: "8px",
-                    font_size: "18px",
+                if let Some(err) = error_msg() {
+                    div {
+                        color: "{colors.error}",
+                        background: "{colors.error_bg}",
+                        padding: "8px 12px",
+                        border_radius: "4px",
+                        margin_bottom: "16px",
+                        font_size: "13px",
 
-                    "➕ 新增 Key"
-                }
-
-            if let Some(err) = error_msg() {
-                div {
-                    color: "{colors.error}",
-                    background: "{colors.error_bg}",
-                    padding: "8px 12px",
-                    border_radius: "4px",
-                    margin_bottom: "16px",
-                    font_size: "13px",
-
-                    "{err}"
-                }
-            }
-
-            div {
-                margin_bottom: "16px",
-
-                label {
-                    display: "block",
-                    color: "{colors.text_secondary}",
-                    font_size: "12px",
-                    margin_bottom: "4px",
-
-                    "Key 名称"
-                }
-
-                input {
-                    width: "100%",
-                    padding: "8px 12px",
-                    background: "{colors.background_tertiary}",
-                    border: "1px solid {colors.border}",
-                    border_radius: "4px",
-                    color: "{colors.text}",
-                    font_size: "13px",
-                    box_sizing: "border-box",
-                    value: "{key_name}",
-                    oninput: move |e| key_name.set(e.value()),
-                }
-            }
-
-            div {
-                margin_bottom: "16px",
-
-                label {
-                    display: "block",
-                    color: "{colors.text_secondary}",
-                    font_size: "12px",
-                    margin_bottom: "8px",
-
-                    "类型"
+                        "{err}"
+                    }
                 }
 
                 div {
-                    display: "flex",
-                    flex_wrap: "wrap",
-                    gap: "8px",
+                    margin_bottom: "16px",
 
-                    for type_name in ["String", "Hash", "List", "Set", "ZSet", "Stream"] {
-                        {
-                            let kt = KeyType::from(type_name.to_string());
-                            let is_selected = key_type() == kt;
-                            let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
-                            let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
-                            let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
-                            rsx! {
-                                div {
-                                    key: "{type_name}",
-                                    padding: "6px 14px",
-                                    background: "{bg}",
-                                    border: "1px solid {border_color}",
-                                    border_radius: "16px",
-                                    color: "{text_color}",
-                                    font_size: "13px",
-                                    cursor: "pointer",
-                                    user_select: "none",
-                                    onclick: {
-                                        let kt = kt.clone();
-                                        move |_| key_type.set(kt.clone())
-                                    },
+                    label {
+                        display: "block",
+                        color: "{colors.text_secondary}",
+                        font_size: "12px",
+                        margin_bottom: "4px",
 
-                                    "{type_name}"
+                        "Key 名称"
+                    }
+
+                    input {
+                        width: "100%",
+                        padding: "8px 12px",
+                        background: "{colors.background_tertiary}",
+                        border: "1px solid {colors.border}",
+                        border_radius: "4px",
+                        color: "{colors.text}",
+                        font_size: "13px",
+                        box_sizing: "border-box",
+                        value: "{key_name}",
+                        oninput: move |e| key_name.set(e.value()),
+                    }
+                }
+
+                div {
+                    margin_bottom: "16px",
+
+                    label {
+                        display: "block",
+                        color: "{colors.text_secondary}",
+                        font_size: "12px",
+                        margin_bottom: "8px",
+
+                        "类型"
+                    }
+
+                    div {
+                        display: "flex",
+                        flex_wrap: "wrap",
+                        gap: "8px",
+
+                        for type_name in ["String", "Hash", "List", "Set", "ZSet", "Stream"] {
+                            {
+                                let kt = KeyType::from(type_name.to_string());
+                                let is_selected = key_type() == kt;
+                                let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
+                                let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
+                                let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                                rsx! {
+                                    div {
+                                        key: "{type_name}",
+                                        padding: "6px 14px",
+                                        background: "{bg}",
+                                        border: "1px solid {border_color}",
+                                        border_radius: "16px",
+                                        color: "{text_color}",
+                                        font_size: "13px",
+                                        cursor: "pointer",
+                                        user_select: "none",
+                                        onclick: {
+                                            let kt = kt.clone();
+                                            move |_| key_type.set(kt.clone())
+                                        },
+
+                                        "{type_name}"
+                                    }
                                 }
                             }
                         }
@@ -752,7 +743,6 @@ pub fn AddKeyDialog(
                         "✓ 保存"
                     }
                 }
-            }
             }
         }
     }

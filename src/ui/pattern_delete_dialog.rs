@@ -103,17 +103,7 @@ pub fn PatternDeleteDialog(
             colors,
             width: "550px".to_string(),
             max_height: "85vh".to_string(),
-
-            h3 {
-                color: "{colors.error}",
-                margin_bottom: "16px",
-                display: "flex",
-                align_items: "center",
-                gap: "8px",
-                font_size: "18px",
-
-                "⚠️ 按模式批量删除"
-            }
+            title: "按模式批量删除".to_string(),
 
             div {
                 margin_bottom: "16px",

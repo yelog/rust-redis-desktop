@@ -40,16 +40,9 @@ pub fn SettingsDialog(
             on_close: on_close.clone(),
             colors,
             width: "520px".to_string(),
+            title: "设置".to_string(),
 
             div {
-                h2 {
-                    color: "{colors.text}",
-                    margin_bottom: "24px",
-                    font_size: "20px",
-
-                    "设置"
-                }
-
                 div {
                     margin_bottom: "20px",
 

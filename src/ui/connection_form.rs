@@ -239,16 +239,9 @@ pub fn ConnectionForm(
             on_close: on_cancel.clone(),
             colors,
             width: "450px".to_string(),
+            title: title.to_string(),
 
             div {
-                h2 {
-                    color: "{colors.text}",
-                    margin_bottom: "20px",
-                    font_size: "20px",
-
-                    "{title}"
-                }
-
                 div {
                     margin_bottom: "16px",
 

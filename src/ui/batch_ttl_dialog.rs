@@ -1,7 +1,6 @@
 use crate::connection::ConnectionPool;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
-use crate::ui::icons::*;
 use dioxus::prelude::*;
 
 #[component]
@@ -30,22 +29,11 @@ pub fn BatchTtlDialog(
             on_close: on_cancel.clone(),
             colors,
             width: "500px".to_string(),
-
-            h3 {
-                color: "{colors.accent}",
-                margin_bottom: "16px",
-                display: "flex",
-                align_items: "center",
-                gap: "8px",
-                font_size: "18px",
-
-                IconRefresh { size: Some(16) }
-                if is_single {
-                    " 设置 TTL"
-                } else {
-                    " 批量设置 TTL"
-                }
-            }
+            title: if is_single {
+                "设置 TTL".to_string()
+            } else {
+                "批量设置 TTL".to_string()
+            },
 
             div {
                 color: "{colors.text_secondary}",
