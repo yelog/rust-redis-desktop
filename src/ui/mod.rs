@@ -10,6 +10,7 @@ mod connection_io_dialog;
 mod context_menu;
 pub mod delete_confirm_dialog;
 pub mod delete_connection_confirm_dialog;
+pub mod draggable_list;
 pub mod editable_field;
 mod export_dialog;
 mod flush_confirm_dialog;

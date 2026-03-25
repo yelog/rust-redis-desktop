@@ -1,9 +1,8 @@
 use crate::connection::ConnectionState;
 use crate::theme::{
-    ThemeColors, COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BORDER,
-    COLOR_ERROR, COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_SURFACE_HIGH,
-    COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
-    COLOR_WARNING,
+    ThemeColors, COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BORDER, COLOR_ERROR, COLOR_PRIMARY,
+    COLOR_SURFACE_HIGH, COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
+    COLOR_TEXT_SUBTLE,
 };
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::icons::{
@@ -43,8 +42,12 @@ pub fn LeftRail(
     on_export_connections: EventHandler<()>,
     on_import_connections: EventHandler<()>,
     on_open_settings: EventHandler<()>,
+    on_reorder_connection: EventHandler<(usize, usize)>,
 ) -> Element {
     let mut context_menu = use_signal(|| None::<(Uuid, i32, i32)>);
+    let mut dragging_index = use_signal(|| None::<usize>);
+    let mut drag_over_index = use_signal(|| None::<usize>);
+    let mut drag_start_y = use_signal(|| 0.0);
     let has_connections = !connections.is_empty();
     let selected_name = selected_connection.and_then(|id| {
         connections
@@ -339,26 +342,40 @@ pub fn LeftRail(
                 flex_direction: "column",
                 gap: "6px",
 
-                for (id, name) in connections {
+                for (index, (id, name)) in connections.iter().enumerate() {
                     {
+                        let id = *id;
+                        let name = name.clone();
                         let state = connection_states
                             .get(&id)
                             .copied()
                             .unwrap_or(ConnectionState::Disconnected);
                         let is_selected = selected_connection == Some(id);
+                        let is_dragging = dragging_index() == Some(index);
+                        let is_drag_over = drag_over_index() == Some(index);
                         let dot_color = match state {
                             ConnectionState::Connected => colors.state_connected,
                             ConnectionState::Connecting => colors.state_connecting,
                             ConnectionState::Disconnected => colors.state_disconnected,
                             ConnectionState::Error => colors.state_error,
                         };
+                        let mut context_menu_clone = context_menu.clone();
 
                         rsx! {
-                            button {
+                            div {
+                                key: "{id}",
                                 padding: "12px",
-                                background: if is_selected { COLOR_BG } else { COLOR_SURFACE_LOW },
+                                background: if is_dragging {
+                                    COLOR_SURFACE_HIGH
+                                } else if is_selected {
+                                    COLOR_BG
+                                } else {
+                                    COLOR_SURFACE_LOW
+                                },
                                 color: if is_selected { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
-                                border: if is_selected {
+                                border: if is_drag_over {
+                                    format!("2px solid {}", COLOR_ACCENT)
+                                } else if is_selected {
                                     format!("1px solid {}", COLOR_BORDER)
                                 } else {
                                     "1px solid transparent".to_string()
@@ -369,16 +386,14 @@ pub fn LeftRail(
                                 display: "flex",
                                 flex_direction: "column",
                                 gap: "6px",
+                                opacity: if is_dragging { "0.5" } else { "1" },
                                 onclick: move |_| on_select_connection.call(id),
-                                oncontextmenu: {
-                                    let id = id;
-                                    move |e| {
-                                        e.prevent_default();
-                                        crate::ui::context_menu::close_all_context_menus();
-                                        let x = e.client_coordinates().x as i32;
-                                        let y = e.client_coordinates().y as i32;
-                                        context_menu.set(Some((id, x, y)));
-                                    }
+                                oncontextmenu: move |e| {
+                                    e.prevent_default();
+                                    crate::ui::context_menu::close_all_context_menus();
+                                    let x = e.client_coordinates().x as i32;
+                                    let y = e.client_coordinates().y as i32;
+                                    context_menu_clone.set(Some((id, x, y)));
                                 },
 
                                 div {
@@ -398,19 +413,128 @@ pub fn LeftRail(
                                         font_size: "13px",
                                         font_weight: if is_selected { "700" } else { "500" },
                                         color: if is_selected { colors.accent } else { colors.text },
+                                        flex: "1",
 
                                         "{name}"
                                     }
+
+                                    div {
+                                        padding: "4px",
+                                        cursor: "grab",
+                                        opacity: "0.4",
+                                        display: "flex",
+                                        align_items: "center",
+                                        onmousedown: move |e| {
+                                            e.prevent_default();
+                                            e.stop_propagation();
+                                            dragging_index.set(Some(index));
+                                            drag_over_index.set(Some(index));
+                                            drag_start_y.set(e.client_coordinates().y);
+                                        },
+
+                                        svg {
+                                            width: "12",
+                                            height: "12",
+                                            view_box: "0 0 24 24",
+                                            fill: "currentColor",
+
+                                            circle {
+                                                cx: "8",
+                                                cy: "6",
+                                                r: "1.5",
+                                            }
+                                            circle {
+                                                cx: "16",
+                                                cy: "6",
+                                                r: "1.5",
+                                            }
+                                            circle {
+                                                cx: "8",
+                                                cy: "12",
+                                                r: "1.5",
+                                            }
+                                            circle {
+                                                cx: "16",
+                                                cy: "12",
+                                                r: "1.5",
+                                            }
+                                            circle {
+                                                cx: "8",
+                                                cy: "18",
+                                                r: "1.5",
+                                            }
+                                            circle {
+                                                cx: "16",
+                                                cy: "18",
+                                                r: "1.5",
+                                            }
+                                        }
+                                    }
                                 }
 
-                                span {
-                                    color: COLOR_TEXT_SUBTLE,
-                                    font_size: "11px",
+                                div {
+                                    display: "flex",
+                                    align_items: "center",
+                                    justify_content: "space_between",
 
-                                    "{state_label(state)}"
+                                    span {
+                                        color: COLOR_TEXT_SUBTLE,
+                                        font_size: "11px",
+
+                                        "{state_label(state)}"
+                                    }
                                 }
                             }
                         }
+                    }
+                }
+
+                if dragging_index().is_some() {
+                    div {
+                        position: "fixed",
+                        top: "0",
+                        left: "0",
+                        right: "0",
+                        bottom: "0",
+                        z_index: "9999",
+                        cursor: "grabbing",
+
+                        onmousemove: move |e| {
+                            let current_y = e.client_coordinates().y;
+                            let delta_y = current_y - drag_start_y();
+                            let item_height = 58.0_f64;
+                            let move_count = (delta_y.abs() / item_height).floor() as i32;
+
+                            if let Some(drag_idx) = dragging_index() {
+                                if move_count > 0 {
+                                    let direction: i32 = if delta_y > 0.0 { 1 } else { -1 };
+                                    let new_over_index = (drag_idx as i32 + direction * move_count) as usize;
+                                    let clamped = new_over_index.min(connections.len().saturating_sub(1));
+                                    if drag_over_index() != Some(clamped) {
+                                        drag_over_index.set(Some(clamped));
+                                    }
+                                } else {
+                                    if drag_over_index() != Some(drag_idx) {
+                                        drag_over_index.set(Some(drag_idx));
+                                    }
+                                }
+                            }
+                        },
+
+                        onmouseup: move |_| {
+                            if let (Some(from), Some(to)) = (dragging_index(), drag_over_index()) {
+                                if from != to {
+                                    on_reorder_connection.call((from, to));
+                                }
+                            }
+                            dragging_index.set(None);
+                            drag_over_index.set(None);
+                        },
+
+                        onmouseleave: move |_| {
+                            dragging_index.set(None);
+                            drag_over_index.set(None);
+                        },
                     }
                 }
 

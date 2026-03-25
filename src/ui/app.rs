@@ -996,6 +996,20 @@ await new Promise(() => {});
                                 on_export_connections: move |_| show_export_connections_dialog.set(true),
                                 on_import_connections: move |_| show_import_connections_dialog.set(true),
                                 on_open_settings: move |_| show_settings.set(true),
+                                on_reorder_connection: move |(from, to): (usize, usize)| {
+                                    let mut conns = connections.write();
+                                    if from < conns.len() && to < conns.len() {
+                                        let conn = conns.remove(from);
+                                        conns.insert(to, conn);
+                                        drop(conns);
+                                        
+                                        spawn(async move {
+                                            if let Some(storage) = config_storage.read().as_ref() {
+                                                let _ = storage.reorder_connections(from, to);
+                                            }
+                                        });
+                                    }
+                                },
                             }
 
                             ResizableDivider {

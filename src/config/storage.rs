@@ -166,6 +166,41 @@ impl ConfigStorage {
         self.save_config_file(&file)
     }
 
+    pub fn reorder_connections(&self, from_index: usize, to_index: usize) -> io::Result<()> {
+        let mut file = self.load_or_create_config_file()?;
+
+        if from_index >= file.connections.len() || to_index >= file.connections.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Index out of bounds",
+            ));
+        }
+
+        let conn = file.connections.remove(from_index);
+        file.connections.insert(to_index, conn);
+
+        for (i, conn) in file.connections.iter_mut().enumerate() {
+            conn.order = i as u32;
+        }
+
+        self.save_config_file(&file)
+    }
+
+    pub fn save_connections_with_order(
+        &self,
+        connections: Vec<ConnectionConfig>,
+    ) -> io::Result<()> {
+        let mut file = self.load_or_create_config_file()?;
+
+        let mut connections = connections;
+        for (i, conn) in connections.iter_mut().enumerate() {
+            conn.order = i as u32;
+        }
+
+        file.connections = connections;
+        self.save_config_file(&file)
+    }
+
     fn load_or_create_config_file(&self) -> io::Result<ConfigFile> {
         if self.config_path.exists() {
             let content = fs::read_to_string(&self.config_path)?;

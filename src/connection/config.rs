@@ -146,6 +146,8 @@ pub struct ConnectionConfig {
     pub heartbeat_interval_secs: u64,
     #[serde(default)]
     pub readonly: bool,
+    #[serde(default)]
+    pub order: u32,
 }
 
 fn default_heartbeat_interval() -> u64 {
@@ -173,6 +175,7 @@ impl Default for ConnectionConfig {
             auto_reconnect: true,
             heartbeat_interval_secs: 30,
             readonly: false,
+            order: 0,
         }
     }
 }
