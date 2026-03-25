@@ -48,6 +48,7 @@ regex = "1"
 urlencoding = "2.1"
 flate2 = "1.0"
 brotli = "7.0"
+rfd = "0.17"
 
 [dev-dependencies]
 tokio-test = "0.4"

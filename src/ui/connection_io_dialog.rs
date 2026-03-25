@@ -4,6 +4,7 @@ use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
 use crate::ui::clipboard::copy_text_to_clipboard;
 use crate::ui::icons::{IconDownload, IconUpload};
+use crate::ui::ToastManager;
 use dioxus::prelude::*;
 use std::sync::Arc;
 
@@ -158,7 +159,47 @@ pub fn ConnectionExportDialog(
 }
 
 #[component]
-fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<()>) -> Element {
+fn ExportSuccessView(
+    json: String,
+    colors: ThemeColors,
+    on_close: EventHandler<()>,
+) -> Element {
+    let mut toast_manager = use_context::<Signal<ToastManager>>();
+
+    let copy_to_clipboard = {
+        let json = json.clone();
+        move |_| {
+            if copy_text_to_clipboard(&json).is_ok() {
+                toast_manager.write().success("Copied to clipboard");
+            }
+        }
+    };
+
+    let export_to_file = {
+        let json = json.clone();
+        move |_| {
+            let json = json.clone();
+            spawn(async move {
+                let file_path = rfd::AsyncFileDialog::new()
+                    .add_filter("JSON", &["json"])
+                    .set_file_name("connections.json")
+                    .save_file()
+                    .await;
+
+                if let Some(path) = file_path {
+                    match std::fs::write(path.path(), &json) {
+                        Ok(_) => {
+                            toast_manager.write().success("Exported to file");
+                        }
+                        Err(e) => {
+                            toast_manager.write().error(&format!("Failed to save: {}", e));
+                        }
+                    }
+                }
+            });
+        }
+    };
+
     rsx! {
         div {
             color: "{colors.text_secondary}",
@@ -203,12 +244,7 @@ fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<(
                 cursor: "pointer",
                 font_size: "13px",
 
-                onclick: {
-                    let json = json.clone();
-                    move |_| {
-                        let _ = copy_text_to_clipboard(&json);
-                    }
-                },
+                onclick: copy_to_clipboard,
 
                 "Copy to Clipboard"
             }
@@ -222,9 +258,9 @@ fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<(
                 border_radius: "4px",
                 cursor: "pointer",
                 font_size: "13px",
-                onclick: move |_| on_close.call(()),
+                onclick: export_to_file,
 
-                "Close"
+                "Export as File"
             }
         }
     }

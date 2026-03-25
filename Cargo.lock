@@ -5698,6 +5698,9 @@ dependencies = [
  "raw-window-handle 0.6.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
  "web-sys",
  "windows-sys 0.61.2",
 ]
@@ -5778,6 +5781,7 @@ dependencies = [
  "rand 0.9.2",
  "redis",
  "regex",
+ "rfd",
  "rmp-serde",
  "rmpv",
  "serde",
