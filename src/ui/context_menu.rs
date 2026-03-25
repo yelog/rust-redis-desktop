@@ -73,8 +73,8 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
             visibility.set(VisibilityState::Visible);
             mounted.set(true);
             set_context_menu_open(true);
-            my_close_version.set(get_close_version());
         }
+        my_close_version.set(get_close_version());
     }
 
     use_effect(move || {
@@ -83,14 +83,12 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
         if current_version != my_version && *visibility.read() == VisibilityState::Visible {
             visibility.set(VisibilityState::Hidden);
             set_context_menu_open(false);
-            on_close.call(());
         }
     });
 
     use_future(move || {
         let mut visibility = visibility.clone();
         let mut my_close_version = my_close_version.clone();
-        let on_close = on_close.clone();
         async move {
             loop {
                 tokio::time::sleep(Duration::from_millis(50)).await;
@@ -99,7 +97,6 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
                 if current_version != my_version && *visibility.read() == VisibilityState::Visible {
                     visibility.set(VisibilityState::Hidden);
                     set_context_menu_open(false);
-                    on_close.call(());
                 }
             }
         }
