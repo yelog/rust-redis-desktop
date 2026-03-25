@@ -7,6 +7,7 @@ use crate::theme::{
 };
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
+use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::export_dialog::{ExportDialog, ExportTarget};
 use crate::ui::icons::*;
@@ -759,93 +760,95 @@ button {
             }
 
             if let Some((node_path, is_leaf, (x, y))) = context_menu() {
-                div {
-                    position: "fixed",
-                    left: "{x}px",
-                    top: "{y}px",
-                    background: COLOR_BG_SECONDARY,
-                    border: "1px solid {COLOR_BORDER}",
-                    border_radius: "6px",
-                    box_shadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
-                    z_index: "1000",
-                    min_width: "120px",
-                    padding: "4px 0",
+                {
+                    let node_path = node_path.clone();
+                    rsx! {
+                        ContextMenu {
+                            x: x,
+                            y: y,
+                            on_close: move |_| context_menu.set(None),
 
-                    div {
-                        padding: "8px 12px",
-                        cursor: "pointer",
-                        color: COLOR_TEXT,
-                        font_size: "12px",
-                        onmouseenter: |_| {},
-                        onmouseleave: |_| {},
-
-                        onclick: {
-                            let node_path = node_path.clone();
-                            move |_| {
-                                context_menu.set(None);
-                                if copy_text_to_clipboard(&node_path).is_ok() {
-                                    toast_manager.write().success("路径已复制");
-                                }
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconCopy { size: Some(14) } }),
+                                label: "复制路径".to_string(),
+                                danger: false,
+                                disabled: false,
+                                onclick: {
+                                    let node_path = node_path.clone();
+                                    move |_| {
+                                        context_menu.set(None);
+                                        if copy_text_to_clipboard(&node_path).is_ok() {
+                                            toast_manager.write().success("路径已复制");
+                                        }
+                                    }
+                                },
                             }
-                        },
 
-                        "复制路径"
-                    }
-
-                    div {
-                        padding: "8px 12px",
-                        cursor: "pointer",
-                        color: COLOR_TEXT,
-                        font_size: "12px",
-                        onmouseenter: |_| {},
-                        onmouseleave: |_| {},
-
-                        onclick: {
-                            let node_path = node_path.clone();
-                            let is_leaf = is_leaf;
-                            move |_| {
-                                context_menu.set(None);
-                                show_export_dialog.set(Some(vec![ExportTarget {
-                                    key: node_path.clone(),
-                                    is_folder: !is_leaf,
-                                }]));
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconDownload { size: Some(14) } }),
+                                label: "导出".to_string(),
+                                danger: false,
+                                disabled: false,
+                                onclick: {
+                                    let node_path = node_path.clone();
+                                    let is_leaf = is_leaf;
+                                    move |_| {
+                                        context_menu.set(None);
+                                        show_export_dialog.set(Some(vec![ExportTarget {
+                                            key: node_path.clone(),
+                                            is_folder: !is_leaf,
+                                        }]));
+                                    }
+                                },
                             }
-                        },
 
-                        "导出"
-                    }
-
-                    div {
-                        padding: "8px 12px",
-                        cursor: "pointer",
-                        color: COLOR_ERROR,
-                        font_size: "12px",
-
-                        onclick: {
-                            let node_path = node_path.clone();
-                            let is_leaf = is_leaf;
-                            move |_| {
-                                context_menu.set(None);
-                                show_delete_dialog.set(Some(vec![DeleteTarget {
-                                    key: node_path.clone(),
-                                    is_folder: !is_leaf,
-                                }]));
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconClock { size: Some(14) } }),
+                                label: "设置TTL".to_string(),
+                                danger: false,
+                                disabled: !is_leaf,
+                                onclick: {
+                                    let node_path = node_path.clone();
+                                    move |_| {
+                                        context_menu.set(None);
+                                        show_batch_ttl_dialog.set(Some(vec![node_path.clone()]));
+                                    }
+                                },
                             }
-                        },
 
-                        "删除"
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconRefresh { size: Some(14) } }),
+                                label: "重命名".to_string(),
+                                danger: false,
+                                disabled: !is_leaf,
+                                onclick: {
+                                    let _node_path = node_path.clone();
+                                    move |_| {
+                                        context_menu.set(None);
+                                        toast_manager.write().success("重命名功能开发中");
+                                    }
+                                },
+                            }
+
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconTrash { size: Some(14) } }),
+                                label: "删除".to_string(),
+                                danger: true,
+                                disabled: false,
+                                onclick: {
+                                    let node_path = node_path.clone();
+                                    let is_leaf = is_leaf;
+                                    move |_| {
+                                        context_menu.set(None);
+                                        show_delete_dialog.set(Some(vec![DeleteTarget {
+                                            key: node_path.clone(),
+                                            is_folder: !is_leaf,
+                                        }]));
+                                    }
+                                },
+                            }
+                        }
                     }
-                }
-
-                div {
-                    position: "fixed",
-                    top: "0",
-                    left: "0",
-                    right: "0",
-                    bottom: "0",
-                    z_index: "999",
-
-                    onclick: move |_| context_menu.set(None),
                 }
             }
 
