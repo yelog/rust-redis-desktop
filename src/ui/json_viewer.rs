@@ -201,46 +201,75 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
             div {
                 display: "flex",
-                gap: "8px",
+                justify_content: "space_between",
                 align_items: "center",
+                gap: "12px",
                 margin_bottom: "12px",
                 flex_wrap: "wrap",
 
-                span {
-                    color: COLOR_ACCENT,
-                    font_size: "12px",
+                div {
+                    display: "flex",
+                    gap: "8px",
+                    align_items: "center",
+                    flex_wrap: "wrap",
 
-                    "JSON"
+                    span {
+                        color: COLOR_ACCENT,
+                        font_size: "12px",
+
+                        "JSON"
+                    }
+
+                    button {
+                        padding: "4px 8px",
+                        background: if view_mode() == ViewMode::Pretty { "var(--theme-primary)" } else { COLOR_BG_TERTIARY },
+                        color: if view_mode() == ViewMode::Pretty { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "12px",
+                        onclick: move |_| view_mode.set(ViewMode::Pretty),
+
+                        "格式化"
+                    }
+
+                    button {
+                        padding: "4px 8px",
+                        background: if view_mode() == ViewMode::Raw { "var(--theme-primary)" } else { COLOR_BG_TERTIARY },
+                        color: if view_mode() == ViewMode::Raw { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                        border: "none",
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "12px",
+                        onclick: move |_| view_mode.set(ViewMode::Raw),
+
+                        "压缩"
+                    }
+
+                    if editable && !is_editing() {
+                        button {
+                            padding: "4px 8px",
+                            background: COLOR_PRIMARY,
+                            color: COLOR_TEXT_CONTRAST,
+                            border: "none",
+                            border_radius: "4px",
+                            cursor: "pointer",
+                            font_size: "12px",
+                            onclick: move |_| {
+                                temp_value.set(formatted.clone());
+                                is_editing.set(true);
+                                parse_error.set(None);
+                            },
+
+                            "编辑"
+                        }
+                    }
                 }
 
                 button {
-                    padding: "4px 8px",
-                    background: if view_mode() == ViewMode::Pretty { "var(--theme-primary)" } else { COLOR_BG_TERTIARY },
-                    color: if view_mode() == ViewMode::Pretty { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                    border: "none",
-                    border_radius: "4px",
-                    cursor: "pointer",
-                    font_size: "12px",
-                    onclick: move |_| view_mode.set(ViewMode::Pretty),
-
-                    "格式化"
-                }
-
-                button {
-                    padding: "4px 8px",
-                    background: if view_mode() == ViewMode::Raw { "var(--theme-primary)" } else { COLOR_BG_TERTIARY },
-                    color: if view_mode() == ViewMode::Raw { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                    border: "none",
-                    border_radius: "4px",
-                    cursor: "pointer",
-                    font_size: "12px",
-                    onclick: move |_| view_mode.set(ViewMode::Raw),
-
-                    "压缩"
-                }
-
-                button {
-                    padding: "4px 10px",
+                    margin_left: "auto",
+                    flex_shrink: "0",
+                    padding: "6px 10px",
                     background: "rgba(47, 133, 90, 0.16)",
                     color: COLOR_SUCCESS,
                     border: "1px solid rgba(104, 211, 145, 0.28)",
@@ -254,25 +283,6 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
                     IconCopy { size: Some(14) }
                     "复制"
-                }
-
-                if editable && !is_editing() {
-                    button {
-                        padding: "4px 8px",
-                        background: COLOR_PRIMARY,
-                        color: COLOR_TEXT_CONTRAST,
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "12px",
-                        onclick: move |_| {
-                            temp_value.set(formatted.clone());
-                            is_editing.set(true);
-                            parse_error.set(None);
-                        },
-
-                        "编辑"
-                    }
                 }
             }
 
