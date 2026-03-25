@@ -77,29 +77,19 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
         }
     }
 
-    use_effect(move || {
-        let current_version = get_close_version();
-        let my_version = *my_close_version.read();
-        if current_version != my_version && *visibility.read() == VisibilityState::Visible {
-            visibility.set(VisibilityState::Hidden);
-            mounted.set(false);
-            set_context_menu_open(false);
-        }
-    });
-
     use_future(move || {
         let mut visibility = visibility.clone();
         let mut mounted = mounted.clone();
-        let mut my_close_version = my_close_version.clone();
+        let my_version = *my_close_version.read();
         async move {
             loop {
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                tokio::time::sleep(Duration::from_millis(16)).await;
                 let current_version = get_close_version();
-                let my_version = *my_close_version.read();
                 if current_version != my_version && *visibility.read() == VisibilityState::Visible {
                     visibility.set(VisibilityState::Hidden);
                     mounted.set(false);
                     set_context_menu_open(false);
+                    break;
                 }
             }
         }
