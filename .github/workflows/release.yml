@@ -17,7 +17,7 @@ jobs:
         include:
           - target: x86_64-apple-darwin
             arch: x86_64
-            runner: macos-13
+            runner: macos-latest
           - target: aarch64-apple-darwin
             arch: aarch64
             runner: macos-latest
@@ -40,6 +40,15 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Setup OpenSSL for cross-compilation (x86_64)
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: |
+          brew install openssl@3
+          OPENSSL_PATH=$(brew --prefix openssl@3)
+          echo "OPENSSL_DIR=${OPENSSL_PATH}" >> $GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=${OPENSSL_PATH}/lib" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=${OPENSSL_PATH}/include" >> $GITHUB_ENV
 
       - name: Create .app bundle
         run: |
