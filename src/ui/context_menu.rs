@@ -73,8 +73,8 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
             visibility.set(VisibilityState::Visible);
             mounted.set(true);
             set_context_menu_open(true);
+            my_close_version.set(get_close_version());
         }
-        my_close_version.set(get_close_version());
     }
 
     use_effect(move || {
