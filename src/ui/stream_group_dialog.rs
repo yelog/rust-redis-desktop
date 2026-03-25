@@ -112,8 +112,15 @@ pub fn StreamGroupDialog(
     #[derive(Clone)]
     enum StreamAction {
         DeleteGroup(String),
-        DeleteConsumer { group: String, consumer: String },
-        CreateGroup { name: String, id: String, mkstream: bool },
+        DeleteConsumer {
+            group: String,
+            consumer: String,
+        },
+        CreateGroup {
+            name: String,
+            id: String,
+            mkstream: bool,
+        },
     }
 
     let pool_clone = connection_pool.clone();
@@ -173,7 +180,11 @@ pub fn StreamGroupDialog(
                             consumers.set(parse_consumers(&value));
                         }
                     }
-                    StreamAction::CreateGroup { name, id, mkstream: mks } => {
+                    StreamAction::CreateGroup {
+                        name,
+                        id,
+                        mkstream: mks,
+                    } => {
                         let _ = pool.stream_create_group(&key, &name, &id, mks).await;
                         if let Ok(value) = pool.stream_get_groups_raw(&key).await {
                             groups.set(parse_groups(&value));

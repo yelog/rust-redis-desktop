@@ -125,13 +125,9 @@ pub fn Sidebar(
                                     move |evt: Event<MouseData>| {
                                         evt.prevent_default();
                                         let coords = evt.data().client_coordinates();
-                                        context_menu.set(None);
-                                        let id = id;
                                         let x = coords.x as i32;
                                         let y = coords.y as i32;
-                                        spawn(async move {
-                                            context_menu.set(Some((id, (x, y))));
-                                        });
+                                        context_menu.set(Some((id, (x, y))));
                                     }
                                 },
 

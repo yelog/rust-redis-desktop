@@ -126,11 +126,7 @@ pub fn LazyTreeNode(
                         let data = e.data();
                         let client_x = data.client_coordinates().x as i32;
                         let client_y = data.client_coordinates().y as i32;
-                        let path = path.clone();
-                        context_menu.set(None);
-                        spawn(async move {
-                            context_menu.set(Some((path, is_leaf, (client_x, client_y))));
-                        });
+                        context_menu.set(Some((path.clone(), is_leaf, (client_x, client_y))));
                     }
                 },
 

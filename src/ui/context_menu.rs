@@ -1,5 +1,16 @@
 use dioxus::prelude::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static CONTEXT_MENU_OPEN: AtomicBool = AtomicBool::new(false);
+
+pub fn context_menu_is_open() -> bool {
+    CONTEXT_MENU_OPEN.load(Ordering::SeqCst)
+}
+
+pub fn set_context_menu_open(open: bool) {
+    CONTEXT_MENU_OPEN.store(open, Ordering::SeqCst);
+}
 
 #[derive(Clone, PartialEq)]
 pub struct ContextMenuPosition {
@@ -27,21 +38,33 @@ impl<T> ContextMenuState<T> {
 
 #[component]
 pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element) -> Element {
-    rsx! {
-        div {
-            position: "fixed",
-            top: "0",
-            left: "0",
-            right: "0",
-            bottom: "0",
-            z_index: "999",
-            onclick: move |_| on_close.call(()),
-            oncontextmenu: move |e| {
-                e.prevent_default();
-                on_close.call(());
-            },
+    let mut mounted = use_signal(|| false);
+    
+    use_effect(move || {
+        if !mounted() {
+            mounted.set(true);
+            set_context_menu_open(true);
+            let on_close = on_close.clone();
+            spawn(async move {
+                let mut eval = dioxus::document::eval(
+                    r#"
+                    let handler = function(e) {
+                        dioxus.send(e.type);
+                    };
+                    document.addEventListener('mousedown', handler, true);
+                    document.addEventListener('click', handler, true);
+                    await new Promise(() => {});
+                    "#,
+                );
+                while let Ok(_) = eval.recv::<String>().await {
+                    on_close.call(());
+                    break;
+                }
+            });
         }
+    });
 
+    rsx! {
         div {
             position: "fixed",
             left: "{x}px",

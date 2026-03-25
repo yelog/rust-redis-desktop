@@ -374,13 +374,9 @@ pub fn LeftRail(
                                     let id = id;
                                     move |e| {
                                         e.prevent_default();
-                                        context_menu.set(None);
-                                        let id = id;
                                         let x = e.client_coordinates().x as i32;
                                         let y = e.client_coordinates().y as i32;
-                                        spawn(async move {
-                                            context_menu.set(Some((id, x, y)));
-                                        });
+                                        context_menu.set(Some((id, x, y)));
                                     }
                                 },
 

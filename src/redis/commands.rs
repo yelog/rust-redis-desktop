@@ -899,11 +899,7 @@ impl ConnectionPool {
         }
     }
 
-    pub async fn stream_get_consumers_raw(
-        &self,
-        key: &str,
-        group: &str,
-    ) -> Result<redis::Value> {
+    pub async fn stream_get_consumers_raw(&self, key: &str, group: &str) -> Result<redis::Value> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {

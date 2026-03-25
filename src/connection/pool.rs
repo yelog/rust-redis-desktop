@@ -379,15 +379,17 @@ impl RedisConnection {
     async fn execute_cmd_raw(&mut self, cmd: &mut redis::Cmd) -> Result<redis::Value> {
         match self {
             RedisConnection::Single(conn) => {
-                let result: redis::Value = cmd.query_async(conn).await.map_err(|e| {
-                    ConnectionError::ConnectionFailed(e.to_string())
-                })?;
+                let result: redis::Value = cmd
+                    .query_async(conn)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
                 Ok(result)
             }
             RedisConnection::Cluster(conn) => {
-                let result: redis::Value = cmd.query_async(conn).await.map_err(|e| {
-                    ConnectionError::ConnectionFailed(e.to_string())
-                })?;
+                let result: redis::Value = cmd
+                    .query_async(conn)
+                    .await
+                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
                 Ok(result)
             }
         }

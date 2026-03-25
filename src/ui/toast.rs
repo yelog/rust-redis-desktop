@@ -132,7 +132,7 @@ fn ToastItem(toast: Toast, manager: Signal<ToastManager>) -> Element {
             padding: "10px 16px",
             background: bg_color,
             border_radius: "6px",
-            color: "#1a1a1a",
+            color: "#ffffff",
             font_size: "13px",
             box_shadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
             pointer_events: "auto",
