@@ -49,7 +49,7 @@ pub fn MemoryAnalysisDialog(
     let mut cancel_flag = use_signal(|| None::<Arc<AtomicBool>>);
     let mut min_size_filter = use_signal(|| 0u64);
     let mut pattern = use_signal(|| "*".to_string());
-    let mut sort_desc = use_signal(|| true);
+    let sort_desc = use_signal(|| true);
 
     let start_scan = {
         let connection_pool = connection_pool.clone();
@@ -75,9 +75,7 @@ pub fn MemoryAnalysisDialog(
                         return;
                     }
 
-                    let result = pool
-                        .scan_keys_with_cursor(&pattern_val, cursor, 100)
-                        .await;
+                    let result = pool.scan_keys_with_cursor(&pattern_val, cursor, 100).await;
 
                     match result {
                         Ok((next_cursor, keys)) => {
@@ -148,290 +146,491 @@ pub fn MemoryAnalysisDialog(
             is_open: true,
             on_close: on_close.clone(),
             colors,
-            width: "700px".to_string(),
+            width: "760px".to_string(),
             max_height: "85vh".to_string(),
 
-            h3 {
-                color: "{colors.text}",
-                margin_bottom: "16px",
-                display: "flex",
-                align_items: "center",
-                gap: "8px",
-                font_size: "18px",
-
-                IconSearch { size: Some(20) }
-                "Memory Analysis"
-            }
-
             div {
-                margin_bottom: "16px",
                 display: "flex",
-                gap: "12px",
-                align_items: "flex_end",
+                flex_direction: "column",
+                gap: "16px",
 
                 div {
-                    flex: "1",
+                    display: "flex",
+                    flex_direction: "column",
+                    gap: "10px",
+                    padding_right: "44px",
 
-                    label {
-                        display: "block",
-                        color: "{colors.text_secondary}",
-                        font_size: "12px",
-                        margin_bottom: "4px",
+                    div {
+                        display: "flex",
+                        align_items: "center",
+                        gap: "12px",
 
-                        "Pattern"
-                    }
+                        div {
+                            width: "38px",
+                            height: "38px",
+                            flex_shrink: "0",
+                            display: "flex",
+                            align_items: "center",
+                            justify_content: "center",
+                            background: "{colors.background_secondary}",
+                            border: "1px solid {colors.border}",
+                            border_radius: "10px",
 
-                    input {
-                        width: "100%",
-                        padding: "8px 12px",
-                        background: "{colors.background_tertiary}",
-                        border: "1px solid {colors.border}",
-                        border_radius: "4px",
-                        color: "{colors.text}",
-                        font_size: "13px",
-                        font_family: "monospace",
-                        box_sizing: "border_box",
-                        value: "{pattern}",
-                        oninput: move |e| pattern.set(e.value()),
+                            IconSearch { size: Some(18), color: Some(colors.accent.to_string()) }
+                        }
+
+                        div {
+                            display: "flex",
+                            flex_direction: "column",
+                            gap: "4px",
+
+                            h3 {
+                                margin: "0",
+                                color: "{colors.text}",
+                                font_size: "22px",
+                                font_weight: "700",
+                                line_height: "1.2",
+
+                                "Memory Analysis"
+                            }
+
+                            p {
+                                margin: "0",
+                                color: "{colors.text_secondary}",
+                                font_size: "13px",
+                                line_height: "1.5",
+
+                                "Scan keys by pattern, filter out small values, and jump directly to the selected result."
+                            }
+                        }
                     }
                 }
 
                 div {
-                    width: "150px",
+                    padding: "16px",
+                    background: "{colors.background_secondary}",
+                    border: "1px solid {colors.border}",
+                    border_radius: "12px",
+                    display: "flex",
+                    flex_direction: "column",
+                    gap: "14px",
 
-                    label {
-                        display: "block",
-                        color: "{colors.text_secondary}",
-                        font_size: "12px",
-                        margin_bottom: "4px",
+                    div {
+                        display: "flex",
+                        flex_wrap: "wrap",
+                        gap: "12px",
 
-                        "Min Size (bytes)"
-                    }
+                        div {
+                            flex: "1 1 320px",
+                            min_width: "0",
 
-                    input {
-                        width: "100%",
-                        padding: "8px 12px",
-                        background: "{colors.background_tertiary}",
-                        border: "1px solid {colors.border}",
-                        border_radius: "4px",
-                        color: "{colors.text}",
-                        font_size: "13px",
-                        box_sizing: "border_box",
-                        r#type: "number",
-                        value: "{min_size_filter}",
-                        oninput: move |e| {
-                            if let Ok(v) = e.value().parse() {
-                                min_size_filter.set(v);
+                            label {
+                                display: "block",
+                                color: "{colors.text_secondary}",
+                                font_size: "12px",
+                                margin_bottom: "6px",
+
+                                "Pattern"
+                            }
+
+                            input {
+                                width: "100%",
+                                padding: "10px 12px",
+                                background: "{colors.background}",
+                                border: "1px solid {colors.border}",
+                                border_radius: "8px",
+                                color: "{colors.text}",
+                                font_size: "13px",
+                                font_family: "monospace",
+                                box_sizing: "border_box",
+                                value: "{pattern}",
+                                oninput: move |e| pattern.set(e.value()),
                             }
                         },
-                    }
-                }
-
-                if matches!(state(), ScanState::Scanning(_)) {
-                    button {
-                        padding: "8px 16px",
-                        background: "{colors.error}",
-                        color: "{colors.primary_text}",
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "13px",
-                        display: "flex",
-                        align_items: "center",
-                        gap: "6px",
-                        onclick: stop_scan,
-
-                        IconX { size: Some(14) }
-                        "Stop"
-                    }
-                } else {
-                    button {
-                        padding: "8px 16px",
-                        background: "{colors.primary}",
-                        color: "{colors.primary_text}",
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "13px",
-                        display: "flex",
-                        align_items: "center",
-                        gap: "6px",
-                        onclick: start_scan.clone(),
-
-                        IconSearch { size: Some(14) }
-                        "Scan"
-                    }
-                }
-            }
-
-            match state() {
-                ScanState::Scanning(count) => rsx! {
-                    div {
-                        padding: "20px",
-                        text_align: "center",
-                        color: "{colors.text_secondary}",
-
-                        "Scanning... {count} keys checked"
-                    }
-                },
-                ScanState::Error(ref e) => rsx! {
-                    div {
-                        padding: "20px",
-                        background: "rgba(239, 68, 68, 0.1)",
-                        border: "1px solid rgba(239, 68, 68, 0.3)",
-                        border_radius: "4px",
-                        color: "{colors.error}",
-
-                        "{e}"
-                    }
-                },
-                ScanState::Completed(total) if entries.read().is_empty() => rsx! {
-                    div {
-                        padding: "20px",
-                        text_align: "center",
-                        color: "{colors.text_secondary}",
-
-                        "No keys found matching the criteria"
-                    }
-                },
-                _ => rsx! {
-                    if !entries.read().is_empty() {
-                        div {
-                            margin_bottom: "12px",
-                            padding: "10px 12px",
-                            background: "{colors.background_tertiary}",
-                            border_radius: "4px",
-                            display: "flex",
-                            justify_content: "space_between",
-
-                            span {
-                                color: "{colors.text_secondary}",
-                                font_size: "12px",
-
-                                "{entries.read().len()} keys found"
-                            }
-
-                            span {
-                                color: "{colors.text_secondary}",
-                                font_size: "12px",
-
-                                "Total: {format_bytes(total_memory)}"
-                            }
-                        }
 
                         div {
-                            border: "1px solid {colors.border}",
-                            border_radius: "4px",
-                            overflow: "hidden",
-                            max_height: "400px",
-                            overflow_y: "auto",
+                            flex: "1 1 180px",
+                            min_width: "0",
 
-                            table {
+                            label {
+                                display: "block",
+                                color: "{colors.text_secondary}",
+                                font_size: "12px",
+                                margin_bottom: "6px",
+
+                                "Min Size (bytes)"
+                            }
+
+                            input {
                                 width: "100%",
-                                border_collapse: "collapse",
+                                padding: "10px 12px",
+                                background: "{colors.background}",
+                                border: "1px solid {colors.border}",
+                                border_radius: "8px",
+                                color: "{colors.text}",
+                                font_size: "13px",
+                                box_sizing: "border_box",
+                                r#type: "number",
+                                value: "{min_size_filter}",
+                                oninput: move |e| {
+                                    if let Ok(v) = e.value().parse() {
+                                        min_size_filter.set(v);
+                                    }
+                                },
+                            }
+                        }
+                    }
 
-                                thead {
-                                    tr {
-                                        background: "{colors.background_tertiary}",
+                    div {
+                        display: "flex",
+                        flex_wrap: "wrap",
+                        align_items: "center",
+                        justify_content: "space_between",
+                        gap: "12px",
 
-                                        th {
-                                            padding: "10px 12px",
-                                            text_align: "left",
-                                            color: "{colors.text_secondary}",
-                                            font_size: "12px",
+                        div {
+                            display: "flex",
+                            flex_direction: "column",
+                            gap: "4px",
+
+                            span {
+                                color: "{colors.text_secondary}",
+                                font_size: "12px",
+
+                                "Pattern supports glob syntax such as `user:*` or `cache:*`."
+                            }
+
+                            span {
+                                color: "{colors.text_subtle}",
+                                font_size: "12px",
+
+                                "Results stay sorted by memory usage so the largest keys remain at the top."
+                            }
+                        }
+
+                        div {
+                            display: "flex",
+                            align_items: "center",
+                            gap: "10px",
+                            flex_wrap: "wrap",
+
+                            if matches!(state(), ScanState::Scanning(_)) {
+                                button {
+                                    padding: "10px 16px",
+                                    background: "{colors.error}",
+                                    color: "{colors.primary_text}",
+                                    border: "none",
+                                    border_radius: "8px",
+                                    cursor: "pointer",
+                                    font_size: "13px",
+                                    font_weight: "600",
+                                    display: "flex",
+                                    align_items: "center",
+                                    gap: "6px",
+                                    onclick: stop_scan,
+
+                                    IconX { size: Some(14), color: Some(colors.primary_text.to_string()) }
+                                    "Stop"
+                                }
+                            } else {
+                                button {
+                                    padding: "10px 16px",
+                                    background: "{colors.primary}",
+                                    color: "{colors.primary_text}",
+                                    border: "none",
+                                    border_radius: "8px",
+                                    cursor: "pointer",
+                                    font_size: "13px",
+                                    font_weight: "600",
+                                    display: "flex",
+                                    align_items: "center",
+                                    gap: "6px",
+                                    onclick: start_scan.clone(),
+
+                                    IconSearch { size: Some(14), color: Some(colors.primary_text.to_string()) }
+                                    "Scan"
+                                }
+                            }
+                        }
+                    }
+                }
+
+                match state() {
+                    ScanState::Scanning(count) => rsx! {
+                        div {
+                            padding: "18px 20px",
+                            background: "{colors.background_secondary}",
+                            border: "1px solid {colors.border}",
+                            border_radius: "12px",
+                            display: "flex",
+                            flex_direction: "column",
+                            gap: "6px",
+
+                            div {
+                                color: "{colors.text}",
+                                font_size: "15px",
+                                font_weight: "600",
+
+                                "Scanning in progress"
+                            }
+
+                            div {
+                                color: "{colors.text_secondary}",
+                                font_size: "13px",
+                                line_height: "1.5",
+
+                                "{count} keys checked so far. You can keep waiting or stop the scan at any time."
+                            }
+                        }
+                    },
+                    ScanState::Error(ref e) => rsx! {
+                        div {
+                            padding: "18px 20px",
+                            background: "{colors.error_bg}",
+                            border: "1px solid {colors.error}",
+                            border_radius: "12px",
+                            display: "flex",
+                            flex_direction: "column",
+                            gap: "6px",
+
+                            div {
+                                color: "{colors.error}",
+                                font_size: "15px",
+                                font_weight: "600",
+
+                                "Scan failed"
+                            }
+
+                            div {
+                                color: "{colors.error}",
+                                font_size: "13px",
+                                line_height: "1.5",
+
+                                "{e}"
+                            }
+                        }
+                    },
+                    ScanState::Completed(total) if entries.read().is_empty() => rsx! {
+                        div {
+                            padding: "28px 20px",
+                            text_align: "center",
+                            background: "{colors.background_secondary}",
+                            border: "1px dashed {colors.border}",
+                            border_radius: "12px",
+                            display: "flex",
+                            flex_direction: "column",
+                            gap: "8px",
+
+                            div {
+                                color: "{colors.text}",
+                                font_size: "15px",
+                                font_weight: "600",
+
+                                "No matching keys"
+                            }
+
+                            div {
+                                color: "{colors.text_secondary}",
+                                font_size: "13px",
+                                line_height: "1.5",
+
+                                "The scan completed successfully, but no keys matched the current pattern and minimum size filter. Checked result count: {total}."
+                            }
+                        }
+                    },
+                    _ => rsx! {
+                        if !entries.read().is_empty() {
+                            div {
+                                display: "flex",
+                                flex_direction: "column",
+                                gap: "12px",
+
+                                div {
+                                    padding: "12px 14px",
+                                    background: "{colors.background_secondary}",
+                                    border: "1px solid {colors.border}",
+                                    border_radius: "12px",
+                                    display: "flex",
+                                    flex_wrap: "wrap",
+                                    justify_content: "space_between",
+                                    align_items: "center",
+                                    gap: "10px",
+
+                                    div {
+                                        display: "flex",
+                                        flex_direction: "column",
+                                        gap: "4px",
+
+                                        span {
+                                            color: "{colors.text}",
+                                            font_size: "14px",
                                             font_weight: "600",
-                                            border_bottom: "1px solid {colors.border}",
 
-                                            "Key"
+                                            "{entries.read().len()} keys found"
                                         }
 
-                                        th {
-                                            padding: "10px 12px",
-                                            text_align: "right",
+                                        span {
                                             color: "{colors.text_secondary}",
                                             font_size: "12px",
-                                            font_weight: "600",
-                                            border_bottom: "1px solid {colors.border}",
-                                            width: "120px",
 
-                                            "Memory"
+                                            "Click any row to open the corresponding key."
                                         }
+                                    }
 
-                                        th {
-                                            padding: "10px 12px",
-                                            text_align: "center",
-                                            color: "{colors.text_secondary}",
-                                            font_size: "12px",
-                                            font_weight: "600",
-                                            border_bottom: "1px solid {colors.border}",
-                                            width: "80px",
+                                    span {
+                                        color: "{colors.accent}",
+                                        font_size: "13px",
+                                        font_weight: "600",
 
-                                            "Type"
-                                        }
+                                        "Total memory: {format_bytes(total_memory)}"
                                     }
                                 }
 
-                                tbody {
-                                    for entry in entries.read().iter() {
-                                        tr {
-                                            cursor: "pointer",
-                                            onclick: {
-                                                let key = entry.key.clone();
-                                                let on_select_key = on_select_key.clone();
-                                                let on_close = on_close.clone();
-                                                move |_| {
-                                                    on_select_key.call(key.clone());
-                                                    on_close.call(());
+                                div {
+                                    border: "1px solid {colors.border}",
+                                    border_radius: "12px",
+                                    overflow: "hidden",
+                                    max_height: "400px",
+                                    overflow_y: "auto",
+                                    background: "{colors.background_secondary}",
+
+                                    table {
+                                        width: "100%",
+                                        border_collapse: "collapse",
+
+                                        thead {
+                                            tr {
+                                                background: "{colors.surface_low}",
+
+                                                th {
+                                                    padding: "11px 14px",
+                                                    text_align: "left",
+                                                    color: "{colors.text_secondary}",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    border_bottom: "1px solid {colors.border}",
+
+                                                    "Key"
                                                 }
-                                            },
 
-                                            td {
-                                                padding: "8px 12px",
-                                                color: "{colors.text}",
-                                                font_size: "13px",
-                                                font_family: "monospace",
-                                                border_bottom: "1px solid {colors.border}",
+                                                th {
+                                                    padding: "11px 14px",
+                                                    text_align: "right",
+                                                    color: "{colors.text_secondary}",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    border_bottom: "1px solid {colors.border}",
+                                                    width: "140px",
 
-                                                "{entry.key}"
+                                                    "Memory"
+                                                }
+
+                                                th {
+                                                    padding: "11px 14px",
+                                                    text_align: "center",
+                                                    color: "{colors.text_secondary}",
+                                                    font_size: "12px",
+                                                    font_weight: "600",
+                                                    border_bottom: "1px solid {colors.border}",
+                                                    width: "110px",
+
+                                                    "Type"
+                                                }
                                             }
+                                        }
 
-                                            td {
-                                                padding: "8px 12px",
-                                                color: "{colors.accent}",
-                                                font_size: "13px",
-                                                font_weight: "600",
-                                                text_align: "right",
-                                                border_bottom: "1px solid {colors.border}",
+                                        tbody {
+                                            for (idx, entry) in entries.read().iter().enumerate() {
+                                                tr {
+                                                    key: "{entry.key}",
+                                                    background: if idx % 2 == 0 {
+                                                        colors.background
+                                                    } else {
+                                                        colors.background_secondary
+                                                    },
+                                                    cursor: "pointer",
+                                                    onclick: {
+                                                        let key = entry.key.clone();
+                                                        let on_select_key = on_select_key.clone();
+                                                        let on_close = on_close.clone();
+                                                        move |_| {
+                                                            on_select_key.call(key.clone());
+                                                            on_close.call(());
+                                                        }
+                                                    },
 
-                                                "{format_bytes(entry.memory_bytes)}"
-                                            }
+                                                    td {
+                                                        padding: "10px 14px",
+                                                        color: "{colors.text}",
+                                                        font_size: "13px",
+                                                        font_family: "monospace",
+                                                        border_bottom: "1px solid {colors.border}",
+                                                        word_break: "break_all",
+                                                        line_height: "1.5",
 
-                                            td {
-                                                padding: "8px 12px",
-                                                color: "{colors.text_secondary}",
-                                                font_size: "12px",
-                                                text_align: "center",
-                                                border_bottom: "1px solid {colors.border}",
+                                                        "{entry.key}"
+                                                    }
 
-                                                "{entry.key_type}"
+                                                    td {
+                                                        padding: "10px 14px",
+                                                        color: "{colors.accent}",
+                                                        font_size: "13px",
+                                                        font_weight: "600",
+                                                        text_align: "right",
+                                                        border_bottom: "1px solid {colors.border}",
+                                                        white_space: "nowrap",
+
+                                                        "{format_bytes(entry.memory_bytes)}"
+                                                    }
+
+                                                    td {
+                                                        padding: "10px 14px",
+                                                        color: "{colors.text_secondary}",
+                                                        font_size: "12px",
+                                                        text_align: "center",
+                                                        border_bottom: "1px solid {colors.border}",
+                                                        white_space: "nowrap",
+
+                                                        "{entry.key_type}"
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    if entries.read().is_empty() && matches!(state(), ScanState::Idle) {
-                        div {
-                            padding: "40px",
-                            text_align: "center",
-                            color: "{colors.text_secondary}",
+                        if entries.read().is_empty() && matches!(state(), ScanState::Idle) {
+                            div {
+                                padding: "28px 20px",
+                                text_align: "center",
+                                background: "{colors.background_secondary}",
+                                border: "1px dashed {colors.border}",
+                                border_radius: "12px",
+                                display: "flex",
+                                flex_direction: "column",
+                                gap: "8px",
 
-                            "Set pattern and minimum size, then click Scan"
+                                div {
+                                    color: "{colors.text}",
+                                    font_size: "15px",
+                                    font_weight: "600",
+
+                                    "Ready to scan"
+                                }
+
+                                div {
+                                    color: "{colors.text_secondary}",
+                                    font_size: "13px",
+                                    line_height: "1.5",
+
+                                    "Set a pattern and minimum size, then click Scan. Matching keys will appear here in descending memory order."
+                                }
+                            }
                         }
-                    }
-                },
+                    },
+                }
             }
         }
     }

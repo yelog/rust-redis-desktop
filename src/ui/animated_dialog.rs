@@ -54,10 +54,7 @@ pub fn AnimatedDialog(
             let id = dialog_id();
             spawn(async move {
                 tokio::time::sleep(Duration::from_millis(50)).await;
-                let _ = document::eval(&format!(
-                    "document.getElementById('{}')?.focus()",
-                    id
-                ));
+                let _ = document::eval(&format!("document.getElementById('{}')?.focus()", id));
             });
         }
     });
@@ -169,14 +166,20 @@ pub fn AnimatedDialog(
                 if show_close {
                     button {
                         position: "absolute",
-                        top: "8px",
-                        right: "8px",
+                        top: "14px",
+                        right: "14px",
                         z_index: "10",
-                        padding: "4px",
-                        background: "transparent",
-                        border: "none",
+                        width: "30px",
+                        height: "30px",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        padding: "0",
+                        background: "{colors.background_secondary}",
+                        border: "1px solid {colors.border}",
+                        border_radius: "8px",
+                        box_shadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
                         cursor: "pointer",
-                        color: "{colors.text_secondary}",
                         onclick: {
                             let mut visibility = visibility.clone();
                             let on_close = on_close.clone();
@@ -195,7 +198,7 @@ pub fn AnimatedDialog(
                             }
                         },
 
-                        IconX { size: Some(18) }
+                        IconX { size: Some(16), color: Some(colors.text_secondary.to_string()) }
                     }
                 }
 
