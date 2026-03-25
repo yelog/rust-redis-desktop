@@ -640,22 +640,43 @@ async fn search_hash_server(
         format!("*{}*", pattern)
     };
 
-    match pool
-        .hash_scan_match(&key, &redis_pattern, 0, PAGE_SIZE)
-        .await
-    {
-        Ok((cursor, items)) => {
-            let result: HashMap<String, String> = items.into_iter().collect();
-            hash_value.set(result);
-            hash_cursor.set(cursor);
-            hash_has_more.set(cursor != 0);
-            hash_loading_more.set(false);
-        }
-        Err(e) => {
-            tracing::error!("搜索 hash 数据失败: {}", e);
-            hash_loading_more.set(false);
+    let mut cursor: u64 = 0;
+    let mut all_items: HashMap<String, String> = HashMap::new();
+    let max_iterations = 1000;
+    let mut iterations = 0;
+
+    loop {
+        match pool
+            .hash_scan_match(&key, &redis_pattern, cursor, PAGE_SIZE)
+            .await
+        {
+            Ok((new_cursor, items)) => {
+                for (field, value) in items {
+                    all_items.insert(field, value);
+                }
+                cursor = new_cursor;
+                iterations += 1;
+
+                if cursor == 0 || iterations >= max_iterations {
+                    break;
+                }
+
+                if !all_items.is_empty() {
+                    break;
+                }
+            }
+            Err(e) => {
+                tracing::error!("搜索 hash 数据失败: {}", e);
+                hash_loading_more.set(false);
+                return;
+            }
         }
     }
+
+    hash_value.set(all_items);
+    hash_cursor.set(cursor);
+    hash_has_more.set(cursor != 0);
+    hash_loading_more.set(false);
 }
 
 async fn search_zset_server(
@@ -675,21 +696,41 @@ async fn search_zset_server(
         format!("*{}*", pattern)
     };
 
-    match pool
-        .zset_scan_match(&key, &redis_pattern, 0, PAGE_SIZE)
-        .await
-    {
-        Ok((cursor, items)) => {
-            zset_value.set(items);
-            zset_cursor.set(cursor);
-            zset_has_more.set(cursor != 0);
-            zset_loading_more.set(false);
-        }
-        Err(e) => {
-            tracing::error!("搜索 zset 数据失败: {}", e);
-            zset_loading_more.set(false);
+    let mut cursor: u64 = 0;
+    let mut all_items: Vec<(String, f64)> = Vec::new();
+    let max_iterations = 1000;
+    let mut iterations = 0;
+
+    loop {
+        match pool
+            .zset_scan_match(&key, &redis_pattern, cursor, PAGE_SIZE)
+            .await
+        {
+            Ok((new_cursor, items)) => {
+                all_items.extend(items);
+                cursor = new_cursor;
+                iterations += 1;
+
+                if cursor == 0 || iterations >= max_iterations {
+                    break;
+                }
+
+                if !all_items.is_empty() {
+                    break;
+                }
+            }
+            Err(e) => {
+                tracing::error!("搜索 zset 数据失败: {}", e);
+                zset_loading_more.set(false);
+                return;
+            }
         }
     }
+
+    zset_value.set(all_items);
+    zset_cursor.set(cursor);
+    zset_has_more.set(cursor != 0);
+    zset_loading_more.set(false);
 }
 
 async fn search_set_server(
@@ -709,21 +750,41 @@ async fn search_set_server(
         format!("*{}*", pattern)
     };
 
-    match pool
-        .set_scan_match(&key, &redis_pattern, 0, PAGE_SIZE)
-        .await
-    {
-        Ok((cursor, items)) => {
-            set_value.set(items);
-            set_cursor.set(cursor);
-            set_has_more.set(cursor != 0);
-            set_loading_more.set(false);
-        }
-        Err(e) => {
-            tracing::error!("搜索 set 数据失败: {}", e);
-            set_loading_more.set(false);
+    let mut cursor: u64 = 0;
+    let mut all_items: Vec<String> = Vec::new();
+    let max_iterations = 1000;
+    let mut iterations = 0;
+
+    loop {
+        match pool
+            .set_scan_match(&key, &redis_pattern, cursor, PAGE_SIZE)
+            .await
+        {
+            Ok((new_cursor, items)) => {
+                all_items.extend(items);
+                cursor = new_cursor;
+                iterations += 1;
+
+                if cursor == 0 || iterations >= max_iterations {
+                    break;
+                }
+
+                if !all_items.is_empty() {
+                    break;
+                }
+            }
+            Err(e) => {
+                tracing::error!("搜索 set 数据失败: {}", e);
+                set_loading_more.set(false);
+                return;
+            }
         }
     }
+
+    set_value.set(all_items);
+    set_cursor.set(cursor);
+    set_has_more.set(cursor != 0);
+    set_loading_more.set(false);
 }
 
 #[component]
@@ -1199,28 +1260,17 @@ pub fn ValueViewer(
                                         }
 
                                         {
-                                            let value_metric = value_metric_label(
-                                                &info.key_type,
-                                                &str_val,
-                                                &hash_val,
-                                                &list_val,
-                                                &set_val,
-                                                &zset_val,
-                                                &stream_val,
-                                            );
                                             let memory_badge = format_memory_usage(memory_usage());
 
                                             rsx! {
-                                                for badge in [value_metric, format!("内存: {memory_badge}")] {
-                                                    span {
-                                                        padding: "4px 8px",
-                                                        border_radius: "6px",
-                                                        background: COLOR_BG_TERTIARY,
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "11px",
+                                                span {
+                                                    padding: "4px 8px",
+                                                    border_radius: "6px",
+                                                    background: COLOR_BG_TERTIARY,
+                                                    color: COLOR_TEXT_SECONDARY,
+                                                    font_size: "11px",
 
-                                                        "{badge}"
-                                                    }
+                                                    "内存: {memory_badge}"
                                                 }
                                             }
                                         }
@@ -1984,7 +2034,44 @@ pub fn ValueViewer(
                                                             let key = display_key.clone();
                                                             move |event| {
                                                                 let value = event.value();
+                                                                let was_empty = hash_search().is_empty();
                                                                 hash_search.set(value.clone());
+                                                                
+                                                                if value.is_empty() && !was_empty {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    spawn(async move {
+                                                                        if let Err(e) = load_key_data(
+                                                                            pool,
+                                                                            key,
+                                                                            key_info,
+                                                                            string_value,
+                                                                            hash_value,
+                                                                            list_value,
+                                                                            set_value,
+                                                                            zset_value,
+                                                                            stream_value,
+                                                                            is_binary,
+                                                                            binary_format,
+                                                                            serialization_data,
+                                                                            bitmap_info,
+                                                                            loading,
+                                                                            hash_cursor,
+                                                                            hash_total,
+                                                                            hash_has_more,
+                                                                            list_has_more,
+                                                                            list_total,
+                                                                            set_cursor,
+                                                                            set_total,
+                                                                            set_has_more,
+                                                                            zset_cursor,
+                                                                            zset_total,
+                                                                            zset_has_more,
+                                                                        ).await {
+                                                                            tracing::error!("重新加载 hash 数据失败: {}", e);
+                                                                        }
+                                                                    });
+                                                                }
                                                             }
                                                         },
                                                     }
@@ -3490,7 +3577,51 @@ if let Err(error) = load_key_data(
                                                         color: COLOR_TEXT,
                                                         value: "{set_search}",
                                                         placeholder: "搜索成员",
-                                                        oninput: move |event| set_search.set(event.value()),
+                                                        oninput: {
+                                                            let pool = connection_pool.clone();
+                                                            let key = display_key.clone();
+                                                            move |event| {
+                                                                let value = event.value();
+                                                                let was_empty = set_search().is_empty();
+                                                                set_search.set(value.clone());
+                                                                
+                                                                if value.is_empty() && !was_empty {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    spawn(async move {
+                                                                        if let Err(e) = load_key_data(
+                                                                            pool,
+                                                                            key,
+                                                                            key_info,
+                                                                            string_value,
+                                                                            hash_value,
+                                                                            list_value,
+                                                                            set_value,
+                                                                            zset_value,
+                                                                            stream_value,
+                                                                            is_binary,
+                                                                            binary_format,
+                                                                            serialization_data,
+                                                                            bitmap_info,
+                                                                            loading,
+                                                                            hash_cursor,
+                                                                            hash_total,
+                                                                            hash_has_more,
+                                                                            list_has_more,
+                                                                            list_total,
+                                                                            set_cursor,
+                                                                            set_total,
+                                                                            set_has_more,
+                                                                            zset_cursor,
+                                                                            zset_total,
+                                                                            zset_has_more,
+                                                                        ).await {
+                                                                            tracing::error!("重新加载 set 数据失败: {}", e);
+                                                                        }
+                                                                    });
+                                                                }
+                                                            }
+                                                        },
                                                     }
 
                                                     if set_total() > PAGE_SIZE {
@@ -4119,7 +4250,51 @@ if let Err(error) = load_key_data(
                                                         color: COLOR_TEXT,
                                                         value: "{zset_search}",
                                                         placeholder: "搜索成员",
-                                                        oninput: move |event| zset_search.set(event.value()),
+                                                        oninput: {
+                                                            let pool = connection_pool.clone();
+                                                            let key = display_key.clone();
+                                                            move |event| {
+                                                                let value = event.value();
+                                                                let was_empty = zset_search().is_empty();
+                                                                zset_search.set(value.clone());
+                                                                
+                                                                if value.is_empty() && !was_empty {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    spawn(async move {
+                                                                        if let Err(e) = load_key_data(
+                                                                            pool,
+                                                                            key,
+                                                                            key_info,
+                                                                            string_value,
+                                                                            hash_value,
+                                                                            list_value,
+                                                                            set_value,
+                                                                            zset_value,
+                                                                            stream_value,
+                                                                            is_binary,
+                                                                            binary_format,
+                                                                            serialization_data,
+                                                                            bitmap_info,
+                                                                            loading,
+                                                                            hash_cursor,
+                                                                            hash_total,
+                                                                            hash_has_more,
+                                                                            list_has_more,
+                                                                            list_total,
+                                                                            set_cursor,
+                                                                            set_total,
+                                                                            set_has_more,
+                                                                            zset_cursor,
+                                                                            zset_total,
+                                                                            zset_has_more,
+                                                                        ).await {
+                                                                            tracing::error!("重新加载 zset 数据失败: {}", e);
+                                                                        }
+                                                                    });
+                                                                }
+                                                            }
+                                                        },
                                                     }
 
                                                     if zset_total() > PAGE_SIZE {
