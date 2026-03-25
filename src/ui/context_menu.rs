@@ -62,7 +62,13 @@ impl<T> ContextMenuState<T> {
 }
 
 #[component]
-pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element) -> Element {
+pub fn ContextMenu(
+    menu_id: u64,
+    x: i32,
+    y: i32,
+    on_close: EventHandler<u64>,
+    children: Element,
+) -> Element {
     let mut visibility = use_signal(VisibilityState::default);
     let mut mounted = use_signal(|| false);
     let mut my_close_version = use_signal(|| 0u64);
@@ -81,6 +87,7 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
         let mut visibility = visibility.clone();
         let mut mounted = mounted.clone();
         let my_version = *my_close_version.read();
+        let on_close = on_close.clone();
         async move {
             loop {
                 tokio::time::sleep(Duration::from_millis(16)).await;
@@ -89,6 +96,7 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
                     visibility.set(VisibilityState::Hidden);
                     mounted.set(false);
                     set_context_menu_open(false);
+                    on_close.call(menu_id);
                     break;
                 }
             }
@@ -117,11 +125,13 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
                     visibility.set(VisibilityState::Exiting);
                     let on_close = on_close.clone();
                     let mut vis = visibility.clone();
+                    let mut mounted = mounted.clone();
                     spawn(async move {
                         tokio::time::sleep(Duration::from_millis(EXIT_DURATION_MS)).await;
                         vis.set(VisibilityState::Hidden);
+                        mounted.set(false);
                         set_context_menu_open(false);
-                        on_close.call(());
+                        on_close.call(menu_id);
                     });
                     break;
                 }

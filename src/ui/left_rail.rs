@@ -4,7 +4,7 @@ use crate::theme::{
     COLOR_SURFACE_HIGH, COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
     COLOR_TEXT_SUBTLE,
 };
-use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
+use crate::ui::context_menu::{ContextMenu, ContextMenuItem, ContextMenuState};
 use crate::ui::icons::{
     IconAlert, IconDownload, IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconUpload,
     IconX,
@@ -44,7 +44,7 @@ pub fn LeftRail(
     on_open_settings: EventHandler<()>,
     on_reorder_connection: EventHandler<(usize, usize)>,
 ) -> Element {
-    let mut context_menu = use_signal(|| None::<(Uuid, i32, i32)>);
+    let mut context_menu = use_signal(|| None::<ContextMenuState<Uuid>>);
     let mut dragging_index = use_signal(|| None::<usize>);
     let mut drag_over_index = use_signal(|| None::<usize>);
     let mut drag_start_y = use_signal(|| 0.0);
@@ -393,7 +393,7 @@ pub fn LeftRail(
                                     crate::ui::context_menu::close_all_context_menus();
                                     let x = e.client_coordinates().x as i32;
                                     let y = e.client_coordinates().y as i32;
-                                    context_menu_clone.set(Some((id, x, y)));
+                                    context_menu_clone.set(Some(ContextMenuState::new(id, x, y)));
                                 },
 
                                 div {
@@ -576,21 +576,35 @@ pub fn LeftRail(
                 }
             }
 
-            if let Some((ctx_id, x, y)) = context_menu() {
+            if let Some(menu) = context_menu() {
                 {
+                    let ctx_id = menu.data;
+                    let menu_id = menu.id;
+                    let x = menu.x;
+                    let y = menu.y;
                     let state = connection_states
                         .get(&ctx_id)
                         .copied()
                         .unwrap_or(ConnectionState::Disconnected);
                     let is_connected = matches!(state, ConnectionState::Connected);
                     let is_connecting = matches!(state, ConnectionState::Connecting);
-                    let is_disconnected = matches!(state, ConnectionState::Disconnected);
+                    let mut context_menu_for_close = context_menu.clone();
 
                     rsx! {
                         ContextMenu {
+                            key: "{menu_id}",
+                            menu_id: menu_id,
                             x: x,
                             y: y,
-                            on_close: move |_| context_menu.set(None),
+                            on_close: move |closing_menu_id| {
+                                if context_menu_for_close()
+                                    .as_ref()
+                                    .map(|menu| menu.id)
+                                    == Some(closing_menu_id)
+                                {
+                                    context_menu_for_close.set(None);
+                                }
+                            },
 
                             ContextMenuItem {
                                 icon: Some(rsx! { IconEdit { size: Some(14) } }),

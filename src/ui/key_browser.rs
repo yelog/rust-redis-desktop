@@ -7,7 +7,7 @@ use crate::theme::{
 };
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
-use crate::ui::context_menu::{ContextMenu, ContextMenuItem};
+use crate::ui::context_menu::{ContextMenu, ContextMenuItem, ContextMenuState};
 use crate::ui::delete_confirm_dialog::{DeleteConfirmDialog, DeleteTarget};
 use crate::ui::export_dialog::{ExportDialog, ExportTarget};
 use crate::ui::icons::*;
@@ -115,7 +115,7 @@ pub fn KeyBrowser(
     let cancel_scan = use_signal(|| Arc::new(AtomicBool::new(false)));
     let key_type_cache = use_signal(HashMap::<String, KeyType>::new);
     let mut tree_state = use_signal(TreeState::default);
-    let mut context_menu = use_signal(|| None::<(String, bool, (i32, i32))>);
+    let mut context_menu = use_signal(|| None::<ContextMenuState<(String, bool)>>);
     let mut key_list_width = use_signal(|| 320.0);
     let mut show_export_dialog = use_signal(|| None::<Vec<ExportTarget>>);
     let mut toast_manager = use_context::<Signal<ToastManager>>();
@@ -776,14 +776,28 @@ pub fn KeyBrowser(
                 }
             }
 
-            if let Some((node_path, is_leaf, (x, y))) = context_menu() {
+            if let Some(menu) = context_menu() {
                 {
-                    let node_path = node_path.clone();
+                    let menu_id = menu.id;
+                    let x = menu.x;
+                    let y = menu.y;
+                    let (node_path, is_leaf) = menu.data.clone();
+                    let mut context_menu_for_close = context_menu.clone();
                     rsx! {
                         ContextMenu {
+                            key: "{menu_id}",
+                            menu_id: menu_id,
                             x: x,
                             y: y,
-                            on_close: move |_| context_menu.set(None),
+                            on_close: move |closing_menu_id| {
+                                if context_menu_for_close()
+                                    .as_ref()
+                                    .map(|menu| menu.id)
+                                    == Some(closing_menu_id)
+                                {
+                                    context_menu_for_close.set(None);
+                                }
+                            },
 
                             ContextMenuItem {
                                 icon: Some(rsx! { IconCopy { size: Some(14) } }),
