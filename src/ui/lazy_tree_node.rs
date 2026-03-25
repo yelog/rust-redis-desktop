@@ -123,6 +123,7 @@ pub fn LazyTreeNode(
                     let is_leaf = node.is_leaf;
                     move |e| {
                         e.prevent_default();
+                        crate::ui::context_menu::close_all_context_menus();
                         let data = e.data();
                         let client_x = data.client_coordinates().x as i32;
                         let client_y = data.client_coordinates().y as i32;

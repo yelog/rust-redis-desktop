@@ -374,6 +374,7 @@ pub fn LeftRail(
                                     let id = id;
                                     move |e| {
                                         e.prevent_default();
+                                        crate::ui::context_menu::close_all_context_menus();
                                         let x = e.client_coordinates().x as i32;
                                         let y = e.client_coordinates().y as i32;
                                         context_menu.set(Some((id, x, y)));

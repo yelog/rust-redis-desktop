@@ -1,8 +1,9 @@
 use dioxus::prelude::*;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 static CONTEXT_MENU_OPEN: AtomicBool = AtomicBool::new(false);
+static CONTEXT_MENU_CLOSE_VERSION: AtomicU64 = AtomicU64::new(0);
 
 pub fn context_menu_is_open() -> bool {
     CONTEXT_MENU_OPEN.load(Ordering::SeqCst)
@@ -10,6 +11,19 @@ pub fn context_menu_is_open() -> bool {
 
 pub fn set_context_menu_open(open: bool) {
     CONTEXT_MENU_OPEN.store(open, Ordering::SeqCst);
+}
+
+pub fn close_all_context_menus() -> u64 {
+    let version = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    CONTEXT_MENU_CLOSE_VERSION.store(version, Ordering::SeqCst);
+    version
+}
+
+pub fn get_close_version() -> u64 {
+    CONTEXT_MENU_CLOSE_VERSION.load(Ordering::SeqCst)
 }
 
 const ENTER_DURATION_MS: u64 = 150;
@@ -51,6 +65,7 @@ impl<T> ContextMenuState<T> {
 pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element) -> Element {
     let mut visibility = use_signal(VisibilityState::default);
     let mut mounted = use_signal(|| false);
+    let mut my_close_version = use_signal(|| 0u64);
 
     {
         let current = *visibility.read();
@@ -58,18 +73,50 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
             visibility.set(VisibilityState::Visible);
             mounted.set(true);
             set_context_menu_open(true);
+            my_close_version.set(get_close_version());
         }
     }
+
+    use_effect(move || {
+        let current_version = get_close_version();
+        let my_version = *my_close_version.read();
+        if current_version != my_version && *visibility.read() == VisibilityState::Visible {
+            visibility.set(VisibilityState::Hidden);
+            set_context_menu_open(false);
+            on_close.call(());
+        }
+    });
+
+    use_future(move || {
+        let mut visibility = visibility.clone();
+        let mut my_close_version = my_close_version.clone();
+        let on_close = on_close.clone();
+        async move {
+            loop {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                let current_version = get_close_version();
+                let my_version = *my_close_version.read();
+                if current_version != my_version && *visibility.read() == VisibilityState::Visible {
+                    visibility.set(VisibilityState::Hidden);
+                    set_context_menu_open(false);
+                    on_close.call(());
+                }
+            }
+        }
+    });
 
     use_effect(move || {
         if *visibility.read() == VisibilityState::Visible {
             let on_close = on_close.clone();
             let mut visibility = visibility.clone();
             spawn(async move {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+
                 let mut eval = dioxus::document::eval(
                     r#"
                     let handler = function(e) {
-                        dioxus.send(e.type);
+                        if (e.button === 2) return;
+                        dioxus.send('close');
                     };
                     document.addEventListener('mousedown', handler, true);
                     document.addEventListener('click', handler, true);
