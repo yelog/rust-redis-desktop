@@ -55,9 +55,40 @@ pub fn AnimatedDialog(
     use_effect(move || {
         if *visibility.read() == VisibilityState::Visible {
             let id = dialog_id();
+            let on_close = on_close.clone();
+            let mut visibility_clone = visibility.clone();
             spawn(async move {
+                let mut eval = document::eval(
+                    r#"
+                    let handler = function(e) {
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            dioxus.send('escape');
+                        }
+                    };
+                    document.addEventListener('keydown', handler, true);
+                    await new Promise(() => {});
+                    "#,
+                );
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 let _ = document::eval(&format!("document.getElementById('{}')?.focus()", id));
+                while let Ok(msg) = eval.recv::<String>().await {
+                    if msg == "escape" {
+                        let current = *visibility_clone.read();
+                        if current == VisibilityState::Visible {
+                            visibility_clone.set(VisibilityState::Exiting);
+                            let mut vis = visibility_clone.clone();
+                            let on_close = on_close.clone();
+                            spawn(async move {
+                                tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                vis.set(VisibilityState::Hidden);
+                                on_close.call(());
+                            });
+                        }
+                        break;
+                    }
+                }
             });
         }
     });
@@ -72,6 +103,11 @@ pub fn AnimatedDialog(
         "modalFadeOut"
     } else {
         "modalFadeIn"
+    };
+    let backdrop_animation_name = if is_exiting {
+        "backdropFadeOut"
+    } else {
+        "backdropFadeIn"
     };
 
     rsx! {
@@ -89,6 +125,7 @@ pub fn AnimatedDialog(
             z_index: "1000",
             tabindex: "0",
             "data-dialog": "true",
+            animation: "{backdrop_animation_name} 0.2s ease-out forwards",
             onclick: {
                 let mut visibility = visibility.clone();
                 let on_close = on_close.clone();
@@ -143,6 +180,22 @@ pub fn AnimatedDialog(
 
                 style {
                     r#"
+                    @keyframes backdropFadeIn {{
+                        from {{
+                            opacity: 0;
+                        }}
+                        to {{
+                            opacity: 1;
+                        }}
+                    }}
+                    @keyframes backdropFadeOut {{
+                        from {{
+                            opacity: 1;
+                        }}
+                        to {{
+                            opacity: 0;
+                        }}
+                    }}
                     @keyframes modalFadeIn {{
                         from {{
                             opacity: 0;
