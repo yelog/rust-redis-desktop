@@ -1102,12 +1102,13 @@ pub fn ValueViewer(
                     display: "flex",
                     flex_direction: "column",
 
-                    div {
-                        padding: "18px 20px 16px",
-                        border_bottom: "1px solid {COLOR_BORDER}",
-                        background: COLOR_BG,
-
+                    if !display_key.is_empty() {
                         div {
+                            padding: "18px 20px 16px",
+                            border_bottom: "1px solid {COLOR_BORDER}",
+                            background: COLOR_BG,
+
+                            div {
                             display: "flex",
                             justify_content: "space_between",
                             align_items: "flex_end",
@@ -1443,6 +1444,7 @@ pub fn ValueViewer(
                                 }
                             }
                         }
+                    }
                     }
 
                     div {

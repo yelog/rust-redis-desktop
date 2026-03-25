@@ -728,51 +728,15 @@ pub fn KeyBrowser(
                     display: "flex",
                     flex_direction: "column",
                     overflow: "hidden",
-                    background: COLOR_BG,
 
-                    if selected_key.read().is_empty() {
-                        div {
-                            flex: "1",
-                            display: "flex",
-                            flex_direction: "column",
-                            align_items: "center",
-                            justify_content: "center",
-                            gap: "12px",
-                            color: COLOR_TEXT_SECONDARY,
-
-                            IconDatabase { size: Some(48) }
-
-                            div {
-                                font_size: "16px",
-                                color: COLOR_TEXT,
-
-                                "选择一个 Key 查看内容"
-                            }
-
-                            div {
-                                font_size: "13px",
-
-                                "从左侧树形列表中选择 key，此处将显示其值"
-                            }
-                        }
-                    } else {
-                        div {
-                            flex: "1",
-                            min_height: "0",
-                            display: "flex",
-                            flex_direction: "column",
-                            overflow: "hidden",
-
-                            ValueViewer {
-                                key: "{connection_id}",
-                                connection_pool: connection_pool.clone(),
-                                connection_version: connection_version,
-                                selected_key: selected_key,
-                                on_refresh: move |_| {
-                                    refresh_trigger.set(refresh_trigger() + 1);
-                                },
-                            }
-                        }
+                    ValueViewer {
+                        key: "{connection_id}",
+                        connection_pool: connection_pool.clone(),
+                        connection_version: connection_version,
+                        selected_key: selected_key,
+                        on_refresh: move |_| {
+                            refresh_trigger.set(refresh_trigger() + 1);
+                        },
                     }
                 }
             }
