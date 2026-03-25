@@ -766,6 +766,7 @@ pub fn KeyBrowser(
                             ValueViewer {
                                 key: "{connection_id}",
                                 connection_pool: connection_pool.clone(),
+                                connection_version: connection_version,
                                 selected_key: selected_key,
                                 on_refresh: move |_| {
                                     refresh_trigger.set(refresh_trigger() + 1);

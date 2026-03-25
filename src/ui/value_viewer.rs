@@ -14,7 +14,7 @@ use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
 use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
-use crate::ui::{copy_text_to_clipboard, ToastManager};
+use crate::ui::{copy_text_to_clipboard, ServerInfoPanel, ToastManager};
 use dioxus::prelude::*;
 use serde_json;
 use std::collections::HashMap;
@@ -790,6 +790,7 @@ async fn search_set_server(
 #[component]
 pub fn ValueViewer(
     connection_pool: ConnectionPool,
+    connection_version: u32,
     selected_key: Signal<String>,
     on_refresh: EventHandler<()>,
 ) -> Element {
@@ -1464,18 +1465,10 @@ pub fn ValueViewer(
                                 "正在加载 Key 内容..."
                             }
                         } else if display_key.is_empty() {
-                            div {
-                                height: "100%",
-                                display: "flex",
-                                align_items: "center",
-                                justify_content: "center",
-                                color: COLOR_TEXT_SECONDARY,
-                                text_align: "center",
-                                border: "1px solid {COLOR_BORDER}",
-                                border_radius: "12px",
-                                background: COLOR_BG_SECONDARY,
-
-                                "尚未选择 Key"
+                            ServerInfoPanel {
+                                connection_pool: connection_pool.clone(),
+                                connection_version: connection_version,
+                                auto_refresh_interval: 0,
                             }
                         } else if let Some(info) = info.clone() {
                             {
