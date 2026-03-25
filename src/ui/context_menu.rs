@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 static CONTEXT_MENU_OPEN: AtomicBool = AtomicBool::new(false);
 
@@ -10,6 +10,17 @@ pub fn context_menu_is_open() -> bool {
 
 pub fn set_context_menu_open(open: bool) {
     CONTEXT_MENU_OPEN.store(open, Ordering::SeqCst);
+}
+
+const ENTER_DURATION_MS: u64 = 150;
+const EXIT_DURATION_MS: u64 = 100;
+
+#[derive(Clone, Copy, PartialEq, Default)]
+enum VisibilityState {
+    #[default]
+    Hidden,
+    Visible,
+    Exiting,
 }
 
 #[derive(Clone, PartialEq)]
@@ -38,13 +49,22 @@ impl<T> ContextMenuState<T> {
 
 #[component]
 pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element) -> Element {
+    let mut visibility = use_signal(VisibilityState::default);
     let mut mounted = use_signal(|| false);
-    
-    use_effect(move || {
-        if !mounted() {
+
+    {
+        let current = *visibility.read();
+        if current == VisibilityState::Hidden && !mounted() {
+            visibility.set(VisibilityState::Visible);
             mounted.set(true);
             set_context_menu_open(true);
+        }
+    }
+
+    use_effect(move || {
+        if *visibility.read() == VisibilityState::Visible {
             let on_close = on_close.clone();
+            let mut visibility = visibility.clone();
             spawn(async move {
                 let mut eval = dioxus::document::eval(
                     r#"
@@ -57,12 +77,32 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
                     "#,
                 );
                 while let Ok(_) = eval.recv::<String>().await {
-                    on_close.call(());
+                    visibility.set(VisibilityState::Exiting);
+                    let on_close = on_close.clone();
+                    let mut vis = visibility.clone();
+                    spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(EXIT_DURATION_MS)).await;
+                        vis.set(VisibilityState::Hidden);
+                        set_context_menu_open(false);
+                        on_close.call(());
+                    });
                     break;
                 }
             });
         }
     });
+
+    let state = *visibility.read();
+    if state == VisibilityState::Hidden {
+        return rsx! {};
+    }
+
+    let is_exiting = state == VisibilityState::Exiting;
+    let (animation_name, duration_ms) = if is_exiting {
+        ("contextMenuFadeOut", EXIT_DURATION_MS)
+    } else {
+        ("contextMenuFadeIn", ENTER_DURATION_MS)
+    };
 
     rsx! {
         div {
@@ -79,6 +119,33 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
             display: "flex",
             flex_direction: "column",
             gap: "2px",
+            transform_origin: "top left",
+            animation: "{animation_name} {duration_ms}ms ease-out forwards",
+
+            style {
+                r#"
+                @keyframes contextMenuFadeIn {{
+                    from {{
+                        opacity: 0;
+                        transform: scale(0.9);
+                    }}
+                    to {{
+                        opacity: 1;
+                        transform: scale(1);
+                    }}
+                }}
+                @keyframes contextMenuFadeOut {{
+                    from {{
+                        opacity: 1;
+                        transform: scale(1);
+                    }}
+                    to {{
+                        opacity: 0;
+                        transform: scale(0.95);
+                    }}
+                }}
+                "#
+            }
 
             {children}
         }
