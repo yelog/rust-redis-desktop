@@ -16,7 +16,7 @@ tokio = { version = "1", features = ["full"] }
 redis = { version = "1", features = ["tokio-comp", "cluster", "cluster-async", "connection-manager", "tokio-native-tls-comp"] }
 
 # SSH tunnel
-ssh2 = "0.9"
+ssh2 = { version = "0.9", features = ["vendored-openssl"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
