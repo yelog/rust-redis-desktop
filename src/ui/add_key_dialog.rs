@@ -75,23 +75,6 @@ pub fn AddKeyDialog(
             max_height: "80vh".to_string(),
 
             div {
-                position: "relative",
-
-                button {
-                    position: "absolute",
-                    top: "-8px",
-                    right: "-8px",
-                    z_index: "10",
-                    padding: "4px",
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "{colors.text_secondary}",
-                    onclick: move |_| on_cancel.call(()),
-
-                    IconX { size: Some(18) }
-                }
-
                 h3 {
                     color: "{colors.accent}",
                     margin_bottom: "16px",

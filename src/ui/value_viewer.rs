@@ -1241,35 +1241,37 @@ pub fn ValueViewer(
                                                                 }
                                                             }
 
-                                                            button {
-                                                                padding: "4px 8px",
-                                                                background: if binary_format() == BinaryFormat::Bitmap { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                color: if binary_format() == BinaryFormat::Bitmap { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                border: "none",
-                                                                border_radius: "4px",
-                                                                cursor: "pointer",
-                                                                font_size: "12px",
-                                                                onclick: {
-                                                                    let pool = connection_pool.clone();
-                                                                    let key = display_key.clone();
-                                                                    move |_| {
-                                                                        let pool = pool.clone();
-                                                                        let key = key.clone();
-                                                                        spawn(async move {
-                                                                            match pool.get_bitmap_info(&key).await {
-                                                                                Ok(info) => {
-                                                                                    bitmap_info.set(Some(info));
-                                                                                    binary_format.set(BinaryFormat::Bitmap);
+                                                            if !is_serialized {
+                                                                button {
+                                                                    padding: "4px 8px",
+                                                                    background: if binary_format() == BinaryFormat::Bitmap { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                    color: if binary_format() == BinaryFormat::Bitmap { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                    border: "none",
+                                                                    border_radius: "4px",
+                                                                    cursor: "pointer",
+                                                                    font_size: "12px",
+                                                                    onclick: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        move |_| {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            spawn(async move {
+                                                                                match pool.get_bitmap_info(&key).await {
+                                                                                    Ok(info) => {
+                                                                                        bitmap_info.set(Some(info));
+                                                                                        binary_format.set(BinaryFormat::Bitmap);
+                                                                                    }
+                                                                                    Err(e) => {
+                                                                                        toast_manager.write().error(&format!("加载 Bitmap 失败: {}", e));
+                                                                                    }
                                                                                 }
-                                                                                Err(e) => {
-                                                                                    toast_manager.write().error(&format!("加载 Bitmap 失败: {}", e));
-                                                                                }
-                                                                            }
-                                                                        });
-                                                                    }
-                                                                },
+                                                                            });
+                                                                        }
+                                                                    },
 
-                                                                "Bitmap"
+                                                                    "Bitmap"
+                                                                }
                                                             }
 
                                                             button {

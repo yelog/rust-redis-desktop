@@ -126,7 +126,12 @@ pub fn Sidebar(
                                         evt.prevent_default();
                                         let coords = evt.data().client_coordinates();
                                         context_menu.set(None);
-                                        context_menu.set(Some((id, (coords.x as i32, coords.y as i32))));
+                                        let id = id;
+                                        let x = coords.x as i32;
+                                        let y = coords.y as i32;
+                                        spawn(async move {
+                                            context_menu.set(Some((id, (x, y))));
+                                        });
                                     }
                                 },
 

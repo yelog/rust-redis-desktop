@@ -1,5 +1,5 @@
 use crate::theme::ThemeColors;
-use crate::ui::animation_utils::prefers_reduced_motion;
+use crate::ui::icons::IconX;
 use dioxus::prelude::*;
 use std::time::Duration;
 
@@ -20,13 +20,14 @@ pub fn AnimatedDialog(
     colors: ThemeColors,
     width: Option<String>,
     max_height: Option<String>,
+    show_close_button: Option<bool>,
     children: Element,
 ) -> Element {
     let width_val = width.unwrap_or_else(|| "450px".to_string());
     let max_height_val = max_height.unwrap_or_else(|| "90vh".to_string());
+    let show_close = show_close_button.unwrap_or(true);
 
     let mut visibility = use_signal(VisibilityState::default);
-    let reduced_motion = prefers_reduced_motion();
     let backdrop_color = colors.overlay_backdrop;
 
     let should_show = is_open || *visibility.read() == VisibilityState::Exiting;
@@ -59,9 +60,6 @@ pub fn AnimatedDialog(
         "modalFadeIn"
     };
 
-    let mut visibility_for_click = visibility.clone();
-    let on_close_for_click = on_close.clone();
-
     rsx! {
         div {
             position: "fixed",
@@ -74,18 +72,45 @@ pub fn AnimatedDialog(
             align_items: "center",
             justify_content: "center",
             z_index: "1000",
-            onclick: move |_| {
-                let current = *visibility_for_click.read();
-                if current == VisibilityState::Visible {
-                    visibility_for_click.set(VisibilityState::Exiting);
-
-                    let mut vis = visibility_for_click.clone();
-                    let on_close = on_close_for_click.clone();
-                    spawn(async move {
-                        tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
-                        vis.set(VisibilityState::Hidden);
-                        on_close.call(());
-                    });
+            tabindex: "-1",
+            autofocus: true,
+            "data-dialog": "true",
+            onclick: {
+                let mut visibility = visibility.clone();
+                let on_close = on_close.clone();
+                move |_| {
+                    let current = *visibility.read();
+                    if current == VisibilityState::Visible {
+                        visibility.set(VisibilityState::Exiting);
+                        let mut vis = visibility.clone();
+                        let on_close = on_close.clone();
+                        spawn(async move {
+                            tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                            vis.set(VisibilityState::Hidden);
+                            on_close.call(());
+                        });
+                    }
+                }
+            },
+            onkeydown: {
+                let mut visibility = visibility.clone();
+                let on_close = on_close.clone();
+                move |e: Event<KeyboardData>| {
+                    if e.data().key() == Key::Escape {
+                        e.prevent_default();
+                        e.stop_propagation();
+                        let current = *visibility.read();
+                        if current == VisibilityState::Visible {
+                            visibility.set(VisibilityState::Exiting);
+                            let mut vis = visibility.clone();
+                            let on_close = on_close.clone();
+                            spawn(async move {
+                                tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                vis.set(VisibilityState::Hidden);
+                                on_close.call(());
+                            });
+                        }
+                    }
                 }
             },
 
@@ -99,6 +124,7 @@ pub fn AnimatedDialog(
                 overflow_y: "auto",
                 overflow_x: "hidden",
                 animation: "{animation_name} 0.2s ease-out forwards",
+                position: "relative",
                 onclick: move |evt| evt.stop_propagation(),
 
                 style {
@@ -124,6 +150,39 @@ pub fn AnimatedDialog(
                         }}
                     }}
                     "#
+                }
+
+                if show_close {
+                    button {
+                        position: "absolute",
+                        top: "8px",
+                        right: "8px",
+                        z_index: "10",
+                        padding: "4px",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "{colors.text_secondary}",
+                        onclick: {
+                            let mut visibility = visibility.clone();
+                            let on_close = on_close.clone();
+                            move |_| {
+                                let current = *visibility.read();
+                                if current == VisibilityState::Visible {
+                                    visibility.set(VisibilityState::Exiting);
+                                    let mut vis = visibility.clone();
+                                    let on_close = on_close.clone();
+                                    spawn(async move {
+                                        tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                        vis.set(VisibilityState::Hidden);
+                                        on_close.call(());
+                                    });
+                                }
+                            }
+                        },
+
+                        IconX { size: Some(18) }
+                    }
                 }
 
                 {children}

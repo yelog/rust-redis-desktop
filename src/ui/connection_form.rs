@@ -3,7 +3,6 @@ use crate::connection::{
 };
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
-use crate::ui::icons::IconX;
 use dioxus::prelude::*;
 
 #[derive(Clone, PartialEq, Default)]
@@ -242,23 +241,6 @@ pub fn ConnectionForm(
             width: "450px".to_string(),
 
             div {
-                position: "relative",
-
-                button {
-                    position: "absolute",
-                    top: "-8px",
-                    right: "-8px",
-                    z_index: "10",
-                    padding: "4px",
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "{colors.text_secondary}",
-                    onclick: move |_| on_cancel.call(()),
-
-                    IconX { size: Some(18) }
-                }
-
                 h2 {
                     color: "{colors.text}",
                     margin_bottom: "20px",

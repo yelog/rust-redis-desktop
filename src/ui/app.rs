@@ -693,6 +693,10 @@ document.addEventListener('keydown', (e) => {
         dioxus.send('refresh_keys');
     }
     if (e.key === 'Escape') {
+        const dialog = document.querySelector('[data-dialog="true"]');
+        if (dialog) {
+            return;
+        }
         dioxus.send('escape_pressed');
     }
 });

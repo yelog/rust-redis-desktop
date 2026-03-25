@@ -1,9 +1,28 @@
 use dioxus::prelude::*;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, PartialEq)]
 pub struct ContextMenuPosition {
     pub x: i32,
     pub y: i32,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct ContextMenuState<T> {
+    pub data: T,
+    pub x: i32,
+    pub y: i32,
+    pub id: u64,
+}
+
+impl<T> ContextMenuState<T> {
+    pub fn new(data: T, x: i32, y: i32) -> Self {
+        let id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
+        Self { data, x, y, id }
+    }
 }
 
 #[component]
@@ -17,6 +36,10 @@ pub fn ContextMenu(x: i32, y: i32, on_close: EventHandler<()>, children: Element
             bottom: "0",
             z_index: "999",
             onclick: move |_| on_close.call(()),
+            oncontextmenu: move |e| {
+                e.prevent_default();
+                on_close.call(());
+            },
         }
 
         div {
