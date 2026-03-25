@@ -29,6 +29,7 @@ pub fn AnimatedDialog(
 
     let mut visibility = use_signal(VisibilityState::default);
     let backdrop_color = colors.overlay_backdrop;
+    let dialog_id = use_signal(|| format!("dialog-{}", uuid::Uuid::new_v4()));
 
     let should_show = is_open || *visibility.read() == VisibilityState::Exiting;
 
@@ -48,6 +49,19 @@ pub fn AnimatedDialog(
         }
     }
 
+    use_effect(move || {
+        if *visibility.read() == VisibilityState::Visible {
+            let id = dialog_id();
+            spawn(async move {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                let _ = document::eval(&format!(
+                    "document.getElementById('{}')?.focus()",
+                    id
+                ));
+            });
+        }
+    });
+
     if !should_show {
         return rsx! {};
     }
@@ -62,6 +76,7 @@ pub fn AnimatedDialog(
 
     rsx! {
         div {
+            id: "{dialog_id}",
             position: "fixed",
             top: "0",
             left: "0",
@@ -72,8 +87,7 @@ pub fn AnimatedDialog(
             align_items: "center",
             justify_content: "center",
             z_index: "1000",
-            tabindex: "-1",
-            autofocus: true,
+            tabindex: "0",
             "data-dialog": "true",
             onclick: {
                 let mut visibility = visibility.clone();
