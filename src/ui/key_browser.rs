@@ -444,13 +444,30 @@ pub fn KeyBrowser(
                                 align_items: "center",
                                 gap: "6px",
                                 font_size: "12px",
+                                onclick: move |_| show_add_key_dialog.set(true),
+
+                                IconPlus { size: Some(12) }
+                                "新增"
+                            }
+
+                            button {
+                                padding: "6px 10px",
+                                background: COLOR_SURFACE_HIGHEST,
+                                color: COLOR_TEXT,
+                                border: "1px solid {COLOR_BORDER}",
+                                border_radius: "6px",
+                                cursor: "pointer",
+                                display: "flex",
+                                align_items: "center",
+                                gap: "6px",
+                                font_size: "12px",
                                 onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
 
                                 IconRefresh { size: Some(12) }
                                 "刷新"
                             }
 
-button {
+                            button {
                             padding: "6px 10px",
                             background: "rgba(255, 180, 171, 0.10)",
                             color: "#ffb4ab",
