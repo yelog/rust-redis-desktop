@@ -263,6 +263,10 @@ async fn load_key_data(
                         binary_format.set(match detected_format {
                             SerializationFormat::Java => BinaryFormat::JavaSerialized,
                             SerializationFormat::Php => BinaryFormat::Php,
+                            SerializationFormat::MsgPack => BinaryFormat::MsgPack,
+                            SerializationFormat::Pickle => BinaryFormat::Pickle,
+                            SerializationFormat::Kryo => BinaryFormat::Kryo,
+                            SerializationFormat::Fst => BinaryFormat::Kryo,
                             _ => BinaryFormat::Hex,
                         });
                     } else {
