@@ -75,22 +75,6 @@ fn collect_leaf_keys_by_node_id(nodes: &[TreeNode], node_id: &str) -> Vec<String
     }
 }
 
-fn find_node_ttl_by_path(nodes: &[TreeNode], path: &str) -> Option<i64> {
-    fn find_node<'a>(nodes: &'a [TreeNode], path: &str) -> Option<&'a TreeNode> {
-        for node in nodes {
-            if node.path == path {
-                return Some(node);
-            }
-            if let found @ Some(_) = find_node(&node.children, path) {
-                return found;
-            }
-        }
-        None
-    }
-
-    find_node(nodes, path).and_then(|node| node.key_info.as_ref()?.ttl)
-}
-
 fn key_match_pattern(search_pattern: &str) -> String {
     if search_pattern.trim().is_empty() {
         "*".to_string()
@@ -842,10 +826,15 @@ pub fn KeyBrowser(
                                 disabled: !is_leaf,
                                 onclick: {
                                     let node_path = node_path.clone();
+                                    let pool = connection_pool.clone();
                                     move |_| {
                                         context_menu.set(None);
-                                        let current_ttl = find_node_ttl_by_path(&tree_nodes(), &node_path);
-                                        show_batch_ttl_dialog.set(Some((vec![node_path.clone()], current_ttl)));
+                                        let pool = pool.clone();
+                                        let node_path = node_path.clone();
+                                        spawn(async move {
+                                            let ttl = pool.get_key_info(&node_path).await.ok().and_then(|info| info.ttl);
+                                            show_batch_ttl_dialog.set(Some((vec![node_path], ttl)));
+                                        });
                                     }
                                 },
                             }
