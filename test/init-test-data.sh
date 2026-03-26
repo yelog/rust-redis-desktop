@@ -118,6 +118,58 @@ echo "  ZSet:          test:zset:scores, test:zset:priority"
 echo "  Stream:        test:stream:events"
 
 # ============================================
+# Protobuf Test Data (raw protobuf encoding)
+# ============================================
+echo ""
+echo "Setting Protobuf test data..."
+
+# Simple protobuf: field 1 = string "hello", field 2 = varint 42
+printf '\x0a\x05hello\x10\x2a' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:protobuf:simple"
+
+# Protobuf with nested data: field 1 = string "user", field 2 = embedded message
+printf '\x0a\x04user\x12\x08\x08\x01\x12\x04John' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:protobuf:user"
+
+# Protobuf array: field 1 = repeated integers
+printf '\x08\x01\x08\x02\x08\x03\x08\x04\x08\x05' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:protobuf:numbers"
+
+# ============================================
+# ZSTD Compressed Test Data
+# ============================================
+echo "Setting ZSTD compressed test data..."
+
+# Create a small JSON, compress with zstd, and store
+# Note: This requires zstd to be installed. If not available, we'll store pre-compressed data.
+if command -v zstd &> /dev/null; then
+  echo '{"name":"zstd-test","compressed":true,"items":[1,2,3]}' | zstd -c | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:zstd:json"
+  echo 'Hello, this is a ZSTD compressed string for testing!' | zstd -c | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:zstd:text"
+else
+  # Pre-compressed ZSTD data (handcrafted magic number + simple data)
+  # Magic: 0x28b52ffd, frame with simple content
+  printf '\x28\xb5\x2f\xfd\x24\x05\x00\x00\x00Hello' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:zstd:raw"
+fi
+
+# ============================================
+# Image Test Data (small PNG, JPEG, GIF)
+# ============================================
+echo "Setting Image test data..."
+
+# Minimal valid PNG (1x1 transparent pixel)
+# PNG signature + IHDR + IDAT + IEND
+printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\x0d\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:image:png"
+
+# Minimal JPEG (simplified)
+printf '\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:image:jpeg"
+
+# Minimal GIF (1x1 pixel)
+printf 'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:image:gif"
+
+echo ""
+echo "New test types added:"
+echo "  Protobuf:      test:protobuf:simple, test:protobuf:user, test:protobuf:numbers"
+echo "  ZSTD:          test:zstd:json, test:zstd:text (or test:zstd:raw)"
+echo "  Image:         test:image:png, test:image:jpeg, test:image:gif"
+
+# ============================================
 # Large Dataset for Pagination Testing (100k rows)
 # ============================================
 echo ""

@@ -6,6 +6,12 @@ services:
       - "6379:6379"
     command: redis-server --appendonly no
 
+  redis-stack:
+    image: redis/redis-stack-server:latest
+    container_name: redis-stack
+    ports:
+      - "6383:6379"
+
   redis-cluster-node-1:
     image: redis:7-alpine
     container_name: redis-cluster-1
