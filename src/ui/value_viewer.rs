@@ -1999,36 +1999,56 @@ pub fn ValueViewer(
 BinaryFormat::Image => {
                                                                 let bytes = binary_bytes();
                                                                 if let Some(format) = detect_image_format(&bytes) {
-                                                                    let mime_type = match format {
-                                                                        "PNG" => "image/png",
-                                                                        "JPEG" => "image/jpeg",
-                                                                        "GIF" => "image/gif",
-                                                                        "WEBP" => "image/webp",
-                                                                        "ICO" => "image/x-icon",
-                                                                        _ => "image/png",
+                                                                    let extension = match format {
+                                                                        "PNG" => "png",
+                                                                        "JPEG" => "jpg",
+                                                                        "GIF" => "gif",
+                                                                        "WEBP" => "webp",
+                                                                        "ICO" => "ico",
+                                                                        _ => "png",
                                                                     };
-                                                                    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
-                                                                    let data_url = format!("data:{};base64,{}", mime_type, base64_data);
-                                                                    rsx! {
-                                                                        div {
-                                                                            display: "flex",
-                                                                            flex_direction: "column",
-                                                                            align_items: "center",
-                                                                            gap: "12px",
 
-                                                                            img {
-                                                                                max_width: "100%",
-                                                                                max_height: "500px",
-                                                                                border_radius: "8px",
-                                                                                box_shadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                                                                                src: "{data_url}",
+                                                                    let temp_dir = std::env::temp_dir();
+                                                                    let file_name = format!("redis_image_{}.{}", uuid::Uuid::new_v4(), extension);
+                                                                    let file_path = temp_dir.join(&file_name);
+
+                                                                    match std::fs::write(&file_path, &bytes) {
+                                                                        Ok(_) => {
+                                                                            let file_url = format!("file://{}", file_path.display());
+                                                                            rsx! {
+                                                                                div {
+                                                                                    display: "flex",
+                                                                                    flex_direction: "column",
+                                                                                    align_items: "center",
+                                                                                    gap: "12px",
+
+                                                                                    img {
+                                                                                        max_width: "100%",
+                                                                                        max_height: "500px",
+                                                                                        border_radius: "8px",
+                                                                                        box_shadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                                                                                        src: "{file_url}",
+                                                                                    }
+
+                                                                                    div {
+                                                                                        color: COLOR_TEXT_SECONDARY,
+                                                                                        font_size: "12px",
+
+                                                                                        "{format} - {bytes.len()} 字节"
+                                                                                    }
+                                                                                }
                                                                             }
+                                                                        }
+                                                                        Err(e) => {
+                                                                            rsx! {
+                                                                                div {
+                                                                                    padding: "16px",
+                                                                                    background: COLOR_ERROR_BG,
+                                                                                    border_radius: "8px",
+                                                                                    color: COLOR_ERROR,
 
-                                                                            div {
-                                                                                color: COLOR_TEXT_SECONDARY,
-                                                                                font_size: "12px",
-
-                                                                                "{format} - {bytes.len()} 字节"
+                                                                                    "保存图片失败: {e}"
+                                                                                }
                                                                             }
                                                                         }
                                                                     }

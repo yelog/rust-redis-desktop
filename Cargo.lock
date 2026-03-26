@@ -5819,6 +5819,7 @@ dependencies = [
  "serde_json",
  "ssh2",
  "tao",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-test",

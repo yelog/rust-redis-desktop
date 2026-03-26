@@ -51,7 +51,8 @@ brotli = "7.0"
 zstd = "0.13"
 rfd = "0.17"
 humansize = "2.1"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+tempfile = "3"
 
 # System tray (non-Linux platforms)
 [target.'cfg(not(target_os = "linux"))'.dependencies]
