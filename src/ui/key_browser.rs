@@ -15,6 +15,7 @@ use crate::ui::memory_analysis_dialog::MemoryAnalysisDialog;
 use crate::ui::pattern_delete_dialog::PatternDeleteDialog;
 use crate::ui::{
     copy_text_to_clipboard, LazyTreeNode, ResizableDivider, ToastManager, TreeState, ValueViewer,
+    VirtualTreeList,
 };
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -119,6 +120,8 @@ pub fn KeyBrowser(
     let mut key_list_width = use_signal(|| 320.0);
     let mut show_export_dialog = use_signal(|| None::<Vec<ExportTarget>>);
     let mut toast_manager = use_context::<Signal<ToastManager>>();
+    let mut expanded_paths = use_signal(HashSet::<String>::new);
+    let use_virtual_scroll = use_signal(|| true);
 
     {
         let mut show_delete_dialog = show_delete_dialog.clone();
@@ -678,6 +681,29 @@ pub fn KeyBrowser(
                                 } else {
                                     "没有找到 key"
                                 }
+                            }
+                        } else if use_virtual_scroll() && !tree_state.read().selection_mode {
+                            VirtualTreeList {
+                                nodes: tree_nodes.read().clone(),
+                                selected_key: selected_key(),
+                                expanded_paths: expanded_paths,
+                                on_select: {
+                                    let on_key_select = on_key_select.clone();
+                                    move |key: String| {
+                                        on_key_select.call(key);
+                                    }
+                                },
+                                on_toggle: {
+                                    let expanded_paths = expanded_paths.clone();
+                                    move |path: String| {
+                                        let mut expanded = expanded_paths.write();
+                                        if expanded.contains(&path) {
+                                            expanded.remove(&path);
+                                        } else {
+                                            expanded.insert(path);
+                                        }
+                                    }
+                                },
                             }
                         } else {
                             for node in tree_nodes.read().iter() {
