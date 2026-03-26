@@ -3,6 +3,7 @@ mod connection;
 mod crypto;
 mod formatter;
 mod i18n;
+mod protobuf_schema;
 mod redis;
 mod serialization;
 mod theme;

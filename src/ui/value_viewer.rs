@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::protobuf_schema::{PROTO_REGISTRY, ProtoRegistry};
 use crate::redis::{KeyInfo, KeyType};
 use crate::serialization::{
     detect_serialization_format, is_java_serialization, is_protobuf_data, parse_to_json, SerializationFormat,
@@ -2458,26 +2459,12 @@ BinaryFormat::Kryo => {
                                                                     }
                                                                 }
                                                             }
-                                                            BinaryFormat::Protobuf => {
+BinaryFormat::Protobuf => {
                                                                 if let Some((SerializationFormat::Protobuf, ref data)) = serialization_info {
-                                                                    match parse_to_json(data, SerializationFormat::Protobuf) {
-                                                                        Ok(json_str) => rsx! {
-                                                                            JsonViewer {
-                                                                                value: json_str,
-                                                                                editable: false,
-                                                                                on_change: move |_| {},
-                                                                            }
-                                                                        },
-                                                                        Err(e) => rsx! {
-                                                                            div {
-                                                                                padding: "16px",
-                                                                                background: COLOR_ERROR_BG,
-                                                                                border_radius: "8px",
-                                                                                color: COLOR_ERROR,
-
-                                                                                "Protobuf 解析错误: {e}"
-                                                                            }
-                                                                        },
+                                                                    rsx! {
+                                                                        ProtobufViewer {
+                                                                            data: data.clone(),
+                                                                        }
                                                                     }
                                                                 } else {
                                                                     rsx! {
@@ -6322,6 +6309,162 @@ pub fn BitmapViewer(
                         "应用"
                     }
                 }
+            }
+        }
+    }
+}
+
+#[component]
+fn ProtobufViewer(data: Vec<u8>) -> Element {
+    let mut selected_message = use_signal(|| String::new());
+    let mut import_error = use_signal(|| None::<String>);
+
+    let registry = PROTO_REGISTRY();
+    let messages = registry.list_messages();
+    let has_schema = !messages.is_empty();
+
+    let json_result = if !selected_message().is_empty() {
+        registry.decode_with_schema(&data, &selected_message()).ok()
+    } else {
+        parse_to_json(&data, SerializationFormat::Protobuf).ok()
+    };
+
+    rsx! {
+        div {
+            display: "flex",
+            flex_direction: "column",
+            gap: "12px",
+
+            div {
+                display: "flex",
+                gap: "8px",
+                align_items: "center",
+                flex_wrap: "wrap",
+
+                button {
+                    padding: "6px 12px",
+                    background: COLOR_PRIMARY,
+                    color: COLOR_TEXT_CONTRAST,
+                    border: "none",
+                    border_radius: "4px",
+                    cursor: "pointer",
+                    font_size: "12px",
+
+                    onclick: move |_| {
+                        spawn(async move {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("Proto", &["proto"])
+                                .pick_file()
+                            {
+                                let mut reg = PROTO_REGISTRY.write();
+                                match reg.import_file(&path) {
+                                    Ok(names) => {
+                                        if !names.is_empty() {
+                                            selected_message.set(names[0].clone());
+                                        }
+                                        import_error.set(None);
+                                    }
+                                    Err(e) => {
+                                        import_error.set(Some(e));
+                                    }
+                                }
+                            }
+                        });
+                    },
+
+                    "导入 .proto 文件"
+                }
+
+                if has_schema {
+                    select {
+                        padding: "6px 12px",
+                        background: COLOR_BG_TERTIARY,
+                        color: COLOR_TEXT,
+                        border: format!("1px solid {}", COLOR_BORDER),
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "12px",
+
+                        onchange: move |e| {
+                            selected_message.set(e.value());
+                        },
+
+                        option {
+                            value: "",
+                            "Raw 解析"
+                        }
+
+                        for msg in messages.iter() {
+                            option {
+                                value: msg.full_name.clone(),
+                                selected: selected_message() == msg.full_name,
+
+                                "{msg.name}"
+                            }
+                        }
+                    }
+
+                    button {
+                        padding: "4px 8px",
+                        background: COLOR_BG_TERTIARY,
+                        color: COLOR_TEXT_SECONDARY,
+                        border: format!("1px solid {}", COLOR_BORDER),
+                        border_radius: "4px",
+                        cursor: "pointer",
+                        font_size: "11px",
+
+                        onclick: move |_| {
+                            PROTO_REGISTRY.write().clear();
+                            selected_message.set(String::new());
+                        },
+
+                        "清除 Schema"
+                    }
+                }
+            }
+
+            if let Some(ref err) = import_error() {
+                div {
+                    padding: "8px 12px",
+                    background: COLOR_ERROR_BG,
+                    border_radius: "4px",
+                    color: COLOR_ERROR,
+                    font_size: "12px",
+
+                    "导入错误: {err}"
+                }
+            }
+
+            if has_schema {
+                div {
+                    padding: "8px 12px",
+                    background: COLOR_BG_TERTIARY,
+                    border_radius: "4px",
+                    color: COLOR_TEXT_SECONDARY,
+                    font_size: "11px",
+
+                    "已加载 {messages.len()} 个消息类型"
+                }
+            }
+
+            match json_result {
+                Some(json) => rsx! {
+                    JsonViewer {
+                        value: serde_json::to_string_pretty(&json).unwrap_or_default(),
+                        editable: false,
+                        on_change: move |_| {},
+                    }
+                },
+                None => rsx! {
+                    div {
+                        padding: "16px",
+                        background: COLOR_ERROR_BG,
+                        border_radius: "8px",
+                        color: COLOR_ERROR,
+
+                        "Protobuf 解析失败"
+                    }
+                },
             }
         }
     }

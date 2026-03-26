@@ -30,6 +30,25 @@ pub fn try_parse_protobuf_as_any(data: &[u8]) -> Option<JsonValue> {
     }
 }
 
+pub fn try_parse_with_schema(data: &[u8], message_name: &str) -> Option<JsonValue> {
+    let registry = crate::protobuf_schema::PROTO_REGISTRY();
+    registry.decode_with_schema(data, message_name).ok()
+}
+
+pub fn get_available_messages() -> Vec<String> {
+    let registry = crate::protobuf_schema::PROTO_REGISTRY();
+    registry
+        .list_messages()
+        .iter()
+        .map(|m| m.full_name.clone())
+        .collect()
+}
+
+pub fn has_schema() -> bool {
+    let registry = crate::protobuf_schema::PROTO_REGISTRY();
+    !registry.is_empty()
+}
+
 fn parse_protobuf_fields(data: &[u8]) -> serde_json::Map<String, JsonValue> {
     let mut result = serde_json::Map::new();
 
