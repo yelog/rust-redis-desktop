@@ -8,6 +8,7 @@ pub struct FlatNode {
     pub name: String,
     pub depth: usize,
     pub is_folder: bool,
+    pub is_expanded: bool,
     pub children_count: usize,
     pub key_type: Option<KeyType>,
 }
@@ -67,19 +68,21 @@ impl FlatTreeAdapter {
     }
 
     fn flatten_node(&mut self, node: &TreeNode, depth: usize) {
+        let is_expanded = self.expanded_paths.contains(&node.path);
         let flat_node = FlatNode {
             id: node.node_id.clone(),
             path: node.path.clone(),
             name: node.name.clone(),
             depth,
             is_folder: !node.is_leaf,
+            is_expanded,
             children_count: node.children.len(),
             key_type: node.key_info.as_ref().map(|info| info.key_type.clone()),
         };
 
         self.visible_nodes.push(flat_node);
 
-        if !node.is_leaf && self.expanded_paths.contains(&node.path) {
+        if !node.is_leaf && is_expanded {
             for child in &node.children {
                 self.flatten_node(child, depth + 1);
             }

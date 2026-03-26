@@ -257,6 +257,7 @@ async fn load_key_data(
     mut is_binary: Signal<bool>,
     mut binary_format: Signal<BinaryFormat>,
     mut serialization_data: Signal<Option<(SerializationFormat, Vec<u8>)>>,
+    mut binary_bytes: Signal<Vec<u8>>,
     mut bitmap_info: Signal<Option<crate::redis::BitmapInfo>>,
     mut loading: Signal<bool>,
     mut hash_cursor: Signal<u64>,
@@ -312,6 +313,7 @@ async fn load_key_data(
 
                 if is_binary_data(&bytes) {
                     is_binary.set(true);
+                    binary_bytes.set(bytes.clone());
 
                     let detected_format = detect_serialization_format(&bytes);
                     if detected_format != SerializationFormat::Unknown {
@@ -327,6 +329,9 @@ async fn load_key_data(
                             SerializationFormat::Protobuf => BinaryFormat::Protobuf,
                             _ => BinaryFormat::Hex,
                         });
+                    } else if detect_image_format(&bytes).is_some() {
+                        serialization_data.set(None);
+                        binary_format.set(BinaryFormat::Image);
                     } else {
                         serialization_data.set(None);
                         if bytes.len() <= 1024 {
@@ -340,6 +345,7 @@ async fn load_key_data(
                     let formatted = format_bytes(&bytes, binary_format());
                     string_value.set(formatted);
                 } else {
+                    binary_bytes.set(Vec::new());
                     is_binary.set(false);
                     serialization_data.set(None);
                     match String::from_utf8(bytes) {
@@ -850,6 +856,7 @@ pub fn ValueViewer(
     let mut is_binary = use_signal(|| false);
     let mut binary_format = use_signal(BinaryFormat::default);
     let mut serialization_data = use_signal(|| None::<(SerializationFormat, Vec<u8>)>);
+    let mut binary_bytes = use_signal(Vec::<u8>::new);
 
     let mut hash_search = use_signal(String::new);
     let mut hash_status_message = use_signal(String::new);
@@ -1007,6 +1014,7 @@ pub fn ValueViewer(
                 is_binary,
                 binary_format,
                 serialization_data,
+                binary_bytes,
                 bitmap_info,
                 loading,
                 hash_cursor,
@@ -1404,6 +1412,7 @@ pub fn ValueViewer(
                                                                             is_binary,
                                                                             binary_format,
                                                                             serialization_data,
+                binary_bytes,
                                                                             bitmap_info,
                                                                             loading,
                                                                             hash_cursor,
@@ -1444,6 +1453,7 @@ pub fn ValueViewer(
                                                                             is_binary,
                                                                             binary_format,
                                                                             serialization_data,
+                binary_bytes,
                                                                             bitmap_info,
                                                                             loading,
                                                                             hash_cursor,
@@ -1623,9 +1633,8 @@ pub fn ValueViewer(
                                                             }
 
                                                             {
-                                                                let str_val = string_value();
-                                                                let bytes = str_val.as_bytes();
-                                                                let is_image = detect_image_format(bytes).is_some();
+                                                                let bytes = binary_bytes();
+                                                                let is_image = detect_image_format(&bytes).is_some();
                                                                 if is_image {
                                                                     rsx! {
                                                                         button {
@@ -1988,11 +1997,18 @@ pub fn ValueViewer(
                                                                 }
                                                             }
 BinaryFormat::Image => {
-                                                                let str_val = string_value();
-                                                                let bytes = str_val.as_bytes();
-                                                                if let Some(_format) = detect_image_format(bytes) {
-                                                                    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes);
-                                                                    let data_url = format!("data:image/png;base64,{}", base64_data);
+                                                                let bytes = binary_bytes();
+                                                                if let Some(format) = detect_image_format(&bytes) {
+                                                                    let mime_type = match format {
+                                                                        "PNG" => "image/png",
+                                                                        "JPEG" => "image/jpeg",
+                                                                        "GIF" => "image/gif",
+                                                                        "WEBP" => "image/webp",
+                                                                        "ICO" => "image/x-icon",
+                                                                        _ => "image/png",
+                                                                    };
+                                                                    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+                                                                    let data_url = format!("data:{};base64,{}", mime_type, base64_data);
                                                                     rsx! {
                                                                         div {
                                                                             display: "flex",
@@ -2012,7 +2028,7 @@ BinaryFormat::Image => {
                                                                                 color: COLOR_TEXT_SECONDARY,
                                                                                 font_size: "12px",
 
-                                                                                "{bytes.len()} 字节"
+                                                                                "{format} - {bytes.len()} 字节"
                                                                             }
                                                                         }
                                                                     }
@@ -2211,6 +2227,7 @@ BinaryFormat::Image => {
                                                                             is_binary,
                                                                             binary_format,
                                                                             serialization_data,
+                binary_bytes,
                                                                             bitmap_info,
                                                                             loading,
                                                                             hash_cursor,
@@ -2537,6 +2554,7 @@ if let Err(error) = load_key_data(
                                                                                                      is_binary,
                                                                                                      binary_format,
                                                                                                      serialization_data,
+                binary_bytes,
                                                                                                      bitmap_info,
                                                                                                      loading,
                                                                                                      hash_cursor,
@@ -2722,6 +2740,7 @@ if let Err(error) = load_key_data(
                                                                                                          is_binary,
                                                                                                          binary_format,
                                                                                                          serialization_data,
+                binary_bytes,
                                                                                                          bitmap_info,
                                                                                                          loading,
                                                                                                          hash_cursor,
@@ -3090,6 +3109,7 @@ hash_status_message.set("删除成功".to_string());
                                                                                                      is_binary,
                                                                                                      binary_format,
                                                                                                      serialization_data,
+                binary_bytes,
                                                                                                      bitmap_info,
                                                                                                      loading,
                                                                                                      hash_cursor,
@@ -3229,6 +3249,7 @@ hash_status_message.set("删除成功".to_string());
                                                                                 is_binary,
                                                                                 binary_format,
                                                                                 serialization_data,
+                binary_bytes,
                                                                                 bitmap_info,
                                                                                 loading,
                                                                                 hash_cursor,
@@ -3302,6 +3323,7 @@ hash_status_message.set("删除成功".to_string());
                                                                                 is_binary,
                                                                                 binary_format,
                                                                                 serialization_data,
+                binary_bytes,
                                                                                 bitmap_info,
                                                                                 loading,
                                                                                 hash_cursor,
@@ -3544,6 +3566,7 @@ if let Err(error) = load_key_data(
                                                                                                          is_binary,
                                                                                                          binary_format,
                                                                                                          serialization_data,
+                binary_bytes,
                                                                                                          bitmap_info,
                                                                                                          loading,
                                                                                                          hash_cursor,
@@ -3713,6 +3736,7 @@ if let Err(error) = load_key_data(
                                                                                                          is_binary,
                                                                                                          binary_format,
                                                                                                          serialization_data,
+                binary_bytes,
                                                                                                          bitmap_info,
                                                                                                          loading,
                                                                                                          hash_cursor,
@@ -3802,6 +3826,7 @@ if let Err(error) = load_key_data(
                                                                             is_binary,
                                                                             binary_format,
                                                                             serialization_data,
+                binary_bytes,
                                                                             bitmap_info,
                                                                             loading,
                                                                             hash_cursor,
@@ -3915,6 +3940,7 @@ if let Err(error) = load_key_data(
                                                                                 is_binary,
                                                                                 binary_format,
                                                                                 serialization_data,
+                binary_bytes,
                                                                                 bitmap_info,
                                                                                 loading,
                                                                                 hash_cursor,
@@ -4189,6 +4215,7 @@ if let Err(error) = load_key_data(
                                                                                                          is_binary,
                                                                                                          binary_format,
                                                                                                          serialization_data,
+                binary_bytes,
                                                                                                          bitmap_info,
                                                                                                          loading,
                                                                                                          hash_cursor,
@@ -4362,6 +4389,7 @@ if let Err(error) = load_key_data(
                                                                                                          is_binary,
                                                                                                          binary_format,
                                                                                                          serialization_data,
+                binary_bytes,
                                                                                                          bitmap_info,
                                                                                                          loading,
                                                                                                          hash_cursor,
@@ -4475,6 +4503,7 @@ if let Err(error) = load_key_data(
                                                                             is_binary,
                                                                             binary_format,
                                                                             serialization_data,
+                binary_bytes,
                                                                             bitmap_info,
                                                                             loading,
                                                                             hash_cursor,
@@ -4611,6 +4640,7 @@ if let Err(error) = load_key_data(
                                                                                 is_binary,
                                                                                 binary_format,
                                                                                 serialization_data,
+                binary_bytes,
                                                                                 bitmap_info,
                                                                                 loading,
                                                                                 hash_cursor,
@@ -4882,6 +4912,7 @@ if let Err(error) = load_key_data(
                                                                                                          is_binary,
                                                                                                          binary_format,
                                                                                                          serialization_data,
+                binary_bytes,
                                                                                                          bitmap_info,
                                                                                                          loading,
                                                                                                          hash_cursor,
@@ -5062,6 +5093,7 @@ if let Err(error) = load_key_data(
                                                                                                          is_binary,
                                                                                                          binary_format,
                                                                                                          serialization_data,
+                binary_bytes,
                                                                                                          bitmap_info,
                                                                                                          loading,
                                                                                                          hash_cursor,
@@ -5528,6 +5560,7 @@ if let Err(error) = load_key_data(
                                                                                          is_binary,
                                                                                          binary_format,
                                                                                          serialization_data,
+                binary_bytes,
                                                                                          bitmap_info,
                                                                                          loading,
                                                                                          hash_cursor,

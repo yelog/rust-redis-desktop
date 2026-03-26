@@ -421,6 +421,8 @@ pub fn KeyBrowser(
                                     font_size: "12px",
                                     placeholder: "搜索 key",
                                     value: "{search_pattern}",
+                                    autocapitalize: "off",
+                                    autocorrect: "off",
                                     oninput: move |e| search_pattern.set(e.value()),
                                     onkeydown: move |e| {
                                         if e.data().key() == Key::Enter {

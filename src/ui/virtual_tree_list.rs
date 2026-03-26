@@ -1,4 +1,5 @@
 use crate::redis::{KeyType, TreeNode};
+use crate::theme::{COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_TEXT, COLOR_TEXT_SECONDARY};
 use crate::ui::{FlatNode, FlatTreeAdapter};
 use dioxus::prelude::*;
 use std::collections::HashSet;
@@ -152,11 +153,11 @@ fn VirtualTreeItem(
     on_toggle: EventHandler<()>,
 ) -> Element {
     let bg_color = if is_selected {
-        "#094771"
+        COLOR_BG_TERTIARY
     } else {
         "transparent"
     };
-    let text_color = if is_selected { "white" } else { "#cccccc" };
+    let text_color = if is_selected { COLOR_TEXT } else { COLOR_TEXT };
     let key_type_icon: KeyTypeIcon = node.key_type.clone().into();
     let folder_icon = if node.is_folder {
         "📁"
@@ -195,8 +196,11 @@ fn VirtualTreeItem(
 
             if node.is_folder {
                 span {
-                    color: "#888",
+                    color: COLOR_TEXT_SECONDARY,
                     font_size: "12px",
+                    display: "inline_block",
+                    transition: "transform 200ms ease-out",
+                    transform: if node.is_expanded { "rotate(90deg)" } else { "rotate(0deg)" },
                     if node.children_count > 0 {
                         "▶"
                     } else {
@@ -222,7 +226,7 @@ fn VirtualTreeItem(
 
             if node.is_folder && node.children_count > 0 {
                 span {
-                    color: "#888",
+                    color: COLOR_OUTLINE,
                     font_size: "11px",
                     "({node.children_count})"
                 }
