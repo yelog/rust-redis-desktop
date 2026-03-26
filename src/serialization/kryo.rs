@@ -217,105 +217,94 @@ impl<'a> KryoReader<'a> {
 }
 
 fn parse_fst(data: &[u8]) -> Result<KryoValue, String> {
-    if data.len() < 10 {
+    if data.len() < 5 {
         return Err("FST 数据太短".to_string());
     }
 
     let _version = data[0];
 
-    let length = i64::from_be_bytes([
-        data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
-    ]);
-
-    if length < 0 {
-        return Err("FST 字符串长度为负数".to_string());
+    if data.len() < 9 {
+        return Ok(KryoValue::ByteArray(data.to_vec()));
     }
 
-    let length = length as usize;
-    if 9 + length > data.len() {
-        return Err(format!(
-            "FST 数据不完整: 需要 {} 字节，实际 {} 字节",
-            9 + length,
-            data.len()
-        ));
+    let length = i32::from_be_bytes([data[4], data[5], data[6], data[7]]) as usize;
+
+    if length == 0 || length > 10_000_000 {
+        return Ok(KryoValue::ByteArray(data.to_vec()));
     }
 
-    let string_bytes = &data[9..9 + length];
-    match String::from_utf8(string_bytes.to_vec()) {
-        Ok(s) => Ok(KryoValue::String(Some(s))),
-        Err(_) => Ok(KryoValue::ByteArray(string_bytes.to_vec())),
+    if 8 + length > data.len() {
+        return Ok(KryoValue::ByteArray(data.to_vec()));
+    }
+
+    let content_bytes = &data[8..8 + length];
+    match String::from_utf8(content_bytes.to_vec()) {
+        Ok(s) if s.chars().all(|c| c.is_ascii_graphic() || c.is_whitespace()) => {
+            Ok(KryoValue::String(Some(s)))
+        }
+        _ => Ok(KryoValue::ByteArray(content_bytes.to_vec())),
     }
 }
 
-pub fn parse_kryo_basic(data: &[u8]) -> Result<KryoValue, String> {
+fn parse_kryo_with_size(data: &[u8]) -> Result<(KryoValue, usize), String> {
     if is_fst_serialization(data) {
-        return parse_fst(data);
+        let value = parse_fst(data)?;
+        return Ok((value, data.len()));
     }
 
     let mut reader = KryoReader::new(data);
+    let start_pos = reader.pos;
 
     let type_id = reader.read_u8()?;
 
-    match type_id {
-        0x00 => Ok(KryoValue::Null),
-        0x01 => reader.read_i8().map(KryoValue::Byte),
-        0x03 => reader.read_i16().map(KryoValue::Short),
-        0x04 => reader.read_varint().map(KryoValue::Int),
-        0x05 => reader.read_varlong().map(KryoValue::Long),
-        0x06 => reader.read_float().map(KryoValue::Float),
-        0x07 => reader.read_double().map(KryoValue::Double),
-        0x08 => Ok(KryoValue::Boolean(true)),
-        0x09 => Ok(KryoValue::Boolean(false)),
-        0x0A => reader.read_string().map(KryoValue::String),
+    let value = match type_id {
+        0x00 => KryoValue::Null,
+        0x01 => KryoValue::Byte(reader.read_i8()?),
+        0x03 => KryoValue::Short(reader.read_i16()?),
+        0x04 => KryoValue::Int(reader.read_varint()?),
+        0x05 => KryoValue::Long(reader.read_varlong()?),
+        0x06 => KryoValue::Float(reader.read_float()?),
+        0x07 => KryoValue::Double(reader.read_double()?),
+        0x08 => KryoValue::Boolean(true),
+        0x09 => KryoValue::Boolean(false),
+        0x0A => KryoValue::String(reader.read_string()?),
         0x0B => {
             let len = reader.read_varint()? as usize;
             let mut items = Vec::with_capacity(len);
             for _ in 0..len {
-                let item = parse_kryo_basic(&data[reader.pos..])?;
-                reader.pos += estimate_kryo_value_size(&item);
+                let (item, size) = parse_kryo_with_size(&data[reader.pos..])?;
+                reader.pos += size;
                 items.push(item);
             }
-            Ok(KryoValue::List(items))
+            KryoValue::List(items)
         }
         0x0C => {
             let len = reader.read_varint()? as usize;
             let mut items = Vec::with_capacity(len);
             for _ in 0..len {
-                let key = parse_kryo_basic(&data[reader.pos..])?;
-                reader.pos += estimate_kryo_value_size(&key);
-                let value = parse_kryo_basic(&data[reader.pos..])?;
-                reader.pos += estimate_kryo_value_size(&value);
+                let (key, key_size) = parse_kryo_with_size(&data[reader.pos..])?;
+                reader.pos += key_size;
+                let (value, val_size) = parse_kryo_with_size(&data[reader.pos..])?;
+                reader.pos += val_size;
                 items.push((key, value));
             }
-            Ok(KryoValue::Map(items))
+            KryoValue::Map(items)
         }
         _ => {
             let remaining = data.len().min(64);
-            Ok(KryoValue::Unknown {
+            KryoValue::Unknown {
                 type_id,
                 data: data[..remaining].to_vec(),
                 message: format!("未知的 Kryo 类型 ID: 0x{:02X}", type_id),
-            })
+            }
         }
-    }
+    };
+
+    Ok((value, reader.pos - start_pos))
 }
 
-fn estimate_kryo_value_size(value: &KryoValue) -> usize {
-    match value {
-        KryoValue::Null => 1,
-        KryoValue::Byte(_) => 2,
-        KryoValue::Char(_) => 3,
-        KryoValue::Short(_) => 3,
-        KryoValue::Int(_) => 5,
-        KryoValue::Long(_) => 9,
-        KryoValue::Float(_) => 5,
-        KryoValue::Double(_) => 9,
-        KryoValue::Boolean(_) => 1,
-        KryoValue::String(s) => 1 + s.as_ref().map(|s| s.len()).unwrap_or(0) + 1,
-        KryoValue::ByteArray(v) => 1 + v.len(),
-        KryoValue::Unknown { data, .. } => data.len(),
-        _ => 1,
-    }
+pub fn parse_kryo_basic(data: &[u8]) -> Result<KryoValue, String> {
+    parse_kryo_with_size(data).map(|(v, _)| v)
 }
 
 pub fn kryo_to_json(kryo: KryoValue) -> JsonValue {
@@ -437,12 +426,31 @@ mod tests {
         assert_eq!(json, JsonValue::String("hello".to_string()));
     }
 
-    #[test]
+#[test]
     fn test_parse_fst_string() {
         let data: Vec<u8> = vec![
-            0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, b't', b'e', b's', b't',
+            0xF0,
+            0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x04,
+            b't', b'e', b's', b't'
         ];
         let result = parse_kryo_basic(&data).unwrap();
         assert!(matches!(result, KryoValue::String(Some(ref s)) if s == "test"));
+    }
+}
+
+    #[test]
+    fn test_parse_kryo_list_with_varint_ints() {
+        let data: Vec<u8> = vec![0x0B, 0x03, 0x04, 0x01, 0x04, 0x02, 0x04, 0x03];
+        let result = parse_kryo_basic(&data).unwrap();
+        match result {
+            KryoValue::List(items) => {
+                assert_eq!(items.len(), 3);
+                assert!(matches!(&items[0], KryoValue::Int(1)));
+                assert!(matches!(&items[1], KryoValue::Int(2)));
+                assert!(matches!(&items[2], KryoValue::Int(3)));
+            }
+            _ => panic!("Expected List, got {:?}", result),
+        }
     }
 }

@@ -8,7 +8,7 @@ pub fn is_msgpack_serialization(data: &[u8]) -> bool {
 
     let first = data[0];
 
-    matches!(
+    if !matches!(
         first,
         0x80..=0x8F
         | 0x90..=0x9F
@@ -21,7 +21,12 @@ pub fn is_msgpack_serialization(data: &[u8]) -> bool {
         | 0xD9..=0xDB
         | 0xDC..=0xDD
         | 0xDE..=0xDF
-    )
+    ) {
+        return false;
+    }
+
+    let cursor = Cursor::new(data);
+    rmp_serde::from_read::<_, JsonValue>(cursor).is_ok()
 }
 
 pub fn parse_msgpack_to_json(data: &[u8]) -> Result<String, String> {
@@ -62,8 +67,9 @@ mod tests {
         assert!(is_msgpack_serialization(&[0xA0]));
         assert!(is_msgpack_serialization(&[0xC0]));
         assert!(is_msgpack_serialization(&[0xC2]));
-        assert!(is_msgpack_serialization(&[0xCA]));
+        assert!(is_msgpack_serialization(&[0xCA, 0x00, 0x00, 0x00, 0x00]));
         assert!(!is_msgpack_serialization(&[0xFF, 0xFF]));
+        assert!(!is_msgpack_serialization(&[0x92, 0x11]));
     }
 
     #[test]

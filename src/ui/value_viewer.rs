@@ -2009,41 +2009,77 @@ BinaryFormat::Image => {
                                                                 let bytes = binary_bytes();
                                                                 tracing::info!("Image preview: {} bytes, first 10: {:02x?}", bytes.len(), &bytes[..10.min(bytes.len())]);
                                                                 if let Some(format) = detect_image_format(&bytes) {
-                                                                    let mime_type = match format {
-                                                                        "PNG" => "image/png",
-                                                                        "JPEG" => "image/jpeg",
-                                                                        "GIF" => "image/gif",
-                                                                        "WEBP" => "image/webp",
-                                                                        "ICO" => "image/x-icon",
-                                                                        _ => "image/png",
-                                                                    };
-                                                                    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
-                                                                    let data_url = format!("data:{};base64,{}", mime_type, base64_data);
-                                                                    tracing::info!("Image data URL length: {}", data_url.len());
+                                                                    let temp_dir = std::env::temp_dir();
+                                                                    let file_name = format!("redis_image_{}.{}", uuid::Uuid::new_v4(), format.to_lowercase());
+                                                                    let file_path = temp_dir.join(&file_name);
+                                                                    let file_path_display = file_path.display().to_string();
 
-                                                                    rsx! {
-                                                                        div {
-                                                                            display: "flex",
-                                                                            flex_direction: "column",
-                                                                            align_items: "center",
-                                                                            gap: "12px",
+                                                                    tracing::info!("Saving image to: {:?}", file_path);
 
-                                                                                            img {
-                                                                                                max_width: "100%",
-                                                                                                max_height: "500px",
-                                                                                                border_radius: "8px",
-                                                                                                box_shadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                                                                                                src: "{data_url}",
-                                                                                            }
+                                                                    match std::fs::write(&file_path, &bytes) {
+                                                                        Ok(_) => {
+                                                                            tracing::info!("Image saved successfully");
 
-                                                                                            div {
-                                                                                                color: COLOR_TEXT_SECONDARY,
-                                                                                                font_size: "12px",
+                                                                            rsx! {
+                                                                                div {
+                                                                                    display: "flex",
+                                                                                    flex_direction: "column",
+                                                                                    align_items: "center",
+                                                                                    gap: "12px",
 
-                                                                                                "{format} - {bytes.len()} 字节"
-                                                                                            }
-                                                                                        }
+                                                                                    div {
+                                                                                        padding: "12px",
+                                                                                        background: COLOR_BG_TERTIARY,
+                                                                                        border_radius: "8px",
+                                                                                        color: COLOR_TEXT_SECONDARY,
+                                                                                        font_size: "13px",
+
+                                                                                        "{format} 图片 - {bytes.len()} 字节"
                                                                                     }
+
+                                                                                    div {
+                                                                                        padding: "8px 12px",
+                                                                                        background: COLOR_BG_TERTIARY,
+                                                                                        border_radius: "6px",
+                                                                                        color: COLOR_TEXT,
+                                                                                        font_size: "12px",
+                                                                                        font_family: "monospace",
+
+                                                                                        "已保存到: {file_path_display}"
+                                                                                    }
+
+                                                                                    button {
+                                                                                        padding: "8px 16px",
+                                                                                        background: COLOR_PRIMARY,
+                                                                                        color: COLOR_TEXT_CONTRAST,
+                                                                                        border: "none",
+                                                                                        border_radius: "6px",
+                                                                                        cursor: "pointer",
+                                                                                        font_size: "13px",
+
+                                                                                        onclick: move |_| {
+                                                                                            let _ = open::that(&file_path);
+                                                                                        },
+
+                                                                                        "用系统图片查看器打开"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        Err(e) => {
+                                                                            tracing::error!("Failed to save image: {}", e);
+                                                                            rsx! {
+                                                                                div {
+                                                                                    padding: "16px",
+                                                                                    background: COLOR_ERROR_BG,
+                                                                                    border_radius: "8px",
+                                                                                    color: COLOR_ERROR,
+
+                                                                                    "保存图片失败: {e}"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
                                                                 } else {
                                                                     rsx! {
                                                                         div {
