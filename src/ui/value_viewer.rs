@@ -32,6 +32,7 @@ pub enum BinaryFormat {
     #[default]
     Hex,
     Base64,
+    Image,
     JavaSerialized,
     Php,
     MsgPack,
@@ -143,7 +144,40 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
                 data.len()
             )
         }
+        BinaryFormat::Image => {
+            if let Some(format) = detect_image_format(data) {
+                format!("{} 图片 ({} 字节)", format, data.len())
+            } else {
+                "非图片数据".to_string()
+            }
+        }
     }
+}
+
+fn detect_image_format(data: &[u8]) -> Option<&'static str> {
+    if data.len() < 8 {
+        return None;
+    }
+    if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+        return Some("PNG");
+    }
+    if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
+        return Some("JPEG");
+    }
+    if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
+        return Some("GIF");
+    }
+    if data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46
+        && data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50
+    {
+        return Some("WEBP");
+    }
+    if data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00
+        && (data.len() > 12 && data[4..8] == [b'i', b'c', b'o', b'n'] || data[4..8] == [b'p', b'n', b'g', b' '] || data[4..8] == [b'j', b'p', b'g', b' '])
+    {
+        return Some("ICO");
+    }
+    None
 }
 
 fn copy_value_to_clipboard(value: &str) -> Result<(), String> {
@@ -1578,6 +1612,30 @@ pub fn ValueViewer(
                                                                 "Base64"
                                                             }
 
+                                                            {
+                                                                let str_val = string_value();
+                                                                let bytes = str_val.as_bytes();
+                                                                let is_image = detect_image_format(bytes).is_some();
+                                                                if is_image {
+                                                                    rsx! {
+                                                                        button {
+                                                                            padding: "4px 8px",
+                                                                            background: if binary_format() == BinaryFormat::Image { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                            color: if binary_format() == BinaryFormat::Image { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                            border: "none",
+                                                                            border_radius: "4px",
+                                                                            cursor: "pointer",
+                                                                            font_size: "12px",
+                                                                            onclick: move |_| binary_format.set(BinaryFormat::Image),
+
+                                                                            "图片"
+                                                                        }
+                                                                    }
+                                                                } else {
+                                                                    rsx! { div {} }
+                                                                }
+                                                            }
+
                                                             if detected_format == Some(SerializationFormat::Java) {
                                                                 button {
                                                                     padding: "4px 8px",
@@ -1899,6 +1957,48 @@ pub fn ValueViewer(
                                                                             color: COLOR_TEXT_SECONDARY,
 
                                                                             "解析失败"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+BinaryFormat::Image => {
+                                                                let str_val = string_value();
+                                                                let bytes = str_val.as_bytes();
+                                                                if let Some(_format) = detect_image_format(bytes) {
+                                                                    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes);
+                                                                    let data_url = format!("data:image/png;base64,{}", base64_data);
+                                                                    rsx! {
+                                                                        div {
+                                                                            display: "flex",
+                                                                            flex_direction: "column",
+                                                                            align_items: "center",
+                                                                            gap: "12px",
+
+                                                                            img {
+                                                                                max_width: "100%",
+                                                                                max_height: "500px",
+                                                                                border_radius: "8px",
+                                                                                box_shadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                                                                                src: "{data_url}",
+                                                                            }
+
+                                                                            div {
+                                                                                color: COLOR_TEXT_SECONDARY,
+                                                                                font_size: "12px",
+
+                                                                                "{bytes.len()} 字节"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                } else {
+                                                                    rsx! {
+                                                                        div {
+                                                                            padding: "16px",
+                                                                            background: COLOR_BG_TERTIARY,
+                                                                            border_radius: "8px",
+                                                                            color: COLOR_TEXT_SECONDARY,
+
+                                                                            "非图片数据"
                                                                         }
                                                                     }
                                                                 }
