@@ -9,7 +9,7 @@ pub fn is_protobuf_data(data: &[u8]) -> bool {
     let field_number = first_byte >> 3;
     let wire_type = first_byte & 0x07;
 
-    if field_number == 0 {
+    if field_number == 0 || field_number > 100 {
         return false;
     }
 
@@ -17,31 +17,57 @@ pub fn is_protobuf_data(data: &[u8]) -> bool {
         return false;
     }
 
-    true
+    let parsed = parse_protobuf_fields(data);
+    !parsed.is_empty()
 }
 
 pub fn try_parse_protobuf_as_any(data: &[u8]) -> Option<JsonValue> {
-    if !is_protobuf_data(data) {
-        return None;
+    let fields = parse_protobuf_fields(data);
+    if fields.is_empty() {
+        None
+    } else {
+        Some(JsonValue::Object(fields))
+    }
+}
+
+fn parse_protobuf_fields(data: &[u8]) -> serde_json::Map<String, JsonValue> {
+    let mut result = serde_json::Map::new();
+
+    if data.len() < 2 {
+        return result;
     }
 
-    let mut result = serde_json::Map::new();
+    let first_byte = data[0];
+    let field_number = first_byte >> 3;
+    let wire_type = first_byte & 0x07;
+
+    if field_number == 0 || field_number > 100 {
+        return result;
+    }
+
+    if wire_type > 5 {
+        return result;
+    }
+
     let mut pos = 0;
+    let mut valid_fields = 0;
 
     while pos < data.len() {
-        if let Some((field_number, wire_type, bytes_read)) =
-            decode_varint_field_header(&data[pos..])
-        {
+        if let Some((field_num, wire_ty, bytes_read)) = decode_varint_field_header(&data[pos..]) {
+            if field_num == 0 || field_num > 100 {
+                break;
+            }
             pos += bytes_read;
 
-            let field_name = format!("field_{}", field_number);
+            let field_name = format!("field_{}", field_num);
 
-            match wire_type {
+            match wire_ty {
                 0 => {
                     if let Some((value, bytes_read)) = decode_varint(&data[pos..]) {
                         pos += bytes_read;
                         if let Some(num) = serde_json::Number::from_u128(value as u128) {
                             result.insert(field_name, JsonValue::Number(num));
+                            valid_fields += 1;
                         }
                     } else {
                         break;
@@ -62,6 +88,7 @@ pub fn try_parse_protobuf_as_any(data: &[u8]) -> Option<JsonValue> {
                         pos += 8;
                         if let Some(num) = serde_json::Number::from_u128(value as u128) {
                             result.insert(field_name, JsonValue::Number(num));
+                            valid_fields += 1;
                         }
                     } else {
                         break;
@@ -71,16 +98,15 @@ pub fn try_parse_protobuf_as_any(data: &[u8]) -> Option<JsonValue> {
                     if let Some((length, bytes_read)) = decode_varint(&data[pos..]) {
                         pos += bytes_read;
                         let length = length as usize;
-                        if pos + length <= data.len() {
+                        if length > 0 && pos + length <= data.len() {
                             let bytes = &data[pos..pos + length];
                             pos += length;
 
                             if let Ok(s) = String::from_utf8(bytes.to_vec()) {
-                                result.insert(field_name, JsonValue::String(s));
-                            } else {
-                                let hex: String =
-                                    bytes.iter().map(|b| format!("{:02x}", b)).collect();
-                                result.insert(field_name, JsonValue::String(hex));
+                                if s.chars().all(|c| c.is_ascii_graphic() || c.is_whitespace()) {
+                                    result.insert(field_name, JsonValue::String(s));
+                                    valid_fields += 1;
+                                }
                             }
                         } else {
                             break;
@@ -100,6 +126,7 @@ pub fn try_parse_protobuf_as_any(data: &[u8]) -> Option<JsonValue> {
                         pos += 4;
                         if let Some(num) = serde_json::Number::from_u128(value as u128) {
                             result.insert(field_name, JsonValue::Number(num));
+                            valid_fields += 1;
                         }
                     } else {
                         break;
@@ -112,13 +139,17 @@ pub fn try_parse_protobuf_as_any(data: &[u8]) -> Option<JsonValue> {
         } else {
             break;
         }
+
+        if valid_fields > 20 {
+            break;
+        }
     }
 
-    if result.is_empty() {
-        None
-    } else {
-        Some(JsonValue::Object(result))
+    if valid_fields == 0 {
+        result.clear();
     }
+
+    result
 }
 
 fn decode_varint_field_header(data: &[u8]) -> Option<(u32, u32, usize)> {
