@@ -16,6 +16,7 @@ use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
 use crate::ui::{copy_text_to_clipboard, ServerInfoPanel, ToastManager};
 use dioxus::prelude::*;
+use dioxus::html::geometry::WheelDelta;
 use serde_json;
 use std::collections::HashMap;
 
@@ -26,6 +27,230 @@ const STATUS_SUCCESS_BG: &str = COLOR_SUCCESS_BG;
 const STATUS_ERROR_BG: &str = COLOR_ERROR_BG;
 const ROW_CREATE_BG: &str = COLOR_ROW_CREATE_BG;
 const ROW_EDIT_BG: &str = COLOR_ROW_EDIT_BG;
+
+#[derive(Clone, Default)]
+pub struct PreviewImageData {
+    pub data_uri: String,
+    pub format: String,
+    pub size: String,
+}
+
+pub static PREVIEW_IMAGE: GlobalSignal<Option<PreviewImageData>> = Signal::global(|| None);
+
+#[component]
+pub fn ImagePreview() -> Element {
+    let preview = PREVIEW_IMAGE();
+
+    let Some(ref data) = preview else {
+        return rsx! {};
+    };
+
+    let data_uri = data.data_uri.clone();
+    let format = data.format.clone();
+    let size = data.size.clone();
+
+    let data_uri_for_save = data_uri.clone();
+    let data_uri_for_img = data_uri.clone();
+    let format_for_save = format.clone();
+    let mut zoom_level = use_signal(|| 1.0f32);
+
+    rsx! {
+        div {
+            position: "fixed",
+            top: "0",
+            left: "0",
+            right: "0",
+            bottom: "0",
+            background: "rgba(0, 0, 0, 0.9)",
+            display: "flex",
+            flex_direction: "column",
+            align_items: "center",
+            justify_content: "center",
+            z_index: "9999",
+            animation: "fadeIn 0.2s ease-out",
+
+            onclick: move |_| {
+                *PREVIEW_IMAGE.write() = None;
+                zoom_level.set(1.0);
+            },
+
+            onkeydown: move |e: Event<KeyboardData>| {
+                if e.data().key() == Key::Escape {
+                    e.prevent_default();
+                    e.stop_propagation();
+                    *PREVIEW_IMAGE.write() = None;
+                    zoom_level.set(1.0);
+                }
+            },
+
+            style { {r#"
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes scaleIn {
+                    from { transform: scale(0.9); opacity: 0; }
+                    to { transform: scale(1); opacity: 1; }
+                }
+            "#} }
+
+            div {
+                position: "absolute",
+                top: "16px",
+                right: "16px",
+                display: "flex",
+                gap: "8px",
+                z_index: "10",
+
+                button {
+                    padding: "8px 16px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                    border_radius: "6px",
+                    cursor: "pointer",
+                    font_size: "14px",
+
+                    onclick: move |e| {
+                        e.stop_propagation();
+                        let image_data = base64_decode(&data_uri_for_save);
+                        let extension = format_for_save.to_lowercase();
+                        let file_name = format!("image.{}", extension);
+                        
+                        spawn(async move {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .set_file_name(&file_name)
+                                .add_filter("Image", &[&extension])
+                                .save_file()
+                            {
+                                let _ = std::fs::write(&path, &image_data);
+                            }
+                        });
+                    },
+
+                    "保存图片"
+                }
+
+                button {
+                    padding: "8px 12px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                    border_radius: "6px",
+                    cursor: "pointer",
+                    font_size: "14px",
+
+                    onclick: move |e| {
+                        e.stop_propagation();
+                        zoom_level.set(1.0);
+                    },
+
+                    "重置"
+                }
+
+                button {
+                    padding: "8px 16px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.2)",
+                    border_radius: "6px",
+                    cursor: "pointer",
+                    font_size: "14px",
+
+                    onclick: move |e| {
+                        e.stop_propagation();
+                        *PREVIEW_IMAGE.write() = None;
+                        zoom_level.set(1.0);
+                    },
+
+                    "关闭 (Esc)"
+                }
+            }
+
+            div {
+                width: "100vw",
+                height: "100vh",
+                display: "flex",
+                align_items: "center",
+                justify_content: "center",
+                animation: "scaleIn 0.2s ease-out",
+                overflow: "hidden",
+
+                onclick: |e| e.stop_propagation(),
+
+                onwheel: move |e: Event<WheelData>| {
+                    e.stop_propagation();
+                    let delta = match e.delta() {
+                        WheelDelta::Pixels(p) => {
+                            if p.y > 0.0 { -0.1 } else { 0.1 }
+                        }
+                        WheelDelta::Lines(l) => {
+                            if l.y > 0.0 { -0.1 } else { 0.1 }
+                        }
+                        WheelDelta::Pages(p) => {
+                            if p.y > 0.0 { -0.1 } else { 0.1 }
+                        }
+                    };
+                    let current = zoom_level();
+                    let new_zoom = (current + delta).clamp(0.1, 5.0);
+                    zoom_level.set(new_zoom);
+                },
+
+                img {
+                    src: "{data_uri_for_img}",
+                    max_width: "90vw",
+                    max_height: "85vh",
+                    object_fit: "contain",
+                    transform: "scale({zoom_level})",
+                    transform_origin: "center",
+                    transition: "transform 0.1s ease-out",
+                    draggable: false,
+                }
+            }
+
+            div {
+                position: "absolute",
+                bottom: "24px",
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                gap: "16px",
+                align_items: "center",
+
+                div {
+                    padding: "8px 16px",
+                    background: "rgba(0, 0, 0, 0.6)",
+                    border_radius: "6px",
+                    color: "rgba(255, 255, 255, 0.8)",
+                    font_size: "13px",
+
+                    "{format} - {size}"
+                }
+
+                div {
+                    padding: "8px 16px",
+                    background: "rgba(0, 0, 0, 0.6)",
+                    border_radius: "6px",
+                    color: "rgba(255, 255, 255, 0.8)",
+                    font_size: "13px",
+
+                    "缩放: {(zoom_level() * 100.0) as i32}%"
+                }
+            }
+        }
+    }
+}
+
+fn base64_decode(data_uri: &str) -> Vec<u8> {
+    use base64::{engine::general_purpose, Engine as _};
+    if let Some(base64_data) = data_uri.strip_prefix("data:") {
+        if let Some(start) = base64_data.find(";base64,") {
+            let base64_str = &base64_data[start + 8..];
+            return general_purpose::STANDARD.decode(base64_str).unwrap_or_default();
+        }
+    }
+    Vec::new()
+}
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum BinaryFormat {
@@ -2009,74 +2234,88 @@ BinaryFormat::Image => {
                                                                 let bytes = binary_bytes();
                                                                 tracing::info!("Image preview: {} bytes, first 10: {:02x?}", bytes.len(), &bytes[..10.min(bytes.len())]);
                                                                 if let Some(format) = detect_image_format(&bytes) {
+                                                                    use base64::{engine::general_purpose, Engine as _};
+                                                                    let base64_data = general_purpose::STANDARD.encode(&bytes);
+                                                                    let mime_type = match format {
+                                                                        "PNG" => "image/png",
+                                                                        "JPEG" => "image/jpeg",
+                                                                        "GIF" => "image/gif",
+                                                                        "WEBP" => "image/webp",
+                                                                        "BMP" => "image/bmp",
+                                                                        _ => "application/octet-stream",
+                                                                    };
+                                                                    let data_uri = format!("data:{};base64,{}", mime_type, base64_data);
+                                                                    
                                                                     let temp_dir = std::env::temp_dir();
                                                                     let file_name = format!("redis_image_{}.{}", uuid::Uuid::new_v4(), format.to_lowercase());
                                                                     let file_path = temp_dir.join(&file_name);
-                                                                    let file_path_display = file_path.display().to_string();
+                                                                    let file_path_clone = file_path.clone();
+                                                                    let bytes_clone = bytes.clone();
+                                                                    let file_size_formatted = format_memory_usage(Some(bytes.len() as u64));
+                                                                    let format_str = format.to_string();
+                                                                    let data_uri_for_preview = data_uri.clone();
+                                                                    let format_for_preview = format_str.clone();
+                                                                    let size_for_preview = file_size_formatted.clone();
 
-                                                                    tracing::info!("Saving image to: {:?}", file_path);
+                                                                    rsx! {
+                                                                        div {
+                                                                            display: "flex",
+                                                                            flex_direction: "column",
+                                                                            align_items: "center",
+                                                                            gap: "12px",
 
-                                                                    match std::fs::write(&file_path, &bytes) {
-                                                                        Ok(_) => {
-                                                                            tracing::info!("Image saved successfully");
+                                                                            div {
+                                                                                padding: "12px",
+                                                                                background: COLOR_BG_TERTIARY,
+                                                                                border_radius: "8px",
+                                                                                color: COLOR_TEXT_SECONDARY,
+                                                                                font_size: "13px",
 
-                                                                            rsx! {
-                                                                                div {
-                                                                                    display: "flex",
-                                                                                    flex_direction: "column",
-                                                                                    align_items: "center",
-                                                                                    gap: "12px",
+                                                                                "{format} 图片 - {file_size_formatted}"
+                                                                            }
 
-                                                                                    div {
-                                                                                        padding: "12px",
-                                                                                        background: COLOR_BG_TERTIARY,
-                                                                                        border_radius: "8px",
-                                                                                        color: COLOR_TEXT_SECONDARY,
-                                                                                        font_size: "13px",
+                                                                            div {
+                                                                                max_width: "100%",
+                                                                                max_height: "500px",
+                                                                                overflow: "auto",
+                                                                                background: COLOR_BG_TERTIARY,
+                                                                                border_radius: "8px",
+                                                                                padding: "8px",
 
-                                                                                        "{format} 图片 - {bytes.len()} 字节"
-                                                                                    }
+                                                                                img {
+                                                                                    src: "{data_uri}",
+                                                                                    max_width: "100%",
+                                                                                    max_height: "500px",
+                                                                                    object_fit: "contain",
+                                                                                    border_radius: "4px",
+                                                                                    cursor: "pointer",
+                                                                                    transition: "transform 0.2s, box-shadow 0.2s",
 
-                                                                                    div {
-                                                                                        padding: "8px 12px",
-                                                                                        background: COLOR_BG_TERTIARY,
-                                                                                        border_radius: "6px",
-                                                                                        color: COLOR_TEXT,
-                                                                                        font_size: "12px",
-                                                                                        font_family: "monospace",
-
-                                                                                        "已保存到: {file_path_display}"
-                                                                                    }
-
-                                                                                    button {
-                                                                                        padding: "8px 16px",
-                                                                                        background: COLOR_PRIMARY,
-                                                                                        color: COLOR_TEXT_CONTRAST,
-                                                                                        border: "none",
-                                                                                        border_radius: "6px",
-                                                                                        cursor: "pointer",
-                                                                                        font_size: "13px",
-
-                                                                                        onclick: move |_| {
-                                                                                            let _ = open::that(&file_path);
-                                                                                        },
-
-                                                                                        "用系统图片查看器打开"
-                                                                                    }
+                                                                                    onclick: move |_| {
+                                                                                        *PREVIEW_IMAGE.write() = Some(PreviewImageData {
+                                                                                            data_uri: data_uri_for_preview.clone(),
+                                                                                            format: format_for_preview.clone(),
+                                                                                            size: size_for_preview.clone(),
+                                                                                        });
+                                                                                    },
                                                                                 }
                                                                             }
-                                                                        }
-                                                                        Err(e) => {
-                                                                            tracing::error!("Failed to save image: {}", e);
-                                                                            rsx! {
-                                                                                div {
-                                                                                    padding: "16px",
-                                                                                    background: COLOR_ERROR_BG,
-                                                                                    border_radius: "8px",
-                                                                                    color: COLOR_ERROR,
 
-                                                                                    "保存图片失败: {e}"
-                                                                                }
+                                                                            button {
+                                                                                padding: "8px 16px",
+                                                                                background: COLOR_PRIMARY,
+                                                                                color: COLOR_TEXT_CONTRAST,
+                                                                                border: "none",
+                                                                                border_radius: "6px",
+                                                                                cursor: "pointer",
+                                                                                font_size: "13px",
+
+                                                                                onclick: move |_| {
+                                                                                    let _ = std::fs::write(&file_path_clone, &bytes_clone);
+                                                                                    let _ = open::that(&file_path_clone);
+                                                                                },
+
+                                                                                "用系统图片查看器打开"
                                                                             }
                                                                         }
                                                                     }

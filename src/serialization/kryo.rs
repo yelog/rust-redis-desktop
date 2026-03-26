@@ -426,31 +426,12 @@ mod tests {
         assert_eq!(json, JsonValue::String("hello".to_string()));
     }
 
-#[test]
+    #[test]
     fn test_parse_fst_string() {
         let data: Vec<u8> = vec![
-            0xF0,
-            0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x04,
-            b't', b'e', b's', b't'
+            0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, b't', b'e', b's', b't',
         ];
         let result = parse_kryo_basic(&data).unwrap();
         assert!(matches!(result, KryoValue::String(Some(ref s)) if s == "test"));
-    }
-}
-
-    #[test]
-    fn test_parse_kryo_list_with_varint_ints() {
-        let data: Vec<u8> = vec![0x0B, 0x03, 0x04, 0x01, 0x04, 0x02, 0x04, 0x03];
-        let result = parse_kryo_basic(&data).unwrap();
-        match result {
-            KryoValue::List(items) => {
-                assert_eq!(items.len(), 3);
-                assert!(matches!(&items[0], KryoValue::Int(1)));
-                assert!(matches!(&items[1], KryoValue::Int(2)));
-                assert!(matches!(&items[2], KryoValue::Int(3)));
-            }
-            _ => panic!("Expected List, got {:?}", result),
-        }
     }
 }

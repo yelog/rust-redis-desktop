@@ -63,6 +63,31 @@ pub fn LeftRail(
         .unwrap_or(false);
 
     rsx! {
+        style { "
+            .dot-tooltip-wrapper {{
+                position: relative;
+            }}
+            .dot-tooltip {{
+                position: absolute;
+                left: calc(100% + 6px);
+                top: 50%;
+                transform: translateY(-50%);
+                background: {COLOR_SURFACE_HIGH};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+                color: {COLOR_TEXT_SECONDARY};
+                white-space: nowrap;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.15s;
+                z-index: 100;
+            }}
+            .dot-tooltip-wrapper:hover .dot-tooltip {{
+                opacity: 1;
+            }}
+        " }
         div {
             width: "{width()}px",
             height: "100%",
@@ -384,8 +409,7 @@ pub fn LeftRail(
                                 cursor: "pointer",
                                 text_align: "left",
                                 display: "flex",
-                                flex_direction: "column",
-                                gap: "6px",
+                                align_items: "center",
                                 opacity: if is_dragging { "0.5" } else { "1" },
                                 onclick: move |_| on_select_connection.call(id),
                                 oncontextmenu: move |e| {
@@ -402,11 +426,27 @@ pub fn LeftRail(
                                     gap: "8px",
 
                                     div {
-                                        width: "8px",
-                                        height: "8px",
-                                        border_radius: "50%",
-                                        background: "{dot_color}",
+                                        class: "dot-tooltip-wrapper",
+                                        position: "relative",
+                                        display: "flex",
+                                        align_items: "center",
+                                        justify_content: "center",
+                                        width: "16px",
+                                        height: "16px",
                                         flex_shrink: "0",
+                                        cursor: "default",
+
+                                        div {
+                                            width: "8px",
+                                            height: "8px",
+                                            border_radius: "50%",
+                                            background: "{dot_color}",
+                                        }
+
+                                        div {
+                                            class: "dot-tooltip",
+                                            "{state_label(state)}"
+                                        }
                                     }
 
                                     span {
@@ -472,18 +512,7 @@ pub fn LeftRail(
                                     }
                                 }
 
-                                div {
-                                    display: "flex",
-                                    align_items: "center",
-                                    justify_content: "space_between",
 
-                                    span {
-                                        color: COLOR_TEXT_SUBTLE,
-                                        font_size: "11px",
-
-                                        "{state_label(state)}"
-                                    }
-                                }
                             }
                         }
                     }

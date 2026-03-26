@@ -153,9 +153,15 @@ fi
 # ============================================
 echo "Setting Image test data..."
 
-# Minimal valid PNG (1x1 transparent pixel)
-# PNG signature + IHDR + IDAT + IEND
-printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\x0d\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:image:png"
+# Use actual PNG file if available, otherwise minimal valid PNG
+if [ -f "/test-images/rust-redis.png" ]; then
+  echo "Using rust-redis.png for test:image:png"
+  cat /test-images/rust-redis.png | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:image:png"
+else
+  # Minimal valid PNG (1x1 transparent pixel)
+  # PNG signature + IHDR + IDAT + IEND
+  printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\x0d\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:image:png"
+fi
 
 # Minimal JPEG (simplified)
 printf '\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:image:jpeg"

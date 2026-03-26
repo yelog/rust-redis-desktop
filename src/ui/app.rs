@@ -11,6 +11,7 @@ use crate::ui::{
     MonitorPanel, PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog, SlowLogPanel,
     Terminal, ToastContainer, ToastManager,
 };
+use crate::ui::value_viewer::ImagePreview;
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
@@ -1545,5 +1546,6 @@ await new Promise(() => {});
         }
 
                     ToastContainer { manager: toast_manager }
+                    ImagePreview {}
                 }
 }

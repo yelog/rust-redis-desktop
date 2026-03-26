@@ -114,6 +114,7 @@ services:
       - redis-standalone
     volumes:
       - ./init-test-data.sh:/init-test-data.sh:ro
+      - ./test-images:/test-images:ro
     environment:
       - REDIS_HOST=redis-standalone
     command: sh /init-test-data.sh
