@@ -43,6 +43,7 @@ mod toast;
 mod top_nav;
 mod value_viewer;
 mod virtual_key_list;
+mod virtual_tree_list;
 
 pub use add_key_dialog::*;
 pub use app::*;
@@ -84,3 +85,4 @@ pub use toast::*;
 pub use top_nav::*;
 pub use value_viewer::*;
 pub use virtual_key_list::*;
+pub use virtual_tree_list::*;
