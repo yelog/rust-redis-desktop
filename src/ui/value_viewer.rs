@@ -1,7 +1,7 @@
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
 use crate::serialization::{
-    detect_serialization_format, is_java_serialization, parse_to_json, SerializationFormat,
+    detect_serialization_format, is_java_serialization, is_protobuf_data, parse_to_json, SerializationFormat,
 };
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
@@ -33,6 +33,7 @@ pub enum BinaryFormat {
     Hex,
     Base64,
     Image,
+    Protobuf,
     JavaSerialized,
     Php,
     MsgPack,
@@ -149,6 +150,13 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
                 format!("{} 图片 ({} 字节)", format, data.len())
             } else {
                 "非图片数据".to_string()
+            }
+        }
+        BinaryFormat::Protobuf => {
+            if is_protobuf_data(data) {
+                format!("Protobuf 数据 ({} 字节)\n\n请切换到 Protobuf 视图查看解析结果", data.len())
+            } else {
+                "非 Protobuf 数据".to_string()
             }
         }
     }
@@ -315,6 +323,7 @@ async fn load_key_data(
                             SerializationFormat::Pickle => BinaryFormat::Pickle,
                             SerializationFormat::Kryo => BinaryFormat::Kryo,
                             SerializationFormat::Fst => BinaryFormat::Kryo,
+                            SerializationFormat::Protobuf => BinaryFormat::Protobuf,
                             _ => BinaryFormat::Hex,
                         });
                     } else {
@@ -1740,7 +1749,22 @@ pub fn ValueViewer(
                                                                         }
                                                                     },
 
-                                                                    "Bitmap"
+"Bitmap"
+                                                                 }
+                                                            }
+
+                                                            if detected_format == Some(SerializationFormat::Protobuf) || is_protobuf_data(string_value().as_bytes()) {
+                                                                button {
+                                                                    padding: "4px 8px",
+                                                                    background: if binary_format() == BinaryFormat::Protobuf { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                    color: if binary_format() == BinaryFormat::Protobuf { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                    border: "none",
+                                                                    border_radius: "4px",
+                                                                    cursor: "pointer",
+                                                                    font_size: "12px",
+                                                                    onclick: move |_| binary_format.set(BinaryFormat::Protobuf),
+
+                                                                    "Protobuf"
                                                                 }
                                                             }
 
@@ -1765,7 +1789,8 @@ pub fn ValueViewer(
                                                                         | BinaryFormat::Php
                                                                         | BinaryFormat::MsgPack
                                                                         | BinaryFormat::Pickle
-                                                                        | BinaryFormat::Kryo => {
+                                                                        | BinaryFormat::Kryo
+                                                                        | BinaryFormat::Protobuf => {
                                                                             if let Some((fmt, data)) = serial_info.as_ref() {
                                                                                 parse_to_json(data, *fmt).unwrap_or(current_str)
                                                                             } else {
@@ -1999,6 +2024,40 @@ BinaryFormat::Image => {
                                                                             color: COLOR_TEXT_SECONDARY,
 
                                                                             "非图片数据"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            BinaryFormat::Protobuf => {
+                                                                if let Some((SerializationFormat::Protobuf, ref data)) = serialization_info {
+                                                                    match parse_to_json(data, SerializationFormat::Protobuf) {
+                                                                        Ok(json_str) => rsx! {
+                                                                            JsonViewer {
+                                                                                value: json_str,
+                                                                                editable: false,
+                                                                                on_change: move |_| {},
+                                                                            }
+                                                                        },
+                                                                        Err(e) => rsx! {
+                                                                            div {
+                                                                                padding: "16px",
+                                                                                background: COLOR_ERROR_BG,
+                                                                                border_radius: "8px",
+                                                                                color: COLOR_ERROR,
+
+                                                                                "Protobuf 解析错误: {e}"
+                                                                            }
+                                                                        },
+                                                                    }
+                                                                } else {
+                                                                    rsx! {
+                                                                        div {
+                                                                            padding: "16px",
+                                                                            background: COLOR_BG_TERTIARY,
+                                                                            border_radius: "8px",
+                                                                            color: COLOR_TEXT_SECONDARY,
+
+                                                                            "非 Protobuf 数据"
                                                                         }
                                                                     }
                                                                 }

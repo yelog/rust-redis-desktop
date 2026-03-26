@@ -3,12 +3,14 @@ pub mod kryo;
 pub mod msgpack;
 pub mod php;
 pub mod pickle;
+pub mod protobuf;
 
 pub use jaded::{Content, Parser};
 use kryo::{detect_kryo_or_fst, is_fst_serialization, is_kryo_serialization, parse_kryo_to_json};
 use msgpack::{is_msgpack_serialization, parse_msgpack_to_json};
 use php::{is_php_serialization, parse_php_serialization, php_to_json};
 use pickle::{get_pickle_version, is_pickle_serialization, parse_pickle_to_json};
+pub use protobuf::{is_protobuf_data, try_parse_protobuf_as_any};
 use serde_json::Value as JsonValue;
 use std::io::Cursor;
 
@@ -21,6 +23,7 @@ pub enum SerializationFormat {
     Pickle,
     Kryo,
     Fst,
+    Protobuf,
 }
 
 pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
@@ -42,6 +45,9 @@ pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
     if is_kryo_serialization(data) {
         return SerializationFormat::Kryo;
     }
+    if is_protobuf_data(data) {
+        return SerializationFormat::Protobuf;
+    }
     SerializationFormat::Unknown
 }
 
@@ -56,6 +62,13 @@ pub fn parse_to_json(data: &[u8], format: SerializationFormat) -> Result<String,
         SerializationFormat::MsgPack => parse_msgpack_to_json(data),
         SerializationFormat::Pickle => parse_pickle_to_json(data),
         SerializationFormat::Kryo | SerializationFormat::Fst => parse_kryo_to_json(data),
+        SerializationFormat::Protobuf => {
+            if let Some(json) = try_parse_protobuf_as_any(data) {
+                serde_json::to_string_pretty(&json).map_err(|e| e.to_string())
+            } else {
+                Err("无法解析 Protobuf 数据".to_string())
+            }
+        }
         _ => Err("未知格式，无法解析".to_string()),
     }
 }
@@ -65,6 +78,7 @@ pub fn get_format_version(data: &[u8], format: SerializationFormat) -> Option<St
         SerializationFormat::Pickle => get_pickle_version(data).map(|v| format!("v{}", v)),
         SerializationFormat::Kryo => detect_kryo_or_fst(data).map(|s| s.to_string()),
         SerializationFormat::Fst => Some("FST".to_string()),
+        SerializationFormat::Protobuf => Some("raw".to_string()),
         _ => None,
     }
 }
