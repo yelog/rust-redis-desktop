@@ -49,6 +49,12 @@ urlencoding = "2.1"
 flate2 = "1.0"
 brotli = "7.0"
 rfd = "0.17"
+humansize = "2.1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+# System tray (non-Linux platforms)
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+tray-icon = "0.19"
 
 [dev-dependencies]
 tokio-test = "0.4"

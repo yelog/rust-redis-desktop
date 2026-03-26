@@ -6,6 +6,7 @@ mod i18n;
 mod redis;
 mod serialization;
 mod theme;
+mod tray;
 mod ui;
 
 use config::ConfigStorage;
@@ -15,6 +16,7 @@ use dioxus::desktop::{
     Config, WindowBuilder,
 };
 use theme::preferred_window_theme;
+use tray::{create_shared_state, init_tray};
 use ui::App;
 
 #[cfg(target_os = "macos")]
@@ -103,6 +105,12 @@ fn main() {
             .with_theme(preferred_window_theme(settings.theme_preference))
             .with_visible(true),
     );
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let tray_state = create_shared_state();
+        init_tray(tray_state);
+    }
 
     dioxus::LaunchBuilder::new()
         .with_cfg(Config::new().with_menu(menu).with_window(window_builder))
