@@ -15,6 +15,7 @@ pub fn apply_preset_formatter(formatter_type: &FormatterType, input: &[u8]) -> T
         FormatterType::Zlib => decompress_zlib(input),
         FormatterType::Deflate => decompress_deflate(input),
         FormatterType::Brotli => decompress_brotli(input),
+        FormatterType::Zstd => decompress_zstd(input),
         FormatterType::MsgPack => decode_msgpack(input),
         FormatterType::Protobuf => decode_protobuf(input),
         FormatterType::Custom(_) => {
@@ -96,6 +97,14 @@ fn decompress_brotli(input: &[u8]) -> TransformResult {
     match decoder.read_to_end(&mut decompressed) {
         Ok(_) => TransformResult::Binary(decompressed),
         Err(e) => TransformResult::Error(format!("Brotli decompression error: {}", e)),
+    }
+}
+
+fn decompress_zstd(input: &[u8]) -> TransformResult {
+    use std::io::Cursor;
+    match zstd::stream::decode_all(Cursor::new(input)) {
+        Ok(decompressed) => TransformResult::Binary(decompressed),
+        Err(e) => TransformResult::Error(format!("Zstd decompression error: {}", e)),
     }
 }
 
