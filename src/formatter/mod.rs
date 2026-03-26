@@ -18,6 +18,8 @@ pub enum FormatterType {
     Zstd,
     MsgPack,
     Protobuf,
+    Yaml,
+    Toml,
     Custom(String),
 }
 
@@ -36,6 +38,8 @@ impl FormatterType {
             FormatterType::Zstd => "zstd",
             FormatterType::MsgPack => "msgpack",
             FormatterType::Protobuf => "protobuf",
+            FormatterType::Yaml => "yaml",
+            FormatterType::Toml => "toml",
             FormatterType::Custom(name) => name.as_str(),
         }
     }
@@ -54,6 +58,8 @@ impl FormatterType {
             "zstd" => Some(FormatterType::Zstd),
             "msgpack" => Some(FormatterType::MsgPack),
             "protobuf" => Some(FormatterType::Protobuf),
+            "yaml" => Some(FormatterType::Yaml),
+            "toml" => Some(FormatterType::Toml),
             other => Some(FormatterType::Custom(other.to_string())),
         }
     }
@@ -72,6 +78,8 @@ impl FormatterType {
             FormatterType::Zstd => "Zstd",
             FormatterType::MsgPack => "MessagePack",
             FormatterType::Protobuf => "Protobuf",
+            FormatterType::Yaml => "YAML",
+            FormatterType::Toml => "TOML",
             FormatterType::Custom(name) => name.as_str(),
         }
     }

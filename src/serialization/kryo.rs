@@ -13,8 +13,11 @@ pub enum KryoValue {
     Boolean(bool),
     String(Option<String>),
     ByteArray(Vec<u8>),
+    ShortArray(Vec<i16>),
     IntArray(Vec<i32>),
     LongArray(Vec<i64>),
+    FloatArray(Vec<f32>),
+    DoubleArray(Vec<f64>),
     List(Vec<KryoValue>),
     Map(Vec<(KryoValue, KryoValue)>),
     Unknown {
@@ -31,20 +34,32 @@ pub fn is_kryo_serialization(data: &[u8]) -> bool {
 
     let first = data[0];
 
-    if matches!(
+    if !matches!(
         first,
-        0x01 | 0x02 | 0x03 | 0x04 | 0x05 | 0x06 | 0x07 | 0x08 | 0x09
+        0x00 | 0x01
+            | 0x02
+            | 0x03
+            | 0x04
+            | 0x05
+            | 0x06
+            | 0x07
+            | 0x08
+            | 0x09
+            | 0x0A
+            | 0x0B
+            | 0x0C
+            | 0x0D
+            | 0x0E
+            | 0x0F
     ) {
-        return true;
+        return false;
     }
 
-    if first == 0x0A || first == 0x0B || first == 0x0C {
-        if data.len() > 2 {
-            return true;
-        }
+    if let Ok((_, size)) = parse_kryo_with_size(data) {
+        size == data.len()
+    } else {
+        false
     }
-
-    false
 }
 
 pub fn is_fst_serialization(data: &[u8]) -> bool {
@@ -238,6 +253,32 @@ fn parse_fst(data: &[u8]) -> Result<KryoValue, String> {
     }
 
     let content_bytes = &data[8..8 + length];
+
+    if content_bytes.len() >= 2 {
+        let first = content_bytes[0];
+        if matches!(
+            first,
+            0x00 | 0x01
+                | 0x02
+                | 0x03
+                | 0x04
+                | 0x05
+                | 0x06
+                | 0x07
+                | 0x08
+                | 0x09
+                | 0x0A
+                | 0x0B
+                | 0x0C
+        ) {
+            if let Ok((value, size)) = parse_kryo_with_size(content_bytes) {
+                if size == content_bytes.len() {
+                    return Ok(value);
+                }
+            }
+        }
+    }
+
     match String::from_utf8(content_bytes.to_vec()) {
         Ok(s) if s.chars().all(|c| c.is_ascii_graphic() || c.is_whitespace()) => {
             Ok(KryoValue::String(Some(s)))
@@ -260,6 +301,10 @@ fn parse_kryo_with_size(data: &[u8]) -> Result<(KryoValue, usize), String> {
     let value = match type_id {
         0x00 => KryoValue::Null,
         0x01 => KryoValue::Byte(reader.read_i8()?),
+        0x02 => {
+            let c = reader.read_i16()?;
+            KryoValue::Char(c as u8 as char)
+        }
         0x03 => KryoValue::Short(reader.read_i16()?),
         0x04 => KryoValue::Int(reader.read_varint()?),
         0x05 => KryoValue::Long(reader.read_varlong()?),
@@ -289,6 +334,30 @@ fn parse_kryo_with_size(data: &[u8]) -> Result<(KryoValue, usize), String> {
                 items.push((key, value));
             }
             KryoValue::Map(items)
+        }
+        0x0D => {
+            let len = reader.read_varint()? as usize;
+            let mut arr = Vec::with_capacity(len);
+            for _ in 0..len {
+                arr.push(reader.read_i16()?);
+            }
+            KryoValue::ShortArray(arr)
+        }
+        0x0E => {
+            let len = reader.read_varint()? as usize;
+            let mut arr = Vec::with_capacity(len);
+            for _ in 0..len {
+                arr.push(reader.read_float()?);
+            }
+            KryoValue::FloatArray(arr)
+        }
+        0x0F => {
+            let len = reader.read_varint()? as usize;
+            let mut arr = Vec::with_capacity(len);
+            for _ in 0..len {
+                arr.push(reader.read_double()?);
+            }
+            KryoValue::DoubleArray(arr)
         }
         _ => {
             let remaining = data.len().min(64);
@@ -327,6 +396,11 @@ pub fn kryo_to_json(kryo: KryoValue) -> JsonValue {
             let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
             JsonValue::String(format!("[{} bytes] {}", bytes.len(), hex))
         }
+        KryoValue::ShortArray(arr) => JsonValue::Array(
+            arr.into_iter()
+                .map(|s| JsonValue::Number(s.into()))
+                .collect(),
+        ),
         KryoValue::IntArray(arr) => JsonValue::Array(
             arr.into_iter()
                 .map(|i| JsonValue::Number(i.into()))
@@ -335,6 +409,16 @@ pub fn kryo_to_json(kryo: KryoValue) -> JsonValue {
         KryoValue::LongArray(arr) => JsonValue::Array(
             arr.into_iter()
                 .map(|l| JsonValue::Number(l.into()))
+                .collect(),
+        ),
+        KryoValue::FloatArray(arr) => JsonValue::Array(
+            arr.into_iter()
+                .filter_map(|f| serde_json::Number::from_f64(f as f64).map(JsonValue::Number))
+                .collect(),
+        ),
+        KryoValue::DoubleArray(arr) => JsonValue::Array(
+            arr.into_iter()
+                .filter_map(|d| serde_json::Number::from_f64(d).map(JsonValue::Number))
                 .collect(),
         ),
         KryoValue::List(items) => JsonValue::Array(items.into_iter().map(kryo_to_json).collect()),
@@ -382,11 +466,11 @@ mod tests {
 
     #[test]
     fn test_detect_kryo() {
+        assert!(is_kryo_serialization(&[0x00]));
         assert!(is_kryo_serialization(&[0x01, 0x42]));
-        assert!(is_kryo_serialization(&[0x04, 0x7F]));
-        assert!(is_kryo_serialization(&[0x08, 0x00]));
-        assert!(is_kryo_serialization(&[0x09, 0x00]));
-        assert!(!is_kryo_serialization(&[0xFF, 0xFF]));
+        assert!(is_kryo_serialization(&[0x08]));
+        assert!(is_kryo_serialization(&[0x09]));
+        assert!(!is_kryo_serialization(&[0xFF]));
     }
 
     #[test]
@@ -415,6 +499,13 @@ mod tests {
     fn test_parse_kryo_byte() {
         let result = parse_kryo_basic(&[0x01, 0x42]).unwrap();
         assert!(matches!(result, KryoValue::Byte(0x42)));
+    }
+
+    #[test]
+    fn test_parse_kryo_char() {
+        let data = [0x02, 0x00, 0x41];
+        let result = parse_kryo_basic(&data).unwrap();
+        assert!(matches!(result, KryoValue::Char('A')));
     }
 
     #[test]

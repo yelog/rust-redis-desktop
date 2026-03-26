@@ -18,6 +18,8 @@ pub fn apply_preset_formatter(formatter_type: &FormatterType, input: &[u8]) -> T
         FormatterType::Zstd => decompress_zstd(input),
         FormatterType::MsgPack => decode_msgpack(input),
         FormatterType::Protobuf => decode_protobuf(input),
+        FormatterType::Yaml => format_yaml(input),
+        FormatterType::Toml => format_toml(input),
         FormatterType::Custom(_) => {
             TransformResult::Error("Custom formatters are not supported yet".to_string())
         }
@@ -271,4 +273,26 @@ fn decode_protobuf(input: &[u8]) -> TransformResult {
     }
 
     TransformResult::Text(result)
+}
+
+fn format_yaml(input: &[u8]) -> TransformResult {
+    let input_str = String::from_utf8_lossy(input);
+    match serde_yaml::from_str::<JsonValue>(&input_str) {
+        Ok(json) => match serde_json::to_string_pretty(&json) {
+            Ok(formatted) => TransformResult::Text(formatted),
+            Err(e) => TransformResult::Error(format!("Failed to format JSON: {}", e)),
+        },
+        Err(e) => TransformResult::Error(format!("Invalid YAML: {}", e)),
+    }
+}
+
+fn format_toml(input: &[u8]) -> TransformResult {
+    let input_str = String::from_utf8_lossy(input);
+    match toml::from_str::<JsonValue>(&input_str) {
+        Ok(json) => match serde_json::to_string_pretty(&json) {
+            Ok(formatted) => TransformResult::Text(formatted),
+            Err(e) => TransformResult::Error(format!("Failed to format JSON: {}", e)),
+        },
+        Err(e) => TransformResult::Error(format!("Invalid TOML: {}", e)),
+    }
 }

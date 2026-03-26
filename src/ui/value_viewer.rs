@@ -265,6 +265,8 @@ pub enum BinaryFormat {
     Pickle,
     Kryo,
     Bitmap,
+    Bson,
+    Cbor,
 }
 
 #[derive(Clone, PartialEq)]
@@ -382,6 +384,28 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
                 format!("Protobuf 数据 ({} 字节)\n\n请切换到 Protobuf 视图查看解析结果", data.len())
             } else {
                 "非 Protobuf 数据".to_string()
+            }
+        }
+        BinaryFormat::Bson => {
+            let detected = detect_serialization_format(data);
+            if detected == SerializationFormat::Bson {
+                format!(
+                    "BSON 数据 ({} 字节)\n\n请切换到 BSON 视图查看解析结果",
+                    data.len()
+                )
+            } else {
+                "非 BSON 数据".to_string()
+            }
+        }
+        BinaryFormat::Cbor => {
+            let detected = detect_serialization_format(data);
+            if detected == SerializationFormat::Cbor {
+                format!(
+                    "CBOR 数据 ({} 字节)\n\n请切换到 CBOR 视图查看解析结果",
+                    data.len()
+                )
+            } else {
+                "非 CBOR 数据".to_string()
             }
         }
     }
@@ -563,6 +587,8 @@ async fn load_key_data(
                                 SerializationFormat::Kryo => BinaryFormat::Kryo,
                                 SerializationFormat::Fst => BinaryFormat::Kryo,
                                 SerializationFormat::Protobuf => BinaryFormat::Protobuf,
+                                SerializationFormat::Bson => BinaryFormat::Bson,
+                                SerializationFormat::Cbor => BinaryFormat::Cbor,
                                 _ => BinaryFormat::Hex,
                             });
                         } else {
@@ -1964,6 +1990,36 @@ pub fn ValueViewer(
                                                                 }
                                                             }
 
+                                                            if detected_format == Some(SerializationFormat::Bson) {
+                                                                button {
+                                                                    padding: "4px 8px",
+                                                                    background: if binary_format() == BinaryFormat::Bson { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                    color: if binary_format() == BinaryFormat::Bson { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                    border: "none",
+                                                                    border_radius: "4px",
+                                                                    cursor: "pointer",
+                                                                    font_size: "12px",
+                                                                    onclick: move |_| binary_format.set(BinaryFormat::Bson),
+
+                                                                    "BSON"
+                                                                }
+                                                            }
+
+                                                            if detected_format == Some(SerializationFormat::Cbor) {
+                                                                button {
+                                                                    padding: "4px 8px",
+                                                                    background: if binary_format() == BinaryFormat::Cbor { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                    color: if binary_format() == BinaryFormat::Cbor { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                    border: "none",
+                                                                    border_radius: "4px",
+                                                                    cursor: "pointer",
+                                                                    font_size: "12px",
+                                                                    onclick: move |_| binary_format.set(BinaryFormat::Cbor),
+
+                                                                    "CBOR"
+                                                                }
+                                                            }
+
                                                             if !is_serialized {
                                                                 button {
                                                                     padding: "4px 8px",
@@ -2034,7 +2090,9 @@ pub fn ValueViewer(
                                                                         | BinaryFormat::MsgPack
                                                                         | BinaryFormat::Pickle
                                                                         | BinaryFormat::Kryo
-                                                                        | BinaryFormat::Protobuf => {
+                                                                        | BinaryFormat::Protobuf
+                                                                        | BinaryFormat::Bson
+                                                                        | BinaryFormat::Cbor => {
                                                                             if let Some((fmt, data)) = serial_info.as_ref() {
                                                                                 parse_to_json(data, *fmt).unwrap_or(current_str)
                                                                             } else {
@@ -2183,54 +2241,122 @@ pub fn ValueViewer(
                                                                     }
                                                                 }
                                                             }
-                                                            BinaryFormat::Kryo => {
-                                                                if let Some((ref format, ref data)) = serialization_info {
-                                                                    if matches!(format, SerializationFormat::Kryo | SerializationFormat::Fst) {
-                                                                        match parse_to_json(data, *format) {
-                                                                            Ok(json_str) => rsx! {
-                                                                                JsonViewer {
-                                                                                    value: json_str,
-                                                                                    editable: false,
-                                                                                    on_change: move |_| {},
-                                                                                }
-                                                                            },
-                                                                            Err(e) => rsx! {
-                                                                                div {
-                                                                                    padding: "16px",
-                                                                                    background: COLOR_ERROR_BG,
-                                                                                    border_radius: "8px",
-                                                                                    color: COLOR_ERROR,
+BinaryFormat::Kryo => {
+                                                                 if let Some((ref format, ref data)) = serialization_info {
+                                                                     if matches!(format, SerializationFormat::Kryo | SerializationFormat::Fst) {
+                                                                         match parse_to_json(data, *format) {
+                                                                             Ok(json_str) => rsx! {
+                                                                                 JsonViewer {
+                                                                                     value: json_str,
+                                                                                     editable: false,
+                                                                                     on_change: move |_| {},
+                                                                                 }
+                                                                             },
+                                                                             Err(e) => rsx! {
+                                                                                 div {
+                                                                                     padding: "16px",
+                                                                                     background: COLOR_ERROR_BG,
+                                                                                     border_radius: "8px",
+                                                                                     color: COLOR_ERROR,
 
-                                                                                    "Kryo/FST 解析错误: {e}"
-                                                                                }
-                                                                            },
-                                                                        }
-                                                                    } else {
-                                                                        rsx! {
-                                                                            div {
-                                                                                padding: "16px",
-                                                                                background: COLOR_BG_TERTIARY,
-                                                                                border_radius: "8px",
-                                                                                color: COLOR_TEXT_SECONDARY,
+                                                                                     "Kryo/FST 解析错误: {e}"
+                                                                                 }
+                                                                             },
+                                                                         }
+                                                                     } else {
+                                                                         rsx! {
+                                                                             div {
+                                                                                 padding: "16px",
+                                                                                 background: COLOR_BG_TERTIARY,
+                                                                                 border_radius: "8px",
+                                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                                "非 Kryo/FST 数据"
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                } else {
-                                                                    rsx! {
-                                                                        div {
-                                                                            padding: "16px",
-                                                                            background: COLOR_BG_TERTIARY,
-                                                                            border_radius: "8px",
-                                                                            color: COLOR_TEXT_SECONDARY,
+                                                                                 "非 Kryo/FST 数据"
+                                                                             }
+                                                                         }
+                                                                     }
+                                                                 } else {
+                                                                     rsx! {
+                                                                         div {
+                                                                             padding: "16px",
+                                                                             background: COLOR_BG_TERTIARY,
+                                                                             border_radius: "8px",
+                                                                             color: COLOR_TEXT_SECONDARY,
 
-                                                                            "解析失败"
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-BinaryFormat::Image => {
+                                                                             "解析失败"
+                                                                         }
+                                                                     }
+                                                                 }
+                                                             }
+                                                             BinaryFormat::Bson => {
+                                                                 if let Some((SerializationFormat::Bson, ref data)) = serialization_info {
+                                                                     match parse_to_json(data, SerializationFormat::Bson) {
+                                                                         Ok(json_str) => rsx! {
+                                                                             JsonViewer {
+                                                                                 value: json_str,
+                                                                                 editable: false,
+                                                                                 on_change: move |_| {},
+                                                                             }
+                                                                         },
+                                                                         Err(e) => rsx! {
+                                                                             div {
+                                                                                 padding: "16px",
+                                                                                 background: COLOR_ERROR_BG,
+                                                                                 border_radius: "8px",
+                                                                                 color: COLOR_ERROR,
+
+                                                                                 "BSON 解析错误: {e}"
+                                                                             }
+                                                                         },
+                                                                     }
+                                                                 } else {
+                                                                     rsx! {
+                                                                         div {
+                                                                             padding: "16px",
+                                                                             background: COLOR_BG_TERTIARY,
+                                                                             border_radius: "8px",
+                                                                             color: COLOR_TEXT_SECONDARY,
+
+                                                                             "解析失败"
+                                                                         }
+                                                                     }
+                                                                 }
+                                                             }
+                                                             BinaryFormat::Cbor => {
+                                                                 if let Some((SerializationFormat::Cbor, ref data)) = serialization_info {
+                                                                     match parse_to_json(data, SerializationFormat::Cbor) {
+                                                                         Ok(json_str) => rsx! {
+                                                                             JsonViewer {
+                                                                                 value: json_str,
+                                                                                 editable: false,
+                                                                                 on_change: move |_| {},
+                                                                             }
+                                                                         },
+                                                                         Err(e) => rsx! {
+                                                                             div {
+                                                                                 padding: "16px",
+                                                                                 background: COLOR_ERROR_BG,
+                                                                                 border_radius: "8px",
+                                                                                 color: COLOR_ERROR,
+
+                                                                                 "CBOR 解析错误: {e}"
+                                                                             }
+                                                                         },
+                                                                     }
+                                                                 } else {
+                                                                     rsx! {
+                                                                         div {
+                                                                             padding: "16px",
+                                                                             background: COLOR_BG_TERTIARY,
+                                                                             border_radius: "8px",
+                                                                             color: COLOR_TEXT_SECONDARY,
+
+                                                                             "解析失败"
+                                                                         }
+                                                                     }
+                                                                 }
+                                                             }
+                                                             BinaryFormat::Image => {
                                                                 let bytes = binary_bytes();
                                                                 tracing::info!("Image preview: {} bytes, first 10: {:02x?}", bytes.len(), &bytes[..10.min(bytes.len())]);
                                                                 if let Some(format) = detect_image_format(&bytes) {

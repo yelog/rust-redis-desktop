@@ -1,3 +1,5 @@
+pub mod bson;
+pub mod cbor;
 pub mod java_converters;
 pub mod kryo;
 pub mod msgpack;
@@ -5,6 +7,8 @@ pub mod php;
 pub mod pickle;
 pub mod protobuf;
 
+use bson::{is_bson_serialization, parse_bson_to_json};
+use cbor::{is_cbor_serialization, parse_cbor_to_json};
 pub use jaded::{Content, Parser};
 use kryo::{detect_kryo_or_fst, is_fst_serialization, is_kryo_serialization, parse_kryo_to_json};
 use msgpack::{is_msgpack_serialization, parse_msgpack_to_json};
@@ -24,11 +28,16 @@ pub enum SerializationFormat {
     Kryo,
     Fst,
     Protobuf,
+    Bson,
+    Cbor,
 }
 
 pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
     if is_java_serialization(data) {
         return SerializationFormat::Java;
+    }
+    if is_bson_serialization(data) {
+        return SerializationFormat::Bson;
     }
     if is_pickle_serialization(data) {
         return SerializationFormat::Pickle;
@@ -38,6 +47,9 @@ pub fn detect_serialization_format(data: &[u8]) -> SerializationFormat {
     }
     if is_msgpack_serialization(data) {
         return SerializationFormat::MsgPack;
+    }
+    if is_cbor_serialization(data) {
+        return SerializationFormat::Cbor;
     }
     if is_fst_serialization(data) {
         return SerializationFormat::Fst;
@@ -69,6 +81,8 @@ pub fn parse_to_json(data: &[u8], format: SerializationFormat) -> Result<String,
                 Err("无法解析 Protobuf 数据".to_string())
             }
         }
+        SerializationFormat::Bson => parse_bson_to_json(data),
+        SerializationFormat::Cbor => parse_cbor_to_json(data),
         _ => Err("未知格式，无法解析".to_string()),
     }
 }
