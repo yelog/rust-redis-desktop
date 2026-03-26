@@ -632,6 +632,24 @@ pub fn AddKeyDialog(
                             }
                         }
                     },
+                    KeyType::JSON => rsx! {
+                        textarea {
+                            width: "100%",
+                            min_width: "0",
+                            height: "150px",
+                            padding: "8px 12px",
+                            background: "{colors.background_tertiary}",
+                            border: "1px solid {colors.border}",
+                            border_radius: "4px",
+                            color: "{colors.text}",
+                            font_size: "13px",
+                            font_family: "monospace",
+                            resize: "vertical",
+                            box_sizing: "border-box",
+                            value: "{string_value}",
+                            oninput: move |e| string_value.set(e.value()),
+                        }
+                    },
                     KeyType::None => rsx! { div {} },
                 }
             }
@@ -713,6 +731,9 @@ pub fn AddKeyDialog(
                                 }
                                 KeyType::Stream => {
                                     pool.add_stream_entries(&key, stream_e).await
+                                }
+                                KeyType::JSON => {
+                                    pool.json_set(&key, "$", &string_val).await
                                 }
                                 KeyType::None => {
                                     Err(crate::connection::ConnectionError::ConnectionFailed(

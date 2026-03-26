@@ -8,6 +8,7 @@ pub enum KeyType {
     Set,
     ZSet,
     Stream,
+    JSON,
     None,
 }
 
@@ -20,6 +21,7 @@ impl From<String> for KeyType {
             "set" => KeyType::Set,
             "zset" => KeyType::ZSet,
             "stream" => KeyType::Stream,
+            "json" | "rejson-rl" | "module" => KeyType::JSON,
             "none" => KeyType::None,
             _ => KeyType::None,
         }
@@ -35,6 +37,7 @@ impl std::fmt::Display for KeyType {
             KeyType::Set => write!(f, "Set"),
             KeyType::ZSet => write!(f, "ZSet"),
             KeyType::Stream => write!(f, "Stream"),
+            KeyType::JSON => write!(f, "JSON"),
             KeyType::None => write!(f, "None"),
         }
     }

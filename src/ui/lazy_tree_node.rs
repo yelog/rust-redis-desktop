@@ -223,6 +223,7 @@ pub fn LazyTreeNode(
                             Some(crate::redis::KeyType::Set) => rsx! { IconSet { size: Some(14) } },
                             Some(crate::redis::KeyType::ZSet) => rsx! { IconZSet { size: Some(14) } },
                             Some(crate::redis::KeyType::Stream) => rsx! { IconStream { size: Some(14) } },
+                            Some(crate::redis::KeyType::JSON) => rsx! { IconFile { size: Some(14) } },
                             _ => rsx! { IconFile { size: Some(14) } },
                         }
                     } else {

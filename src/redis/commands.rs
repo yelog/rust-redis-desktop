@@ -34,6 +34,9 @@ pub enum LargeKeyData {
     Stream {
         entries: Vec<(String, Vec<(String, String)>)>,
     },
+    JSON {
+        value: String,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -981,6 +984,10 @@ impl ConnectionPool {
                 let entries = self.stream_range(key, "-", "+").await?;
                 Ok(LargeKeyData::Stream { entries })
             }
+            KeyType::JSON => {
+                let value = self.json_get(key, None).await?.unwrap_or_else(|| "null".to_string());
+                Ok(LargeKeyData::JSON { value })
+            }
             KeyType::None => Err(ConnectionError::ConnectionFailed(
                 "Key not found".to_string(),
             )),
@@ -1134,6 +1141,112 @@ impl ConnectionPool {
         if let Some(ref mut conn) = *connection {
             conn.execute_cmd(&mut redis::cmd("MEMORY").arg("USAGE").arg(key))
                 .await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn json_get(&self, key: &str, path: Option<&str>) -> Result<Option<String>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let mut cmd = redis::cmd("JSON.GET");
+            cmd.arg(key);
+            if let Some(p) = path {
+                cmd.arg(p);
+            } else {
+                cmd.arg("$");
+            }
+            conn.execute_cmd(&mut cmd).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn json_set(&self, key: &str, path: &str, value: &str) -> Result<()> {
+        self.check_write_permission("JSON.SET")?;
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd::<()>(
+                &mut redis::cmd("JSON.SET").arg(key).arg(path).arg(value),
+            )
+            .await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn json_merge(&self, key: &str, path: &str, value: &str) -> Result<()> {
+        self.check_write_permission("JSON.MERGE")?;
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.execute_cmd::<()>(
+                &mut redis::cmd("JSON.MERGE").arg(key).arg(path).arg(value),
+            )
+            .await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn json_del(&self, key: &str, path: Option<&str>) -> Result<i64> {
+        self.check_write_permission("JSON.DEL")?;
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let mut cmd = redis::cmd("JSON.DEL");
+            cmd.arg(key);
+            if let Some(p) = path {
+                cmd.arg(p);
+            }
+            conn.execute_cmd(&mut cmd).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn json_type(&self, key: &str, path: Option<&str>) -> Result<Option<String>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let mut cmd = redis::cmd("JSON.TYPE");
+            cmd.arg(key);
+            if let Some(p) = path {
+                cmd.arg(p);
+            }
+            conn.execute_cmd(&mut cmd).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn json_obj_keys(&self, key: &str, path: Option<&str>) -> Result<Vec<String>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let mut cmd = redis::cmd("JSON.OBJKEYS");
+            cmd.arg(key);
+            if let Some(p) = path {
+                cmd.arg(p);
+            }
+            conn.execute_cmd(&mut cmd).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn json_arr_len(&self, key: &str, path: Option<&str>) -> Result<Option<i64>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let mut cmd = redis::cmd("JSON.ARRLEN");
+            cmd.arg(key);
+            if let Some(p) = path {
+                cmd.arg(p);
+            }
+            conn.execute_cmd(&mut cmd).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1428,6 +1541,19 @@ impl ConnectionPool {
                         members: None,
                         scored_members: None,
                     },
+                    KeyType::JSON => {
+                        let value = self.json_get(key, None).await.ok().flatten();
+                        ExportKeyData {
+                            key: key.clone(),
+                            key_type: "json".to_string(),
+                            ttl,
+                            value,
+                            fields: None,
+                            elements: None,
+                            members: None,
+                            scored_members: None,
+                        }
+                    }
                     KeyType::None => continue,
                 };
 

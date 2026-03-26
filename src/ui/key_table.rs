@@ -27,6 +27,7 @@ fn key_type_label(key_type: Option<&KeyType>) -> &'static str {
         Some(KeyType::Set) => "SET",
         Some(KeyType::ZSet) => "ZSET",
         Some(KeyType::Stream) => "STREAM",
+        Some(KeyType::JSON) => "JSON",
         Some(KeyType::None) => "NONE",
         None => "--",
     }
@@ -52,6 +53,7 @@ fn key_type_tone(key_type: Option<&KeyType>) -> (&'static str, &'static str, &'s
             COLOR_SUCCESS,
             COLOR_TONE_STREAM_BORDER,
         ),
+        Some(KeyType::JSON) => (COLOR_TONE_HASH_BG, COLOR_ACCENT, COLOR_TONE_HASH_BORDER),
         Some(KeyType::None) | None => (
             COLOR_TONE_LIST_BG,
             COLOR_TEXT_SUBTLE,

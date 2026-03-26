@@ -238,6 +238,7 @@ fn value_metric_label(
         KeyType::Set => format!("成员: {}", set_value.len()),
         KeyType::ZSet => format!("成员: {}", zset_value.len()),
         KeyType::Stream => format!("条目: {}", stream_value.len()),
+        KeyType::JSON => format!("JSON: {} 字符", string_value.chars().count()),
         KeyType::None => "--".to_string(),
     }
 }

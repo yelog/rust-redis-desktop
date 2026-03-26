@@ -14,6 +14,7 @@ pub enum KeyTypeIcon {
     Set,
     ZSet,
     Stream,
+    JSON,
     None,
 }
 
@@ -26,6 +27,7 @@ impl From<Option<KeyType>> for KeyTypeIcon {
             Some(KeyType::Set) => KeyTypeIcon::Set,
             Some(KeyType::ZSet) => KeyTypeIcon::ZSet,
             Some(KeyType::Stream) => KeyTypeIcon::Stream,
+            Some(KeyType::JSON) => KeyTypeIcon::JSON,
             _ => KeyTypeIcon::None,
         }
     }
@@ -40,6 +42,7 @@ impl KeyTypeIcon {
             KeyTypeIcon::Set => "📦",
             KeyTypeIcon::ZSet => "📊",
             KeyTypeIcon::Stream => "📜",
+            KeyTypeIcon::JSON => "🔷",
             KeyTypeIcon::None => "📄",
         }
     }
@@ -52,6 +55,7 @@ impl KeyTypeIcon {
             KeyTypeIcon::Set => "#f472b6",
             KeyTypeIcon::ZSet => "#a78bfa",
             KeyTypeIcon::Stream => "#2dd4bf",
+            KeyTypeIcon::JSON => "#f97316",
             KeyTypeIcon::None => "#9ca3af",
         }
     }
