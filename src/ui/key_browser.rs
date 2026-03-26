@@ -694,7 +694,7 @@ pub fn KeyBrowser(
                                     }
                                 },
                                 on_toggle: {
-                                    let expanded_paths = expanded_paths.clone();
+                                    let mut expanded_paths = expanded_paths.clone();
                                     move |path: String| {
                                         let mut expanded = expanded_paths.write();
                                         if expanded.contains(&path) {

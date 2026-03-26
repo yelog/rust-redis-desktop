@@ -1,7 +1,7 @@
 use crate::redis::{KeyType, TreeNode};
 use std::collections::HashSet;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FlatNode {
     pub id: String,
     pub path: String,

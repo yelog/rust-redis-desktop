@@ -66,7 +66,7 @@ pub fn VirtualTreeList(
     on_toggle: EventHandler<String>,
 ) -> Element {
     let mut scroll_top = use_signal(|| 0.0f32);
-    let mut viewport_height = use_signal(|| 600.0f32);
+    let viewport_height = use_signal(|| 600.0f32);
     let mut adapter = use_signal(|| FlatTreeAdapter::new(DEFAULT_ITEM_HEIGHT));
     let mut last_nodes_len = use_signal(|| 0usize);
 
