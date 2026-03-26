@@ -216,7 +216,42 @@ impl<'a> KryoReader<'a> {
     }
 }
 
+fn parse_fst(data: &[u8]) -> Result<KryoValue, String> {
+    if data.len() < 10 {
+        return Err("FST 数据太短".to_string());
+    }
+
+    let _version = data[0];
+
+    let length = i64::from_be_bytes([
+        data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8],
+    ]);
+
+    if length < 0 {
+        return Err("FST 字符串长度为负数".to_string());
+    }
+
+    let length = length as usize;
+    if 9 + length > data.len() {
+        return Err(format!(
+            "FST 数据不完整: 需要 {} 字节，实际 {} 字节",
+            9 + length,
+            data.len()
+        ));
+    }
+
+    let string_bytes = &data[9..9 + length];
+    match String::from_utf8(string_bytes.to_vec()) {
+        Ok(s) => Ok(KryoValue::String(Some(s))),
+        Err(_) => Ok(KryoValue::ByteArray(string_bytes.to_vec())),
+    }
+}
+
 pub fn parse_kryo_basic(data: &[u8]) -> Result<KryoValue, String> {
+    if is_fst_serialization(data) {
+        return parse_fst(data);
+    }
+
     let mut reader = KryoReader::new(data);
 
     let type_id = reader.read_u8()?;
@@ -400,5 +435,14 @@ mod tests {
 
         let json = kryo_to_json(KryoValue::String(Some("hello".to_string())));
         assert_eq!(json, JsonValue::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_parse_fst_string() {
+        let data: Vec<u8> = vec![
+            0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, b't', b'e', b's', b't',
+        ];
+        let result = parse_kryo_basic(&data).unwrap();
+        assert!(matches!(result, KryoValue::String(Some(ref s)) if s == "test"));
     }
 }

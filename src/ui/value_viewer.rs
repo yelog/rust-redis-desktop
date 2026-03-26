@@ -163,25 +163,32 @@ fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
 }
 
 fn detect_image_format(data: &[u8]) -> Option<&'static str> {
-    if data.len() < 8 {
+    if data.len() < 3 {
         return None;
     }
-    if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+    // PNG: 89 50 4E 47
+    if data.len() >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
         return Some("PNG");
     }
+    // JPEG: FF D8 FF
     if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
         return Some("JPEG");
     }
+    // GIF: 47 49 46
     if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
         return Some("GIF");
     }
-    if data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46
+    // WEBP: 52 49 46 46 ... 57 45 42 50
+    if data.len() >= 12
+        && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46
         && data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50
     {
         return Some("WEBP");
     }
-    if data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00
-        && (data.len() > 12 && data[4..8] == [b'i', b'c', b'o', b'n'] || data[4..8] == [b'p', b'n', b'g', b' '] || data[4..8] == [b'j', b'p', b'g', b' '])
+    // ICO
+    if data.len() > 12
+        && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00
+        && (data[4..8] == [b'i', b'c', b'o', b'n'] || data[4..8] == [b'p', b'n', b'g', b' '] || data[4..8] == [b'j', b'p', b'g', b' '])
     {
         return Some("ICO");
     }
@@ -315,29 +322,31 @@ async fn load_key_data(
                     is_binary.set(true);
                     binary_bytes.set(bytes.clone());
 
-                    let detected_format = detect_serialization_format(&bytes);
-                    if detected_format != SerializationFormat::Unknown {
-                        tracing::info!("Detected serialization format: {:?}", detected_format);
-                        serialization_data.set(Some((detected_format, bytes.clone())));
-                        binary_format.set(match detected_format {
-                            SerializationFormat::Java => BinaryFormat::JavaSerialized,
-                            SerializationFormat::Php => BinaryFormat::Php,
-                            SerializationFormat::MsgPack => BinaryFormat::MsgPack,
-                            SerializationFormat::Pickle => BinaryFormat::Pickle,
-                            SerializationFormat::Kryo => BinaryFormat::Kryo,
-                            SerializationFormat::Fst => BinaryFormat::Kryo,
-                            SerializationFormat::Protobuf => BinaryFormat::Protobuf,
-                            _ => BinaryFormat::Hex,
-                        });
-                    } else if detect_image_format(&bytes).is_some() {
+                    if detect_image_format(&bytes).is_some() {
                         serialization_data.set(None);
                         binary_format.set(BinaryFormat::Image);
                     } else {
-                        serialization_data.set(None);
-                        if bytes.len() <= 1024 {
-                            if let Ok(info) = pool.get_bitmap_info(&key).await {
-                                bitmap_info.set(Some(info));
-                                binary_format.set(BinaryFormat::Bitmap);
+                        let detected_format = detect_serialization_format(&bytes);
+                        if detected_format != SerializationFormat::Unknown {
+                            tracing::info!("Detected serialization format: {:?}", detected_format);
+                            serialization_data.set(Some((detected_format, bytes.clone())));
+                            binary_format.set(match detected_format {
+                                SerializationFormat::Java => BinaryFormat::JavaSerialized,
+                                SerializationFormat::Php => BinaryFormat::Php,
+                                SerializationFormat::MsgPack => BinaryFormat::MsgPack,
+                                SerializationFormat::Pickle => BinaryFormat::Pickle,
+                                SerializationFormat::Kryo => BinaryFormat::Kryo,
+                                SerializationFormat::Fst => BinaryFormat::Kryo,
+                                SerializationFormat::Protobuf => BinaryFormat::Protobuf,
+                                _ => BinaryFormat::Hex,
+                            });
+                        } else {
+                            serialization_data.set(None);
+                            if bytes.len() <= 1024 {
+                                if let Ok(info) = pool.get_bitmap_info(&key).await {
+                                    bitmap_info.set(Some(info));
+                                    binary_format.set(BinaryFormat::Bitmap);
+                                }
                             }
                         }
                     }
@@ -1998,60 +2007,43 @@ pub fn ValueViewer(
                                                             }
 BinaryFormat::Image => {
                                                                 let bytes = binary_bytes();
+                                                                tracing::info!("Image preview: {} bytes, first 10: {:02x?}", bytes.len(), &bytes[..10.min(bytes.len())]);
                                                                 if let Some(format) = detect_image_format(&bytes) {
-                                                                    let extension = match format {
-                                                                        "PNG" => "png",
-                                                                        "JPEG" => "jpg",
-                                                                        "GIF" => "gif",
-                                                                        "WEBP" => "webp",
-                                                                        "ICO" => "ico",
-                                                                        _ => "png",
+                                                                    let mime_type = match format {
+                                                                        "PNG" => "image/png",
+                                                                        "JPEG" => "image/jpeg",
+                                                                        "GIF" => "image/gif",
+                                                                        "WEBP" => "image/webp",
+                                                                        "ICO" => "image/x-icon",
+                                                                        _ => "image/png",
                                                                     };
+                                                                    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+                                                                    let data_url = format!("data:{};base64,{}", mime_type, base64_data);
+                                                                    tracing::info!("Image data URL length: {}", data_url.len());
 
-                                                                    let temp_dir = std::env::temp_dir();
-                                                                    let file_name = format!("redis_image_{}.{}", uuid::Uuid::new_v4(), extension);
-                                                                    let file_path = temp_dir.join(&file_name);
+                                                                    rsx! {
+                                                                        div {
+                                                                            display: "flex",
+                                                                            flex_direction: "column",
+                                                                            align_items: "center",
+                                                                            gap: "12px",
 
-                                                                    match std::fs::write(&file_path, &bytes) {
-                                                                        Ok(_) => {
-                                                                            let file_url = format!("file://{}", file_path.display());
-                                                                            rsx! {
-                                                                                div {
-                                                                                    display: "flex",
-                                                                                    flex_direction: "column",
-                                                                                    align_items: "center",
-                                                                                    gap: "12px",
+                                                                                            img {
+                                                                                                max_width: "100%",
+                                                                                                max_height: "500px",
+                                                                                                border_radius: "8px",
+                                                                                                box_shadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                                                                                                src: "{data_url}",
+                                                                                            }
 
-                                                                                    img {
-                                                                                        max_width: "100%",
-                                                                                        max_height: "500px",
-                                                                                        border_radius: "8px",
-                                                                                        box_shadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-                                                                                        src: "{file_url}",
+                                                                                            div {
+                                                                                                color: COLOR_TEXT_SECONDARY,
+                                                                                                font_size: "12px",
+
+                                                                                                "{format} - {bytes.len()} 字节"
+                                                                                            }
+                                                                                        }
                                                                                     }
-
-                                                                                    div {
-                                                                                        color: COLOR_TEXT_SECONDARY,
-                                                                                        font_size: "12px",
-
-                                                                                        "{format} - {bytes.len()} 字节"
-                                                                                    }
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                        Err(e) => {
-                                                                            rsx! {
-                                                                                div {
-                                                                                    padding: "16px",
-                                                                                    background: COLOR_ERROR_BG,
-                                                                                    border_radius: "8px",
-                                                                                    color: COLOR_ERROR,
-
-                                                                                    "保存图片失败: {e}"
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    }
                                                                 } else {
                                                                     rsx! {
                                                                         div {
