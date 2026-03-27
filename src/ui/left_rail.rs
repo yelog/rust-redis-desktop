@@ -424,6 +424,7 @@ pub fn LeftRail(
                                     display: "flex",
                                     align_items: "center",
                                     gap: "8px",
+                                    width: "100%",
 
                                     div {
                                         class: "dot-tooltip-wrapper",
