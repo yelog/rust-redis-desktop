@@ -247,6 +247,9 @@ fn matches_glob_pattern(text: &str, pattern: &str) -> bool {
                 star_idx = Some(pattern_idx);
                 match_idx = text_idx;
                 pattern_idx += 1;
+            } else if pattern_idx < pattern.len() && text[text_idx] == pattern[pattern_idx] {
+                text_idx += 1;
+                pattern_idx += 1;
             } else if let Some(si) = star_idx {
                 pattern_idx = si + 1;
                 match_idx += 1;

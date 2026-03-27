@@ -1,3 +1,21 @@
 /target/
 .DS_Store
 .opencode/
+
+# Test certificates and keys (auto-generated)
+test/redis-ssl-certs/
+test/ssh-keys/
+test/ssh-config/
+*.pem
+*.key
+*.crt
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary plans and drafts
+docs/plans/

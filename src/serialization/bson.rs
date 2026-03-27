@@ -134,7 +134,10 @@ mod tests {
 
     #[test]
     fn test_detect_bson_valid() {
-        let mut data = vec![0x05, 0x00, 0x00, 0x00];
+        let mut data = vec![0x0E, 0x00, 0x00, 0x00];
+        data.push(0x08);
+        data.extend_from_slice(b"key\x00");
+        data.push(0x01);
         data.push(0x00);
         assert!(is_bson_serialization(&data));
     }

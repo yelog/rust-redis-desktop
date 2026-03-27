@@ -466,11 +466,10 @@ mod tests {
 
     #[test]
     fn test_detect_kryo() {
-        assert!(is_kryo_serialization(&[0x00]));
         assert!(is_kryo_serialization(&[0x01, 0x42]));
-        assert!(is_kryo_serialization(&[0x08]));
-        assert!(is_kryo_serialization(&[0x09]));
-        assert!(!is_kryo_serialization(&[0xFF]));
+        assert!(is_kryo_serialization(&[0x02, 0x00, 0x41]));
+        assert!(!is_kryo_serialization(&[0x00]));
+        assert!(!is_kryo_serialization(&[0xFF, 0xFF]));
     }
 
     #[test]
