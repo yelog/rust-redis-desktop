@@ -633,7 +633,7 @@ async fn load_key_data(
                         Err(_) => {
                             is_binary.set(true);
                             binary_bytes.set(bytes.clone());
-                            
+
                             if detect_image_format(&bytes).is_some() {
                                 binary_format.set(BinaryFormat::Image);
                             } else {
@@ -661,7 +661,7 @@ async fn load_key_data(
                                     }
                                 }
                             }
-                            
+
                             string_value.set(format_bytes(&bytes, binary_format()));
                         }
                     }
@@ -3856,7 +3856,6 @@ pub fn ValueViewer(
                                                             IconCopy { size: Some(14) }
                                                             "复制"
                                                         }
-                                                    }
                                                 }
 
                                                 if !list_status_message.read().is_empty() {
@@ -4256,6 +4255,7 @@ pub fn ValueViewer(
                                                             }
                                                         }
                                                     }
+                                                }
                                                 }
                                             }
                                         }
