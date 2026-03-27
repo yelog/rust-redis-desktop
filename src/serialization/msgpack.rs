@@ -1,8 +1,8 @@
 use serde_json::Value as JsonValue;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 pub fn is_msgpack_serialization(data: &[u8]) -> bool {
-    if data.is_empty() {
+    if data.len() < 2 {
         return false;
     }
 
@@ -25,8 +25,39 @@ pub fn is_msgpack_serialization(data: &[u8]) -> bool {
         return false;
     }
 
-    let cursor = Cursor::new(data);
-    rmp_serde::from_read::<_, JsonValue>(cursor).is_ok()
+    let mut cursor = Cursor::new(data);
+    match rmp_serde::from_read::<_, JsonValue>(&mut cursor) {
+        Ok(value) => {
+            let consumed = cursor.position() as usize;
+            if consumed != data.len() {
+                return false;
+            }
+
+            match &value {
+                JsonValue::Object(_) => return true,
+                JsonValue::Array(arr) if arr.len() >= 2 => return true,
+                _ => {}
+            }
+
+            if first >= 0x80 && first <= 0x8F {
+                let expected_count = (first - 0x80) as usize;
+                return expected_count >= 1;
+            }
+
+            if first >= 0xA0 && first <= 0xBF {
+                let expected_len = (first - 0xA0) as usize;
+                return consumed == expected_len + 1 && expected_len >= 2;
+            }
+
+            if first >= 0x90 && first <= 0x9F {
+                let expected_count = (first - 0x90) as usize;
+                return expected_count >= 2;
+            }
+
+            false
+        }
+        Err(_) => false,
+    }
 }
 
 pub fn parse_msgpack_to_json(data: &[u8]) -> Result<String, String> {
@@ -61,15 +92,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_msgpack() {
-        assert!(is_msgpack_serialization(&[0x80]));
-        assert!(is_msgpack_serialization(&[0x90]));
-        assert!(is_msgpack_serialization(&[0xA0]));
-        assert!(is_msgpack_serialization(&[0xC0]));
-        assert!(is_msgpack_serialization(&[0xC2]));
-        assert!(is_msgpack_serialization(&[0xCA, 0x00, 0x00, 0x00, 0x00]));
+    fn test_detect_msgpack_not_false_positive() {
+        assert!(!is_msgpack_serialization(&[0x91, 0x21, 0x0a]));
+        assert!(!is_msgpack_serialization(&[0x90, 0x00]));
+        assert!(!is_msgpack_serialization(&[0xA0]));
+        assert!(!is_msgpack_serialization(&[0x80]));
         assert!(!is_msgpack_serialization(&[0xFF, 0xFF]));
-        assert!(!is_msgpack_serialization(&[0x92, 0x11]));
+    }
+
+    #[test]
+    fn test_detect_msgpack_array() {
+        assert!(is_msgpack_serialization(&[0x92, 0x01, 0x02]));
+        assert!(is_msgpack_serialization(&[0x93, 0x01, 0x02, 0x03]));
+    }
+
+    #[test]
+    fn test_detect_msgpack_map() {
+        assert!(is_msgpack_serialization(&[0x81, 0xA1, b'k', 0x01]));
+    }
+
+    #[test]
+    fn test_detect_msgpack_string() {
+        assert!(is_msgpack_serialization(&[0xA5, b'H', b'e', b'l', b'l', b'o']));
     }
 
     #[test]
@@ -91,10 +135,11 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_msgpack_int() {
-        let data = [0x7F];
+    fn test_parse_msgpack_array() {
+        let data = [0x92, 0x01, 0x02];
         let result = parse_msgpack_to_json(&data[..]).unwrap();
-        assert_eq!(result, "127");
+        assert!(result.contains("1"));
+        assert!(result.contains("2"));
     }
 
     #[test]
