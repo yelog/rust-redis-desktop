@@ -19,6 +19,7 @@ use crate::ui::{copy_text_to_clipboard, ServerInfoPanel, ToastManager};
 use dioxus::prelude::*;
 use dioxus::html::geometry::WheelDelta;
 use serde_json;
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 const PAGE_SIZE: usize = 100;
@@ -6323,10 +6324,12 @@ fn ProtobufViewer(data: Vec<u8>) -> Element {
     let messages = registry.list_messages();
     let has_schema = !messages.is_empty();
 
-    let json_result = if !selected_message().is_empty() {
+    let json_result: Option<JsonValue> = if !selected_message().is_empty() {
         registry.decode_with_schema(&data, &selected_message()).ok()
     } else {
-        parse_to_json(&data, SerializationFormat::Protobuf).ok()
+        parse_to_json(&data, SerializationFormat::Protobuf)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
     };
 
     rsx! {

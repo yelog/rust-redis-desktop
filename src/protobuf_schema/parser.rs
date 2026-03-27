@@ -151,8 +151,8 @@ fn extract_messages_recursive(
                         &mut nested_messages,
                         &mut nested_enums,
                     );
+                    messages.extend(nested_messages.clone());
                     msg.nested_messages = nested_messages;
-                    messages.extend(nested_messages);
                     enums.extend(nested_enums);
 
                     messages.push(msg);

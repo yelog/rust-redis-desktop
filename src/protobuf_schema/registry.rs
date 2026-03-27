@@ -91,8 +91,8 @@ fn decode_message(data: &[u8], msg: &MessageDef) -> Result<JsonValue, String> {
         let (tag, bytes_read) = decode_varint(&data[pos..])?;
         pos += bytes_read;
 
-        let field_number = tag >> 3;
-        let wire_type = tag & 0x07;
+        let field_number = (tag >> 3) as u32;
+        let wire_type = (tag & 0x07) as u32;
 
         let field = msg.get_field(field_number);
 
@@ -103,11 +103,12 @@ fn decode_message(data: &[u8], msg: &MessageDef) -> Result<JsonValue, String> {
             .map(|f| f.name.clone())
             .unwrap_or_else(|| format!("field_{}", field_number));
 
-        if let Some(existing) = result.get(&key) {
-            if let JsonValue::Array(ref mut arr) = result.get_mut(&key).unwrap() {
+        if result.contains_key(&key) {
+            let existing = result.get(&key).cloned();
+            if let Some(JsonValue::Array(mut arr)) = existing {
                 arr.push(value);
-            } else {
-                let old = existing.clone();
+                result.insert(key, JsonValue::Array(arr));
+            } else if let Some(old) = existing {
                 result.insert(key, JsonValue::Array(vec![old, value]));
             }
         } else {
@@ -218,7 +219,7 @@ fn decode_field(
     }
 }
 
-fn decode_varint(data: &[u8]) -> Result<u64, String> {
+fn decode_varint(data: &[u8]) -> Result<(u64, usize), String> {
     let mut result: u64 = 0;
     let mut shift = 0;
     let mut pos = 0;
