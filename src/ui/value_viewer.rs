@@ -2793,7 +2793,6 @@ pub fn ValueViewer(
                                                             "复制"
                                                         }
                                                     }
-                                                }
 
                                                 div {
                                                     flex: "1",
@@ -3631,6 +3630,7 @@ pub fn ValueViewer(
                                                     }
                                                 }
                                             }
+                                            }
                                         }
                                         KeyType::List => {
                                             rsx! {
@@ -3856,7 +3856,7 @@ pub fn ValueViewer(
                                                             IconCopy { size: Some(14) }
                                                             "复制"
                                                         }
-                                                }
+                                                    }
 
                                                 if !list_status_message.read().is_empty() {
                                                     div {
