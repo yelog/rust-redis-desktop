@@ -1838,7 +1838,7 @@ pub fn ValueViewer(
 
                                             rsx! {
                                                 div {
-                                                    if is_binary() {
+if is_binary() {
                                                         div {
                                                             display: "flex",
                                                             gap: "8px",
@@ -1858,6 +1858,9 @@ pub fn ValueViewer(
                                                                         Some(SerializationFormat::Pickle) => "Python Pickle 数据",
                                                                         Some(SerializationFormat::Kryo) => "Kryo 序列化数据",
                                                                         Some(SerializationFormat::Fst) => "FST 序列化数据",
+                                                                        Some(SerializationFormat::Bson) => "BSON 数据",
+                                                                        Some(SerializationFormat::Cbor) => "CBOR 数据",
+                                                                        Some(SerializationFormat::Protobuf) => "Protobuf 数据",
                                                                         _ => "序列化数据",
                                                                     }
                                                                 }
@@ -1899,177 +1902,165 @@ pub fn ValueViewer(
                                                             {
                                                                 let bytes = binary_bytes();
                                                                 let is_image = detect_image_format(&bytes).is_some();
-                                                                if is_image {
-                                                                    rsx! {
-                                                                        button {
-                                                                            padding: "4px 8px",
-                                                                            background: if binary_format() == BinaryFormat::Image { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                            color: if binary_format() == BinaryFormat::Image { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                            border: "none",
-                                                                            border_radius: "4px",
-                                                                            cursor: "pointer",
-                                                                            font_size: "12px",
-                                                                            onclick: move |_| binary_format.set(BinaryFormat::Image),
+                                                                rsx! {
+                                                                    button {
+                                                                        padding: "4px 8px",
+                                                                        background: if binary_format() == BinaryFormat::Image { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                        color: if binary_format() == BinaryFormat::Image { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                        border: if is_image { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                        border_radius: "4px",
+                                                                        cursor: "pointer",
+                                                                        font_size: "12px",
+                                                                        opacity: if is_image { "1.0" } else { "0.6" },
+                                                                        onclick: move |_| binary_format.set(BinaryFormat::Image),
 
-                                                                            "图片"
-                                                                        }
+                                                                        "图片"
                                                                     }
-                                                                } else {
-                                                                    rsx! { div {} }
                                                                 }
                                                             }
 
-                                                            if detected_format == Some(SerializationFormat::Java) {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::JavaSerialized { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::JavaSerialized { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: move |_| binary_format.set(BinaryFormat::JavaSerialized),
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::JavaSerialized { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::JavaSerialized { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if detected_format == Some(SerializationFormat::Java) { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if detected_format == Some(SerializationFormat::Java) { "1.0" } else { "0.6" },
+                                                                onclick: move |_| binary_format.set(BinaryFormat::JavaSerialized),
 
-                                                                    "Java解析"
-                                                                }
+                                                                "Java"
                                                             }
 
-                                                            if detected_format == Some(SerializationFormat::Php) {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::Php { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::Php { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: move |_| binary_format.set(BinaryFormat::Php),
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Php { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Php { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if detected_format == Some(SerializationFormat::Php) { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if detected_format == Some(SerializationFormat::Php) { "1.0" } else { "0.6" },
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Php),
 
-                                                                    "PHP解析"
-                                                                }
+                                                                "PHP"
                                                             }
 
-                                                            if detected_format == Some(SerializationFormat::MsgPack) {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::MsgPack { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::MsgPack { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: move |_| binary_format.set(BinaryFormat::MsgPack),
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::MsgPack { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::MsgPack { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if detected_format == Some(SerializationFormat::MsgPack) { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if detected_format == Some(SerializationFormat::MsgPack) { "1.0" } else { "0.6" },
+                                                                onclick: move |_| binary_format.set(BinaryFormat::MsgPack),
 
-                                                                    "MsgPack"
-                                                                }
+                                                                "MsgPack"
                                                             }
 
-                                                            if detected_format == Some(SerializationFormat::Pickle) {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::Pickle { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::Pickle { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: move |_| binary_format.set(BinaryFormat::Pickle),
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Pickle { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Pickle { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if detected_format == Some(SerializationFormat::Pickle) { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if detected_format == Some(SerializationFormat::Pickle) { "1.0" } else { "0.6" },
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Pickle),
 
-                                                                    "Pickle"
-                                                                }
+                                                                "Pickle"
                                                             }
 
-                                                            if matches!(detected_format, Some(SerializationFormat::Kryo) | Some(SerializationFormat::Fst)) {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::Kryo { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::Kryo { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: move |_| binary_format.set(BinaryFormat::Kryo),
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Kryo { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Kryo { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if matches!(detected_format, Some(SerializationFormat::Kryo) | Some(SerializationFormat::Fst)) { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if matches!(detected_format, Some(SerializationFormat::Kryo) | Some(SerializationFormat::Fst)) { "1.0" } else { "0.6" },
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Kryo),
 
-                                                                    "Kryo"
-                                                                }
+                                                                "Kryo"
                                                             }
 
-                                                            if detected_format == Some(SerializationFormat::Bson) {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::Bson { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::Bson { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: move |_| binary_format.set(BinaryFormat::Bson),
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Bson { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Bson { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if detected_format == Some(SerializationFormat::Bson) { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if detected_format == Some(SerializationFormat::Bson) { "1.0" } else { "0.6" },
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Bson),
 
-                                                                    "BSON"
-                                                                }
+                                                                "BSON"
                                                             }
 
-                                                            if detected_format == Some(SerializationFormat::Cbor) {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::Cbor { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::Cbor { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: move |_| binary_format.set(BinaryFormat::Cbor),
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Cbor { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Cbor { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if detected_format == Some(SerializationFormat::Cbor) { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if detected_format == Some(SerializationFormat::Cbor) { "1.0" } else { "0.6" },
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Cbor),
 
-                                                                    "CBOR"
-                                                                }
+                                                                "CBOR"
                                                             }
 
-                                                            if !is_serialized {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::Bitmap { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::Bitmap { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: {
-                                                                        let pool = connection_pool.clone();
-                                                                        let key = display_key.clone();
-                                                                        move |_| {
-                                                                            let pool = pool.clone();
-                                                                            let key = key.clone();
-                                                                            spawn(async move {
-                                                                                match pool.get_bitmap_info(&key).await {
-                                                                                    Ok(info) => {
-                                                                                        bitmap_info.set(Some(info));
-                                                                                        binary_format.set(BinaryFormat::Bitmap);
-                                                                                    }
-                                                                                    Err(e) => {
-                                                                                        toast_manager.write().error(&format!("加载 Bitmap 失败: {}", e));
-                                                                                    }
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Protobuf { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Protobuf { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if detected_format == Some(SerializationFormat::Protobuf) { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if detected_format == Some(SerializationFormat::Protobuf) { "1.0" } else { "0.6" },
+                                                                onclick: move |_| binary_format.set(BinaryFormat::Protobuf),
+
+                                                                "Protobuf"
+                                                            }
+
+                                                            button {
+                                                                padding: "4px 8px",
+                                                                background: if binary_format() == BinaryFormat::Bitmap { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if binary_format() == BinaryFormat::Bitmap { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                border: if !is_serialized { "none" } else { format!("1px dashed {}", COLOR_BORDER) },
+                                                                border_radius: "4px",
+                                                                cursor: "pointer",
+                                                                font_size: "12px",
+                                                                opacity: if !is_serialized { "1.0" } else { "0.6" },
+                                                                onclick: {
+                                                                    let pool = connection_pool.clone();
+                                                                    let key = display_key.clone();
+                                                                    move |_| {
+                                                                        let pool = pool.clone();
+                                                                        let key = key.clone();
+                                                                        spawn(async move {
+                                                                            match pool.get_bitmap_info(&key).await {
+                                                                                Ok(info) => {
+                                                                                    bitmap_info.set(Some(info));
+                                                                                    binary_format.set(BinaryFormat::Bitmap);
                                                                                 }
-                                                                            });
-                                                                        }
-                                                                    },
+                                                                                Err(e) => {
+                                                                                    toast_manager.write().error(&format!("加载 Bitmap 失败: {}", e));
+                                                                                }
+                                                                            }
+                                                                        });
+                                                                    }
+                                                                },
 
-"Bitmap"
-                                                                 }
-                                                            }
-
-                                                            if detected_format == Some(SerializationFormat::Protobuf) || is_protobuf_data(string_value().as_bytes()) {
-                                                                button {
-                                                                    padding: "4px 8px",
-                                                                    background: if binary_format() == BinaryFormat::Protobuf { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                    color: if binary_format() == BinaryFormat::Protobuf { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                                                                    border: "none",
-                                                                    border_radius: "4px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    onclick: move |_| binary_format.set(BinaryFormat::Protobuf),
-
-                                                                    "Protobuf"
-                                                                }
+                                                                "Bitmap"
                                                             }
 
                                                             button {
@@ -3587,7 +3578,6 @@ hash_status_message.set("删除成功".to_string());
 
                                                     "向下滚动加载更多..."
                                                 }
-                                            }
                                             }
                                         }
                                     }
