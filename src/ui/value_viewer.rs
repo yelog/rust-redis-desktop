@@ -577,36 +577,31 @@ async fn load_key_data(
                         serialization_data.set(None);
                         binary_format.set(BinaryFormat::Image);
                     } else {
-                        let mut detected_bitmap = false;
-                        if bytes.len() <= 1024 {
-                            if let Ok(info) = pool.get_bitmap_info(&key).await {
-                                if info.total_bits > 0 {
-                                    bitmap_info.set(Some(info));
-                                    binary_format.set(BinaryFormat::Bitmap);
-                                    detected_bitmap = true;
+                        let detected_format = detect_serialization_format(&bytes);
+                        if detected_format != SerializationFormat::Unknown {
+                            tracing::info!("Detected serialization format: {:?}", detected_format);
+                            serialization_data.set(Some((detected_format, bytes.clone())));
+                            binary_format.set(match detected_format {
+                                SerializationFormat::Java => BinaryFormat::JavaSerialized,
+                                SerializationFormat::Php => BinaryFormat::Php,
+                                SerializationFormat::MsgPack => BinaryFormat::MsgPack,
+                                SerializationFormat::Pickle => BinaryFormat::Pickle,
+                                SerializationFormat::Kryo => BinaryFormat::Kryo,
+                                SerializationFormat::Fst => BinaryFormat::Kryo,
+                                SerializationFormat::Protobuf => BinaryFormat::Protobuf,
+                                SerializationFormat::Bson => BinaryFormat::Bson,
+                                SerializationFormat::Cbor => BinaryFormat::Cbor,
+                                _ => BinaryFormat::Hex,
+                            });
+                        } else {
+                            serialization_data.set(None);
+                            if bytes.len() <= 1024 {
+                                if let Ok(info) = pool.get_bitmap_info(&key).await {
+                                    if info.set_bits_count > 0 {
+                                        bitmap_info.set(Some(info));
+                                        binary_format.set(BinaryFormat::Bitmap);
+                                    }
                                 }
-                            }
-                        }
-
-                        if !detected_bitmap {
-                            let detected_format = detect_serialization_format(&bytes);
-                            if detected_format != SerializationFormat::Unknown {
-                                tracing::info!("Detected serialization format: {:?}", detected_format);
-                                serialization_data.set(Some((detected_format, bytes.clone())));
-                                binary_format.set(match detected_format {
-                                    SerializationFormat::Java => BinaryFormat::JavaSerialized,
-                                    SerializationFormat::Php => BinaryFormat::Php,
-                                    SerializationFormat::MsgPack => BinaryFormat::MsgPack,
-                                    SerializationFormat::Pickle => BinaryFormat::Pickle,
-                                    SerializationFormat::Kryo => BinaryFormat::Kryo,
-                                    SerializationFormat::Fst => BinaryFormat::Kryo,
-                                    SerializationFormat::Protobuf => BinaryFormat::Protobuf,
-                                    SerializationFormat::Bson => BinaryFormat::Bson,
-                                    SerializationFormat::Cbor => BinaryFormat::Cbor,
-                                    _ => BinaryFormat::Hex,
-                                });
-                            } else {
-                                serialization_data.set(None);
                             }
                         }
                     }
@@ -1828,7 +1823,7 @@ pub fn ValueViewer(
                                         div {
                                             flex: "1",
                                             min_height: "0",
-                                            overflow: "auto",
+                                            overflow: "hidden",
                                             padding: "16px",
                                             border: "1px solid {COLOR_BORDER}",
                                             border_radius: "12px",
@@ -2588,178 +2583,186 @@ BinaryFormat::Protobuf => {
                                         rsx! {
                                             div {
                                                 display: "flex",
-                                                justify_content: "space_between",
-                                                align_items: "center",
-                                                gap: "12px",
-                                                flex_wrap: "wrap",
-                                                margin_bottom: "12px",
+                                                flex_direction: "column",
+                                                height: "100%",
+                                                min_height: "0",
 
                                                 div {
                                                     display: "flex",
-                                                    gap: "8px",
+                                                    justify_content: "space_between",
                                                     align_items: "center",
+                                                    gap: "12px",
                                                     flex_wrap: "wrap",
+                                                    margin_bottom: "12px",
 
-                                                    input {
-                                                        width: "280px",
-                                                        max_width: "100%",
-                                                        padding: "8px 10px",
-                                                        background: COLOR_BG_TERTIARY,
-                                                        border: "1px solid {COLOR_BORDER}",
-                                                        border_radius: "6px",
-                                                        color: COLOR_TEXT,
-                                                        value: "{search_value}",
-                                                        placeholder: "搜索 key 或 value",
-                                                        oninput: {
-                                                            let pool = connection_pool.clone();
-                                                            let key = display_key.clone();
-                                                            move |event| {
-                                                                let value = event.value();
-                                                                let was_empty = hash_search().is_empty();
-                                                                hash_search.set(value.clone());
-                                                                
-                                                                if value.is_empty() && !was_empty {
-                                                                    let pool = pool.clone();
-                                                                    let key = key.clone();
-                                                                    spawn(async move {
-                                                                        if let Err(e) = load_key_data(
-                                                                            pool,
-                                                                            key,
-                                                                            key_info,
-                                                                            string_value,
-                                                                            hash_value,
-                                                                            list_value,
-                                                                            set_value,
-                                                                            zset_value,
-                                                                            stream_value,
-                                                                            is_binary,
-                                                                            binary_format,
-                                                                            serialization_data,
-                binary_bytes,
-                                                                            bitmap_info,
-                                                                            loading,
-                                                                            hash_cursor,
-                                                                            hash_total,
-                                                                            hash_has_more,
-                                                                            list_has_more,
-                                                                            list_total,
-                                                                            set_cursor,
-                                                                            set_total,
-                                                                            set_has_more,
-                                                                            zset_cursor,
-                                                                            zset_total,
-                                                                            zset_has_more,
-                                                                        ).await {
-                                                                            tracing::error!("重新加载 hash 数据失败: {}", e);
-                                                                        }
-                                                                    });
-                                                                }
-                                                            }
-                                                        },
-                                                    }
+                                                    div {
+                                                        display: "flex",
+                                                        gap: "8px",
+                                                        align_items: "center",
+                                                        flex_wrap: "wrap",
 
-                                                    if hash_total() > PAGE_SIZE {
-                                                        button {
-                                                            padding: "6px 10px",
-                                                            background: if hash_search().len() >= 2 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                            color: if hash_search().len() >= 2 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT_SECONDARY },
+                                                        input {
+                                                            width: "280px",
+                                                            max_width: "100%",
+                                                            padding: "8px 10px",
+                                                            background: COLOR_BG_TERTIARY,
                                                             border: "1px solid {COLOR_BORDER}",
                                                             border_radius: "6px",
-                                                            cursor: if hash_search().len() >= 2 { "pointer" } else { "not-allowed" },
-                                                            font_size: "12px",
-                                                            disabled: hash_search().len() < 2 || hash_loading_more(),
-                                                            onclick: {
+                                                            color: COLOR_TEXT,
+                                                            value: "{search_value}",
+                                                            placeholder: "搜索 key 或 value",
+                                                            oninput: {
                                                                 let pool = connection_pool.clone();
                                                                 let key = display_key.clone();
-                                                                move |_| {
-                                                                    let pool = pool.clone();
-                                                                    let key = key.clone();
-                                                                    let pattern = hash_search();
-                                                                    spawn(async move {
-                                                                        search_hash_server(
-                                                                            pool,
-                                                                            key,
-                                                                            pattern,
-                                                                            hash_value,
-                                                                            hash_cursor,
-                                                                            hash_has_more,
-                                                                            hash_loading_more,
-                                                                        ).await;
-                                                                    });
+                                                                move |event| {
+                                                                    let value = event.value();
+                                                                    let was_empty = hash_search().is_empty();
+                                                                    hash_search.set(value.clone());
+
+                                                                    if value.is_empty() && !was_empty {
+                                                                        let pool = pool.clone();
+                                                                        let key = key.clone();
+                                                                        spawn(async move {
+                                                                            if let Err(e) = load_key_data(
+                                                                                pool,
+                                                                                key,
+                                                                                key_info,
+                                                                                string_value,
+                                                                                hash_value,
+                                                                                list_value,
+                                                                                set_value,
+                                                                                zset_value,
+                                                                                stream_value,
+                                                                                is_binary,
+                                                                                binary_format,
+                                                                                serialization_data,
+                    binary_bytes,
+                                                                                bitmap_info,
+                                                                                loading,
+                                                                                hash_cursor,
+                                                                                hash_total,
+                                                                                hash_has_more,
+                                                                                list_has_more,
+                                                                                list_total,
+                                                                                set_cursor,
+                                                                                set_total,
+                                                                                set_has_more,
+                                                                                zset_cursor,
+                                                                                zset_total,
+                                                                                zset_has_more,
+                                                                            ).await {
+                                                                                tracing::error!("重新加载 hash 数据失败: {}", e);
+                                                                            }
+                                                                        });
+                                                                    }
                                                                 }
                                                             },
+                                                        }
 
-                                                            if hash_loading_more() { "搜索中..." } else { "服务端搜索" }
+                                                        if hash_total() > PAGE_SIZE {
+                                                            button {
+                                                                padding: "6px 10px",
+                                                                background: if hash_search().len() >= 2 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                color: if hash_search().len() >= 2 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT_SECONDARY },
+                                                                border: "1px solid {COLOR_BORDER}",
+                                                                border_radius: "6px",
+                                                                cursor: if hash_search().len() >= 2 { "pointer" } else { "not-allowed" },
+                                                                font_size: "12px",
+                                                                disabled: hash_search().len() < 2 || hash_loading_more(),
+                                                                onclick: {
+                                                                    let pool = connection_pool.clone();
+                                                                    let key = display_key.clone();
+                                                                    move |_| {
+                                                                        let pool = pool.clone();
+                                                                        let key = key.clone();
+                                                                        let pattern = hash_search();
+                                                                        spawn(async move {
+                                                                            search_hash_server(
+                                                                                pool,
+                                                                                key,
+                                                                                pattern,
+                                                                                hash_value,
+                                                                                hash_cursor,
+                                                                                hash_has_more,
+                                                                                hash_loading_more,
+                                                                            ).await;
+                                                                        });
+                                                                    }
+                                                                },
+
+                                                                if hash_loading_more() { "搜索中..." } else { "服务端搜索" }
+                                                            }
+                                                        }
+
+                                                        button {
+                                                            padding: "8px 12px",
+                                                            background: "#0e639c",
+                                                            color: COLOR_TEXT_CONTRAST,
+                                                            border: "none",
+                                                            border_radius: "6px",
+                                                            cursor: "pointer",
+                                                            disabled: active_hash_action.is_some(),
+                                                            onclick: move |_| {
+                                                                creating_hash_row.set(true);
+                                                                editing_hash_field.set(None);
+                                                                editing_hash_key.set(String::new());
+                                                                editing_hash_value.set(String::new());
+                                                                new_hash_key.set(String::new());
+                                                                new_hash_value.set(String::new());
+                                                                hash_status_message.set(String::new());
+                                                                hash_status_error.set(false);
+                                                            },
+
+                                                            "+ 新增行"
+                                                        }
+
+                                                        div {
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "13px",
+
+                                                            "Hash Fields ({hash_val.len()}/{hash_total()})"
                                                         }
                                                     }
 
                                                     button {
-                                                        padding: "8px 12px",
-                                                        background: "#0e639c",
-                                                        color: COLOR_TEXT_CONTRAST,
-                                                        border: "none",
+                                                        margin_left: "auto",
+                                                        flex_shrink: "0",
+                                                        padding: "6px 10px",
+                                                        background: "rgba(47, 133, 90, 0.16)",
+                                                        color: COLOR_SUCCESS,
+                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
                                                         border_radius: "6px",
                                                         cursor: "pointer",
-                                                        disabled: active_hash_action.is_some(),
-                                                        onclick: move |_| {
-                                                            creating_hash_row.set(true);
-                                                            editing_hash_field.set(None);
-                                                            editing_hash_key.set(String::new());
-                                                            editing_hash_value.set(String::new());
-                                                            new_hash_key.set(String::new());
-                                                            new_hash_value.set(String::new());
-                                                            hash_status_message.set(String::new());
-                                                            hash_status_error.set(false);
-                                                        },
-
-                                                        "+ 新增行"
-                                                    }
-
-                                                    div {
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "13px",
-
-                                                        "Hash Fields ({hash_val.len()}/{hash_total()})"
-                                                    }
-                                                }
-
-                                                button {
-                                                    margin_left: "auto",
-                                                    flex_shrink: "0",
-                                                    padding: "6px 10px",
-                                                    background: "rgba(47, 133, 90, 0.16)",
-                                                    color: COLOR_SUCCESS,
-                                                    border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                    border_radius: "6px",
-                                                    cursor: "pointer",
-                                                    display: "flex",
-                                                    align_items: "center",
-                                                    gap: "4px",
-                                                    title: "复制",
-                                                    onclick: {
-                                                        let hash = hash_val.clone();
-                                                        move |_| {
-                                                            let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
-                                                            match copy_value_to_clipboard(&json) {
-                                                                Ok(_) => {
-                                                                    toast_manager.write().success("复制成功");
-                                                                }
-                                                                Err(error) => {
-                                                                    toast_manager.write().error(&format!("复制失败：{error}"));
+                                                        display: "flex",
+                                                        align_items: "center",
+                                                        gap: "4px",
+                                                        title: "复制",
+                                                        onclick: {
+                                                            let hash = hash_val.clone();
+                                                            move |_| {
+                                                                let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
+                                                                match copy_value_to_clipboard(&json) {
+                                                                    Ok(_) => {
+                                                                        toast_manager.write().success("复制成功");
+                                                                    }
+                                                                    Err(error) => {
+                                                                        toast_manager.write().error(&format!("复制失败：{error}"));
+                                                                    }
                                                                 }
                                                             }
-                                                        }
-                                                    },
+                                                        },
 
-                                                    IconCopy { size: Some(14) }
-                                                    "复制"
+                                                        IconCopy { size: Some(14) }
+                                                        "复制"
+                                                    }
                                                 }
                                             }
 
                                             div {
+                                                flex: "1",
+                                                min_height: "0",
                                                 overflow_x: "auto",
                                                 overflow_y: "auto",
-                                                max_height: "calc(100vh - 400px)",
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
@@ -3585,11 +3588,17 @@ hash_status_message.set("删除成功".to_string());
                                                     "向下滚动加载更多..."
                                                 }
                                             }
+                                            }
                                         }
                                     }
                                     KeyType::List => {
                                         rsx! {
                                             div {
+                                                display: "flex",
+                                                flex_direction: "column",
+                                                height: "100%",
+                                                min_height: "0",
+
                                                 display: "flex",
                                                 justify_content: "space_between",
                                                 align_items: "center",
@@ -3827,9 +3836,10 @@ hash_status_message.set("删除成功".to_string());
                                             }
 
                                             div {
+                                                flex: "1",
+                                                min_height: "0",
                                                 overflow_x: "auto",
                                                 overflow_y: "auto",
-                                                max_height: "calc(100vh - 400px)",
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
@@ -4190,6 +4200,11 @@ if let Err(error) = load_key_data(
                                         rsx! {
                                             div {
                                                 display: "flex",
+                                                flex_direction: "column",
+                                                height: "100%",
+                                                min_height: "0",
+
+                                                display: "flex",
                                                 justify_content: "space_between",
                                                 align_items: "center",
                                                 gap: "12px",
@@ -4448,11 +4463,12 @@ if let Err(error) = load_key_data(
                                             }
 
                                             div {
+                                                flex: "1",
+                                                min_height: "0",
                                                 overflow_x: "auto",
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
-                                                max_height: "calc(100vh - 400px)",
                                                 overflow_y: "auto",
                                                 onscroll: {
                                                     let pool = connection_pool.clone();
@@ -4865,6 +4881,11 @@ if let Err(error) = load_key_data(
                                         rsx! {
                                             div {
                                                 display: "flex",
+                                                flex_direction: "column",
+                                                height: "100%",
+                                                min_height: "0",
+
+                                                display: "flex",
                                                 justify_content: "space_between",
                                                 align_items: "center",
                                                 gap: "12px",
@@ -5144,9 +5165,10 @@ if let Err(error) = load_key_data(
                                             }
 
                                             div {
+                                                flex: "1",
+                                                min_height: "0",
                                                 overflow_x: "auto",
                                                 overflow_y: "auto",
-                                                max_height: "calc(100vh - 400px)",
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
@@ -5582,6 +5604,11 @@ if let Err(error) = load_key_data(
                                         rsx! {
                                             div {
                                                 display: "flex",
+                                                flex_direction: "column",
+                                                height: "100%",
+                                                min_height: "0",
+
+                                                display: "flex",
                                                 justify_content: "space_between",
                                                 align_items: "center",
                                                 gap: "12px",
@@ -5669,10 +5696,11 @@ if let Err(error) = load_key_data(
                                                 }
                                             }
 
-div {
+                                            div {
+                                                flex: "1",
+                                                min_height: "0",
                                                 overflow_x: "auto",
                                                 overflow_y: "auto",
-                                                max_height: "calc(100vh - 400px)",
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "8px",
                                                 background: COLOR_BG_SECONDARY,
