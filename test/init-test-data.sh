@@ -30,7 +30,7 @@ redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} SET "test:php:nested" 'a:2:{s:4:"use
 echo "Setting MessagePack test data..."
 printf '\x82\xa4name\xa4test\xa5count\x64' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:msgpack:map"
 
-printf '\x93\xa3one\xa3two\xa3three' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:msgpack:array"
+printf '\x93\xa3one\xa3two\xa5three' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:msgpack:array"
 
 printf '\x82\xa4code\x64\xa7message\xa7success' | redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} -x SET "test:msgpack:response"
 
