@@ -577,29 +577,36 @@ async fn load_key_data(
                         serialization_data.set(None);
                         binary_format.set(BinaryFormat::Image);
                     } else {
-                        let detected_format = detect_serialization_format(&bytes);
-                        if detected_format != SerializationFormat::Unknown {
-                            tracing::info!("Detected serialization format: {:?}", detected_format);
-                            serialization_data.set(Some((detected_format, bytes.clone())));
-                            binary_format.set(match detected_format {
-                                SerializationFormat::Java => BinaryFormat::JavaSerialized,
-                                SerializationFormat::Php => BinaryFormat::Php,
-                                SerializationFormat::MsgPack => BinaryFormat::MsgPack,
-                                SerializationFormat::Pickle => BinaryFormat::Pickle,
-                                SerializationFormat::Kryo => BinaryFormat::Kryo,
-                                SerializationFormat::Fst => BinaryFormat::Kryo,
-                                SerializationFormat::Protobuf => BinaryFormat::Protobuf,
-                                SerializationFormat::Bson => BinaryFormat::Bson,
-                                SerializationFormat::Cbor => BinaryFormat::Cbor,
-                                _ => BinaryFormat::Hex,
-                            });
-                        } else {
-                            serialization_data.set(None);
-                            if bytes.len() <= 1024 {
-                                if let Ok(info) = pool.get_bitmap_info(&key).await {
+                        let mut detected_bitmap = false;
+                        if bytes.len() <= 1024 {
+                            if let Ok(info) = pool.get_bitmap_info(&key).await {
+                                if info.total_bits > 0 {
                                     bitmap_info.set(Some(info));
                                     binary_format.set(BinaryFormat::Bitmap);
+                                    detected_bitmap = true;
                                 }
+                            }
+                        }
+
+                        if !detected_bitmap {
+                            let detected_format = detect_serialization_format(&bytes);
+                            if detected_format != SerializationFormat::Unknown {
+                                tracing::info!("Detected serialization format: {:?}", detected_format);
+                                serialization_data.set(Some((detected_format, bytes.clone())));
+                                binary_format.set(match detected_format {
+                                    SerializationFormat::Java => BinaryFormat::JavaSerialized,
+                                    SerializationFormat::Php => BinaryFormat::Php,
+                                    SerializationFormat::MsgPack => BinaryFormat::MsgPack,
+                                    SerializationFormat::Pickle => BinaryFormat::Pickle,
+                                    SerializationFormat::Kryo => BinaryFormat::Kryo,
+                                    SerializationFormat::Fst => BinaryFormat::Kryo,
+                                    SerializationFormat::Protobuf => BinaryFormat::Protobuf,
+                                    SerializationFormat::Bson => BinaryFormat::Bson,
+                                    SerializationFormat::Cbor => BinaryFormat::Cbor,
+                                    _ => BinaryFormat::Hex,
+                                });
+                            } else {
+                                serialization_data.set(None);
                             }
                         }
                     }

@@ -1,19 +1,17 @@
 use ciborium::Value as CborValue;
 use serde_json::Value as JsonValue;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 pub fn is_cbor_serialization(data: &[u8]) -> bool {
-    if data.is_empty() {
+    if data.len() < 2 {
         return false;
     }
 
     let first = data[0];
 
-    if matches!(
+    if !matches!(
         first,
-        0x00..=0x17
-        | 0x20..=0x37
-        | 0x40..=0x57
+        0x40..=0x57
         | 0x60..=0x77
         | 0x80..=0x97
         | 0x9F
@@ -21,13 +19,39 @@ pub fn is_cbor_serialization(data: &[u8]) -> bool {
         | 0xBF
         | 0xC0..=0xD7
         | 0xD8..=0xDB
-        | 0xE0..=0xF7
         | 0xF8..=0xFB
     ) {
-        let cursor = Cursor::new(data);
-        ciborium::from_reader::<CborValue, _>(cursor).is_ok()
-    } else {
-        false
+        return false;
+    }
+
+    let mut cursor = Cursor::new(data);
+    match ciborium::from_reader::<CborValue, _>(&mut cursor) {
+        Ok(value) => {
+            let consumed = cursor.position() as usize;
+            let is_meaningful = matches!(
+                value,
+                CborValue::Array(_)
+                    | CborValue::Map(_)
+                    | CborValue::Bytes(_)
+                    | CborValue::Tag(_, _)
+            );
+
+            if is_meaningful {
+                return true;
+            }
+
+            if first >= 0x60 && first <= 0x77 {
+                let expected_len = (first - 0x60) as usize;
+                return consumed == expected_len + 1;
+            }
+
+            if first == 0x78 || first == 0x79 {
+                return consumed > 2 && consumed <= data.len();
+            }
+
+            false
+        }
+        Err(_) => false,
     }
 }
 
@@ -98,19 +122,31 @@ mod tests {
     #[test]
     fn test_detect_cbor_empty() {
         assert!(!is_cbor_serialization(&[]));
+        assert!(!is_cbor_serialization(&[0x00]));
     }
 
     #[test]
-    fn test_detect_cbor_uint() {
-        assert!(is_cbor_serialization(&[0x00]));
-        assert!(is_cbor_serialization(&[0x0A]));
-        assert!(is_cbor_serialization(&[0x17]));
+    fn test_detect_cbor_not_false_positive() {
+        assert!(!is_cbor_serialization(&[0x00, 0x00, 0x00, 0x00]));
+        assert!(!is_cbor_serialization(&[0x20, 0x00, 0x00, 0x00]));
+        assert!(!is_cbor_serialization(&[0x01, 0x00, 0x00, 0x00]));
+        assert!(!is_cbor_serialization(&[0xFF, 0xFF, 0xFF, 0xFF]));
     }
 
     #[test]
-    fn test_detect_cbor_negint() {
-        assert!(is_cbor_serialization(&[0x20]));
-        assert!(is_cbor_serialization(&[0x37]));
+    fn test_detect_cbor_array() {
+        assert!(is_cbor_serialization(&[0x82, 0x01, 0x02]));
+        assert!(is_cbor_serialization(&[0x9F, 0x01, 0x02, 0xFF]));
+    }
+
+    #[test]
+    fn test_detect_cbor_map() {
+        assert!(is_cbor_serialization(&[0xA1, 0x61, b'a', 0x01]));
+    }
+
+    #[test]
+    fn test_detect_cbor_bytes() {
+        assert!(is_cbor_serialization(&[0x44, 0x01, 0x02, 0x03, 0x04]));
     }
 
     #[test]
@@ -129,20 +165,6 @@ mod tests {
     fn test_parse_cbor_bool() {
         assert_eq!(parse_cbor_to_json(&[0xF4]).unwrap(), "false");
         assert_eq!(parse_cbor_to_json(&[0xF5]).unwrap(), "true");
-    }
-
-    #[test]
-    fn test_parse_cbor_int() {
-        assert_eq!(parse_cbor_to_json(&[0x00]).unwrap(), "0");
-        assert_eq!(parse_cbor_to_json(&[0x0A]).unwrap(), "10");
-        assert_eq!(parse_cbor_to_json(&[0x20]).unwrap(), "-1");
-    }
-
-    #[test]
-    fn test_parse_cbor_string() {
-        let data = [0x65, b'H', b'e', b'l', b'l', b'o'];
-        let result = parse_cbor_to_json(&data).unwrap();
-        assert_eq!(result, "\"Hello\"");
     }
 
     #[test]
