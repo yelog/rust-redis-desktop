@@ -464,6 +464,7 @@ pub fn LeftRail(
                                         opacity: "0.4",
                                         display: "flex",
                                         align_items: "center",
+                                        margin_left: "auto",
                                         onmousedown: move |e| {
                                             e.prevent_default();
                                             e.stop_propagation();
