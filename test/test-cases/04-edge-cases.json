@@ -1,0 +1,40 @@
+{
+  "name": "Edge Cases and Large Data",
+  "description": "Test edge cases and large dataset handling",
+  "cases": [
+    {
+      "key": "test:bitmap:flags",
+      "expected_type": "string",
+      "is_binary": true,
+      "description": "Bitmap data stored as string"
+    },
+    {
+      "key": "test:hash:large",
+      "expected_type": "hash",
+      "expected_field_count": 100000,
+      "test_pagination": true,
+      "description": "Large hash for pagination testing"
+    },
+    {
+      "key": "test:list:large",
+      "expected_type": "list",
+      "expected_length": 100000,
+      "test_pagination": true,
+      "description": "Large list for pagination testing"
+    },
+    {
+      "key": "test:set:large",
+      "expected_type": "set",
+      "expected_cardinality": 100000,
+      "test_pagination": true,
+      "description": "Large set for pagination testing"
+    },
+    {
+      "key": "test:zset:large",
+      "expected_type": "zset",
+      "expected_cardinality": 100000,
+      "test_pagination": true,
+      "description": "Large sorted set for pagination testing"
+    }
+  ]
+}

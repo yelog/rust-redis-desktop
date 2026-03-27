@@ -1,0 +1,124 @@
+{
+  "name": "Serialization Format Detection",
+  "description": "Test automatic detection and parsing of various serialization formats",
+  "cases": [
+    {
+      "key": "test:php:array",
+      "expected_format": "Php",
+      "should_parse": true,
+      "expected_parsed_type": "object",
+      "description": "PHP serialized array"
+    },
+    {
+      "key": "test:php:object",
+      "expected_format": "Php",
+      "should_parse": true,
+      "expected_parsed_type": "object",
+      "description": "PHP serialized object"
+    },
+    {
+      "key": "test:php:nested",
+      "expected_format": "Php",
+      "should_parse": true,
+      "expected_parsed_type": "object",
+      "description": "PHP nested structure"
+    },
+    {
+      "key": "test:msgpack:map",
+      "expected_format": "MsgPack",
+      "should_parse": true,
+      "expected_parsed_type": "object",
+      "description": "MessagePack map"
+    },
+    {
+      "key": "test:msgpack:array",
+      "expected_format": "MsgPack",
+      "should_parse": true,
+      "expected_parsed_type": "array",
+      "description": "MessagePack array"
+    },
+    {
+      "key": "test:msgpack:response",
+      "expected_format": "MsgPack",
+      "should_parse": true,
+      "expected_parsed_type": "object",
+      "description": "MessagePack response"
+    },
+    {
+      "key": "test:pickle:dict",
+      "expected_format": "Pickle",
+      "should_parse": true,
+      "expected_parsed_type": "object",
+      "description": "Python pickle dict"
+    },
+    {
+      "key": "test:pickle:simple",
+      "expected_format": "Pickle",
+      "should_parse": true,
+      "expected_parsed_type": "object",
+      "description": "Python pickle simple"
+    },
+    {
+      "key": "test:pickle:list",
+      "expected_format": "Pickle",
+      "should_parse": true,
+      "expected_parsed_type": "array",
+      "description": "Python pickle list"
+    },
+    {
+      "key": "test:kryo:string",
+      "expected_format": "Kryo",
+      "should_parse": true,
+      "expected_value": "Hello",
+      "description": "Kryo serialized string"
+    },
+    {
+      "key": "test:kryo:int",
+      "expected_format": "Kryo",
+      "should_parse": true,
+      "description": "Kryo serialized int"
+    },
+    {
+      "key": "test:kryo:bool-true",
+      "expected_format": "Kryo",
+      "should_parse": true,
+      "description": "Kryo serialized boolean true"
+    },
+    {
+      "key": "test:kryo:bool-false",
+      "expected_format": "Kryo",
+      "should_parse": true,
+      "description": "Kryo serialized boolean false"
+    },
+    {
+      "key": "test:kryo:list",
+      "expected_format": "Kryo",
+      "should_parse": true,
+      "description": "Kryo serialized list"
+    },
+    {
+      "key": "test:fst:string",
+      "expected_format": "Fst",
+      "should_parse": true,
+      "description": "FST serialized string"
+    },
+    {
+      "key": "test:protobuf:simple",
+      "expected_format": "Protobuf",
+      "should_parse": true,
+      "description": "Protobuf simple message"
+    },
+    {
+      "key": "test:protobuf:user",
+      "expected_format": "Protobuf",
+      "should_parse": true,
+      "description": "Protobuf user message"
+    },
+    {
+      "key": "test:protobuf:numbers",
+      "expected_format": "Protobuf",
+      "should_parse": true,
+      "description": "Protobuf repeated numbers"
+    }
+  ]
+}

@@ -105,7 +105,35 @@ services:
       - "6382:6379"
     volumes:
       - ./redis-ssl-certs:/certs:ro
-    command: redis-server --port 6379 --tls-port 6379 --tls-cert-file /certs/redis.crt --tls-key-file /certs/redis.key --tls-ca-cert-file /certs/ca.crt --tls-auth-clients no --appendonly no
+    command: redis-server --port 0 --tls-port 6379 --tls-cert-file /certs/redis.crt --tls-key-file /certs/redis.key --tls-ca-cert-file /certs/ca.crt --tls-auth-clients no --appendonly no
+
+  redis-ssh-internal:
+    image: redis:7-alpine
+    container_name: redis-ssh-internal
+    networks:
+      - ssh-internal
+    command: redis-server --appendonly no --bind 0.0.0.0
+
+  ssh-server:
+    image: linuxserver/openssh-server:latest
+    container_name: ssh-server
+    ports:
+      - "2222:2222"
+    networks:
+      - ssh-internal
+    volumes:
+      - ./ssh-keys:/config/.ssh:ro
+      - ./ssh-config/sshd_config:/etc/ssh/sshd_config:ro
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Shanghai
+      - PASSWORD_ACCESS=true
+      - USER_PASSWORD=redis-test
+      - USER_NAME=redis-test
+      - SUDO_ACCESS=false
+    depends_on:
+      - redis-ssh-internal
 
   redis-test-data:
     image: redis:7-alpine
@@ -118,3 +146,7 @@ services:
     environment:
       - REDIS_HOST=redis-standalone
     command: sh /init-test-data.sh
+
+networks:
+  ssh-internal:
+    driver: bridge

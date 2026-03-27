@@ -176,65 +176,62 @@ echo "  ZSTD:          test:zstd:json, test:zstd:text (or test:zstd:raw)"
 echo "  Image:         test:image:png, test:image:jpeg, test:image:gif"
 
 # ============================================
-# Large Dataset for Pagination Testing (100k rows)
+# Large Dataset for Pagination Testing (optional, use --with-large flag)
 # ============================================
-echo ""
-echo "Creating large datasets for pagination testing (100,000 rows each)..."
-echo "This may take a few minutes..."
+if [ "${WITH_LARGE:-false}" = "true" ]; then
+    echo ""
+    echo "Creating large datasets for pagination testing (100,000 rows each)..."
+    echo "This may take a few minutes..."
 
-# Hash with 100k fields
-echo "Creating test:hash:large (100k fields)..."
-for i in $(seq 1 1000); do
-  redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} HMSET "test:hash:large" \
-    $(printf "field_%05d value_%05d " $(seq $(( (i-1)*100+1 )) $(( i*100 )) | xargs -n1 printf "%s %s " | sed 's/ $//' | awk '{for(j=1;j<=NF;j+=2){printf "%s %s ", $j, $(j+1)}}') > /dev/null 2>&1
-done
-# Fallback: simpler approach
-redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} DEL "test:hash:large" > /dev/null 2>&1
-for i in $(seq 1 100000); do
-  redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} HSET "test:hash:large" "field_$(printf '%05d' $i)" "value_$(printf '%05d' $i)" > /dev/null 2>&1
-  if [ $(( i % 10000 )) -eq 0 ]; then
-    echo "  Hash: $i / 100000 fields created..."
-  fi
-done
-echo "  test:hash:large created with 100000 fields"
+    # Hash with 100k fields
+    echo "Creating test:hash:large (100k fields)..."
+    redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} DEL "test:hash:large" > /dev/null 2>&1
+    for i in $(seq 1 100000); do
+        redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} HSET "test:hash:large" "field_$(printf '%05d' $i)" "value_$(printf '%05d' $i)" > /dev/null 2>&1
+        if [ $(( i % 10000 )) -eq 0 ]; then
+            echo "  Hash: $i / 100000 fields created..."
+        fi
+    done
+    echo "  test:hash:large created with 100000 fields"
 
-# List with 100k elements
-echo "Creating test:list:large (100k elements)..."
-redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} DEL "test:list:large" > /dev/null 2>&1
-for i in $(seq 1 100000); do
-  redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} RPUSH "test:list:large" "item_$(printf '%05d' $i)" > /dev/null 2>&1
-  if [ $(( i % 10000 )) -eq 0 ]; then
-    echo "  List: $i / 100000 elements created..."
-  fi
-done
-echo "  test:list:large created with 100000 elements"
+    # List with 100k elements
+    echo "Creating test:list:large (100k elements)..."
+    redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} DEL "test:list:large" > /dev/null 2>&1
+    for i in $(seq 1 100000); do
+        redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} RPUSH "test:list:large" "item_$(printf '%05d' $i)" > /dev/null 2>&1
+        if [ $(( i % 10000 )) -eq 0 ]; then
+            echo "  List: $i / 100000 elements created..."
+        fi
+    done
+    echo "  test:list:large created with 100000 elements"
 
-# Set with 100k members
-echo "Creating test:set:large (100k members)..."
-redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} DEL "test:set:large" > /dev/null 2>&1
-for i in $(seq 1 100000); do
-  redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} SADD "test:set:large" "member_$(printf '%05d' $i)" > /dev/null 2>&1
-  if [ $(( i % 10000 )) -eq 0 ]; then
-    echo "  Set: $i / 100000 members created..."
-  fi
-done
-echo "  test:set:large created with 100000 members"
+    # Set with 100k members
+    echo "Creating test:set:large (100k members)..."
+    redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} DEL "test:set:large" > /dev/null 2>&1
+    for i in $(seq 1 100000); do
+        redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} SADD "test:set:large" "member_$(printf '%05d' $i)" > /dev/null 2>&1
+        if [ $(( i % 10000 )) -eq 0 ]; then
+            echo "  Set: $i / 100000 members created..."
+        fi
+    done
+    echo "  test:set:large created with 100000 members"
 
-# ZSet with 100k members
-echo "Creating test:zset:large (100k members)..."
-redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} DEL "test:zset:large" > /dev/null 2>&1
-for i in $(seq 1 100000); do
-  redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} ZADD "test:zset:large" "$i" "member_$(printf '%05d' $i)" > /dev/null 2>&1
-  if [ $(( i % 10000 )) -eq 0 ]; then
-    echo "  ZSet: $i / 100000 members created..."
-  fi
-done
-echo "  test:zset:large created with 100000 members"
+    # ZSet with 100k members
+    echo "Creating test:zset:large (100k members)..."
+    redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} DEL "test:zset:large" > /dev/null 2>&1
+    for i in $(seq 1 100000); do
+        redis-cli -h ${REDIS_HOST} -p ${REDIS_PORT} ZADD "test:zset:large" "$i" "member_$(printf '%05d' $i)" > /dev/null 2>&1
+        if [ $(( i % 10000 )) -eq 0 ]; then
+            echo "  ZSet: $i / 100000 members created..."
+        fi
+    done
+    echo "  test:zset:large created with 100000 members"
 
-echo ""
-echo "Large dataset creation complete!"
-echo "Additional test keys for pagination:"
-echo "  Large Hash:    test:hash:large (100k fields)"
-echo "  Large List:    test:list:large (100k elements)"
-echo "  Large Set:     test:set:large (100k members)"
-echo "  Large ZSet:    test:zset:large (100k members)"
+    echo ""
+    echo "Large dataset creation complete!"
+    echo "Additional test keys for pagination:"
+    echo "  Large Hash:    test:hash:large (100k fields)"
+    echo "  Large List:    test:list:large (100k elements)"
+    echo "  Large Set:     test:set:large (100k members)"
+    echo "  Large ZSet:    test:zset:large (100k members)"
+fi

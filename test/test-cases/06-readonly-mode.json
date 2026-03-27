@@ -1,0 +1,45 @@
+{
+  "name": "Readonly Mode Test",
+  "description": "Test readonly mode prevents write operations",
+  "test_cases": [
+    {
+      "name": "Readonly mode blocks SET",
+      "connection": "readonly_test",
+      "operation": "SET",
+      "key": "test:readonly:set",
+      "value": "should_fail",
+      "expected_error": "read-only"
+    },
+    {
+      "name": "Readonly mode allows GET",
+      "connection": "readonly_test",
+      "operation": "GET",
+      "key": "test:string:simple",
+      "expected_success": true
+    },
+    {
+      "name": "Readonly mode blocks HSET",
+      "connection": "readonly_test",
+      "operation": "HSET",
+      "key": "test:readonly:hash",
+      "field": "field1",
+      "value": "value1",
+      "expected_error": "read-only"
+    },
+    {
+      "name": "Readonly mode allows HGET",
+      "connection": "readonly_test",
+      "operation": "HGET",
+      "key": "test:hash:user",
+      "field": "name",
+      "expected_success": true
+    },
+    {
+      "name": "Readonly mode blocks DEL",
+      "connection": "readonly_test",
+      "operation": "DEL",
+      "key": "test:string:simple",
+      "expected_error": "read-only"
+    }
+  ]
+}

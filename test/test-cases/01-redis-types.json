@@ -1,0 +1,73 @@
+{
+  "name": "Redis Basic Types",
+  "description": "Test all Redis data types are correctly identified and retrieved",
+  "cases": [
+    {
+      "key": "test:string:simple",
+      "expected_type": "string",
+      "expected_value": "Hello World",
+      "description": "Simple string value"
+    },
+    {
+      "key": "test:string:json",
+      "expected_type": "string",
+      "is_json": true,
+      "expected_json_fields": ["name", "value"],
+      "description": "JSON string value"
+    },
+    {
+      "key": "test:hash:user",
+      "expected_type": "hash",
+      "expected_fields": ["id", "name", "email"],
+      "description": "Hash with user info"
+    },
+    {
+      "key": "test:hash:config",
+      "expected_type": "hash",
+      "expected_fields": ["theme", "language", "timeout"],
+      "description": "Hash with config"
+    },
+    {
+      "key": "test:list:queue",
+      "expected_type": "list",
+      "expected_length": 3,
+      "description": "List queue"
+    },
+    {
+      "key": "test:list:logs",
+      "expected_type": "list",
+      "expected_length": 3,
+      "description": "List logs"
+    },
+    {
+      "key": "test:set:tags",
+      "expected_type": "set",
+      "expected_cardinality": 4,
+      "description": "Set of tags"
+    },
+    {
+      "key": "test:set:users",
+      "expected_type": "set",
+      "expected_cardinality": 3,
+      "description": "Set of users"
+    },
+    {
+      "key": "test:zset:scores",
+      "expected_type": "zset",
+      "expected_cardinality": 3,
+      "description": "Sorted set with scores"
+    },
+    {
+      "key": "test:zset:priority",
+      "expected_type": "zset",
+      "expected_cardinality": 3,
+      "description": "Sorted set with priority"
+    },
+    {
+      "key": "test:stream:events",
+      "expected_type": "stream",
+      "expected_length": 3,
+      "description": "Stream events"
+    }
+  ]
+}

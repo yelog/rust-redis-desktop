@@ -1,0 +1,52 @@
+{
+  "name": "SSH Tunnel Test",
+  "description": "Test SSH tunnel connection to Redis",
+  "prerequisites": {
+    "ssh_server": "Required: SSH server accessible for testing",
+    "redis_behind_ssh": "Redis server accessible only through SSH tunnel"
+  },
+  "ssh_configs": [
+    {
+      "name": "SSH with password",
+      "ssh_host": "${SSH_HOST:-localhost}",
+      "ssh_port": 22,
+      "ssh_username": "${SSH_USER:-testuser}",
+      "ssh_password": "${SSH_PASSWORD}",
+      "redis_host": "127.0.0.1",
+      "redis_port": 6379,
+      "description": "Connect to Redis via SSH tunnel using password authentication"
+    },
+    {
+      "name": "SSH with private key",
+      "ssh_host": "${SSH_HOST:-localhost}",
+      "ssh_port": 22,
+      "ssh_username": "${SSH_USER:-testuser}",
+      "ssh_private_key": "${SSH_KEY_PATH:-~/.ssh/id_rsa}",
+      "ssh_passphrase": "${SSH_KEY_PASSPHRASE}",
+      "redis_host": "127.0.0.1",
+      "redis_port": 6379,
+      "description": "Connect to Redis via SSH tunnel using private key authentication"
+    }
+  ],
+  "test_cases": [
+    {
+      "connection": "SSH with password",
+      "tests": [
+        {"type": "ping", "expected": "PONG"},
+        {"type": "set_get", "key": "test:ssh:password", "value": "ssh-password-test"}
+      ]
+    },
+    {
+      "connection": "SSH with private key",
+      "tests": [
+        {"type": "ping", "expected": "PONG"},
+        {"type": "set_get", "key": "test:ssh:key", "value": "ssh-key-test"}
+      ]
+    }
+  ],
+  "notes": [
+    "SSH tests require a running SSH server with Redis accessible through it",
+    "Set environment variables SSH_HOST, SSH_USER, SSH_PASSWORD before running",
+    "For key-based auth, set SSH_KEY_PATH and optionally SSH_KEY_PASSPHRASE"
+  ]
+}

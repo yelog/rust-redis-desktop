@@ -1,0 +1,27 @@
+{
+  "name": "Image Format Detection",
+  "description": "Test automatic detection of image binary formats",
+  "cases": [
+    {
+      "key": "test:image:png",
+      "expected_format": "Image",
+      "image_type": "png",
+      "magic_bytes": "89 50 4E 47 0D 0A 1A 0A",
+      "description": "PNG image"
+    },
+    {
+      "key": "test:image:jpeg",
+      "expected_format": "Image",
+      "image_type": "jpeg",
+      "magic_bytes": "FF D8 FF",
+      "description": "JPEG image"
+    },
+    {
+      "key": "test:image:gif",
+      "expected_format": "Image",
+      "image_type": "gif",
+      "magic_bytes": "47 49 46 38",
+      "description": "GIF image"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "name": "Connection Modes Test",
+  "description": "Test various connection modes: Direct, Cluster, Sentinel",
+  "connections": [
+    {
+      "name": "Direct Connection",
+      "type": "direct",
+      "host": "localhost",
+      "port": 6379,
+      "description": "Standard direct Redis connection"
+    },
+    {
+      "name": "Cluster Connection",
+      "type": "cluster",
+      "nodes": [
+        "localhost:7000",
+        "localhost:7001",
+        "localhost:7002",
+        "localhost:7003",
+        "localhost:7004",
+        "localhost:7005"
+      ],
+      "description": "Redis Cluster with 6 nodes (3 masters + 3 replicas)"
+    },
+    {
+      "name": "Sentinel Connection",
+      "type": "sentinel",
+      "master_name": "mymaster",
+      "sentinel_nodes": ["localhost:26379"],
+      "description": "Redis Sentinel for high availability"
+    },
+    {
+      "name": "SSL/TLS Connection",
+      "type": "ssl",
+      "host": "localhost",
+      "port": 6382,
+      "ssl_enabled": true,
+      "description": "Redis with SSL/TLS encryption"
+    },
+    {
+      "name": "Redis Stack",
+      "type": "direct",
+      "host": "localhost",
+      "port": 6383,
+      "description": "Redis Stack with modules (JSON, Search, etc.)"
+    }
+  ],
+  "test_cases": [
+    {
+      "connection": "Direct Connection",
+      "tests": [
+        {"type": "ping", "expected": "PONG"},
+        {"type": "set_get", "key": "test:direct:string", "value": "direct-test"},
+        {"type": "info", "section": "server"}
+      ]
+    },
+    {
+      "connection": "Cluster Connection",
+      "tests": [
+        {"type": "ping", "expected": "PONG"},
+        {"type": "cluster_info", "check": "cluster_state:ok"},
+        {"type": "cluster_nodes", "expected_count": 6}
+      ]
+    },
+    {
+      "connection": "Sentinel Connection",
+      "tests": [
+        {"type": "ping", "expected": "PONG"},
+        {"type": "sentinel_masters"},
+        {"type": "sentinel_slaves", "master_name": "mymaster"}
+      ]
+    },
+    {
+      "connection": "SSL/TLS Connection",
+      "tests": [
+        {"type": "ping", "expected": "PONG"},
+        {"type": "set_get", "key": "test:ssl:string", "value": "ssl-test"}
+      ]
+    }
+  ]
+}
