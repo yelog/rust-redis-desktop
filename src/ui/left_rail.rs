@@ -31,6 +31,153 @@ fn primary_connection_action_label(state: ConnectionState) -> &'static str {
     }
 }
 
+fn state_dot_color(state: ConnectionState, colors: ThemeColors) -> &'static str {
+    match state {
+        ConnectionState::Connected => colors.state_connected,
+        ConnectionState::Connecting => colors.state_connecting,
+        ConnectionState::Disconnected => colors.state_disconnected,
+        ConnectionState::Error => colors.state_error,
+    }
+}
+
+#[component]
+fn ConnectionDragOverlay(
+    width: f64,
+    drag_start_y: f64,
+    item_height: f64,
+    gap_height: f64,
+    item_count: usize,
+    drag_index: usize,
+    drag_name: String,
+    drag_dot_color: &'static str,
+    on_drag_over_change: EventHandler<usize>,
+    on_drop: EventHandler<usize>,
+    on_cancel: EventHandler<()>,
+) -> Element {
+    let mut drag_current_y = use_signal(|| drag_start_y);
+    let mut current_over_index = use_signal(|| drag_index);
+    let preview_base_top = (drag_start_y - item_height / 2.0).max(0.0);
+    let preview_offset = drag_current_y() - drag_start_y;
+    let preview_width = (width - 24.0).max(0.0);
+
+    rsx! {
+        div {
+            position: "fixed",
+            top: "0",
+            left: "0",
+            right: "0",
+            bottom: "0",
+            z_index: "9998",
+            cursor: "grabbing",
+            user_select: "none",
+
+            onmousemove: move |e| {
+                let current_y = e.client_coordinates().y;
+                drag_current_y.set(current_y);
+
+                let delta_y = current_y - drag_start_y;
+                let item_stride = item_height + gap_height;
+                let rounded_shift = (delta_y / item_stride).round() as i32;
+                let next_over_index = (drag_index as i32 + rounded_shift)
+                    .clamp(0, item_count.saturating_sub(1) as i32) as usize;
+
+                if current_over_index() != next_over_index {
+                    current_over_index.set(next_over_index);
+                    on_drag_over_change.call(next_over_index);
+                }
+            },
+
+            onmouseup: move |_| {
+                on_drop.call(current_over_index());
+            },
+
+            onmouseleave: move |_| {
+                on_cancel.call(());
+            },
+        }
+
+        div {
+            position: "fixed",
+            top: "{preview_base_top}px",
+            left: "12px",
+            width: "{preview_width}px",
+            z_index: "9999",
+            pointer_events: "none",
+            transform: "translate3d(0, {preview_offset}px, 0)",
+            will_change: "transform",
+
+            div {
+                padding: "12px",
+                background: COLOR_BG,
+                color: COLOR_TEXT,
+                border: format!("1px solid {}", COLOR_ACCENT),
+                border_radius: "8px",
+                box_shadow: "0 6px 16px rgba(0, 0, 0, 0.28)",
+                opacity: "0.96",
+                display: "flex",
+                align_items: "center",
+                gap: "8px",
+
+                div {
+                    width: "8px",
+                    height: "8px",
+                    border_radius: "50%",
+                    background: "{drag_dot_color}",
+                    flex_shrink: "0",
+                    box_shadow: "0 0 4px {drag_dot_color}",
+                }
+
+                span {
+                    font_size: "13px",
+                    font_weight: "600",
+                    color: COLOR_TEXT,
+                    flex: "1",
+
+                    "{drag_name}"
+                }
+
+                svg {
+                    width: "12",
+                    height: "12",
+                    view_box: "0 0 24 24",
+                    fill: "currentColor",
+
+                    circle {
+                        cx: "8",
+                        cy: "6",
+                        r: "1.5",
+                    }
+                    circle {
+                        cx: "16",
+                        cy: "6",
+                        r: "1.5",
+                    }
+                    circle {
+                        cx: "8",
+                        cy: "12",
+                        r: "1.5",
+                    }
+                    circle {
+                        cx: "16",
+                        cy: "12",
+                        r: "1.5",
+                    }
+                    circle {
+                        cx: "8",
+                        cy: "18",
+                        r: "1.5",
+                    }
+                    circle {
+                        cx: "16",
+                        cy: "18",
+                        r: "1.5",
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[component]
 pub fn LeftRail(
     width: Signal<f64>,
@@ -56,8 +203,6 @@ pub fn LeftRail(
     let mut dragging_index = use_signal(|| None::<usize>);
     let mut drag_over_index = use_signal(|| None::<usize>);
     let mut drag_start_y = use_signal(|| 0.0);
-    let mut drag_current_y = use_signal(|| 0.0);
-    let mut drag_preview_offset = use_signal(|| 0.0);
     let item_height = 58.0;
     let gap_height = 6.0;
     let has_connections = !connections.is_empty();
@@ -338,12 +483,7 @@ pub fn LeftRail(
                         let is_selected = selected_connection == Some(id);
                         let is_dragging = dragging_index() == Some(index);
                         let is_drag_over = drag_over_index() == Some(index);
-                        let dot_color = match state {
-                            ConnectionState::Connected => colors.state_connected,
-                            ConnectionState::Connecting => colors.state_connecting,
-                            ConnectionState::Disconnected => colors.state_disconnected,
-                            ConnectionState::Error => colors.state_error,
-                        };
+                        let dot_color = state_dot_color(state, colors);
                         let mut context_menu_clone = context_menu.clone();
 
                         rsx! {
@@ -352,18 +492,23 @@ pub fn LeftRail(
                                 padding: "12px",
                                 background: if is_dragging {
                                     COLOR_SURFACE_LOW
+                                } else if is_drag_over {
+                                    COLOR_SURFACE_HIGH
                                 } else if is_selected {
                                     COLOR_BG
                                 } else {
                                     COLOR_SURFACE_LOW
                                 },
                                 color: if is_selected { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
-                                border: if is_drag_over && !is_dragging {
-                                    format!("2px solid {}", COLOR_ACCENT)
-                                } else if is_selected {
+                                border: if is_selected {
                                     format!("1px solid {}", COLOR_BORDER)
                                 } else {
                                     "1px solid transparent".to_string()
+                                },
+                                outline: if is_drag_over && !is_dragging {
+                                    format!("2px solid {}", COLOR_ACCENT)
+                                } else {
+                                    "none".to_string()
                                 },
                                 border_radius: "8px",
                                 cursor: if is_dragging { "grabbing" } else { "pointer" },
@@ -371,17 +516,7 @@ pub fn LeftRail(
                                 display: "flex",
                                 align_items: "center",
                                 opacity: if is_dragging { "0.3" } else { "1" },
-                                transform: if is_drag_over && !is_dragging {
-                                    "scale(1.02)"
-                                } else {
-                                    "scale(1)"
-                                },
-                                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                                box_shadow: if is_drag_over && !is_dragging {
-                                    format!("0 0 0 1px {}, 0 4px 12px rgba(0, 0, 0, 0.2)", COLOR_ACCENT)
-                                } else {
-                                    "none".to_string()
-                                },
+                                transition: "background 120ms ease, opacity 120ms ease, outline-color 120ms ease",
                                 onclick: move |_| on_select_connection.call(id),
                                 oncontextmenu: move |e| {
                                     e.prevent_default();
@@ -453,8 +588,6 @@ pub fn LeftRail(
                                             dragging_index.set(Some(index));
                                             drag_over_index.set(Some(index));
                                             drag_start_y.set(y);
-                                            drag_current_y.set(y);
-                                            drag_preview_offset.set(0.0);
                                         },
 
                                         svg {
@@ -503,165 +636,47 @@ pub fn LeftRail(
                     }
                 }
 
-                if dragging_index().is_some() {
-                    div {
-                        position: "fixed",
-                        top: "0",
-                        left: "0",
-                        right: "0",
-                        bottom: "0",
-                        z_index: "9998",
-                        cursor: "grabbing",
-
-                        onmousemove: move |e| {
-                            let current_y = e.client_coordinates().y;
-                            drag_current_y.set(current_y);
-
-                            // Update preview offset for smooth animation
-                            let offset = current_y - drag_start_y();
-                            drag_preview_offset.set(offset);
-
-                            // Calculate target index based on mouse position
-                            let delta_y = current_y - drag_start_y();
-                            let move_count = (delta_y.abs() / (item_height + gap_height)).floor() as i32;
-
-                            if let Some(drag_idx) = dragging_index() {
-                                if move_count > 0 {
-                                    let direction: i32 = if delta_y > 0.0 { 1 } else { -1 };
-                                    let new_over_index = (drag_idx as i32 + direction * move_count) as usize;
-                                    let clamped = new_over_index.min(connections.len().saturating_sub(1));
-                                    if drag_over_index() != Some(clamped) {
-                                        drag_over_index.set(Some(clamped));
-                                    }
-                                } else {
-                                    if drag_over_index() != Some(drag_idx) {
-                                        drag_over_index.set(Some(drag_idx));
-                                    }
-                                }
-                            }
-                        },
-
-                        onmouseup: move |_| {
-                            if let (Some(from), Some(to)) = (dragging_index(), drag_over_index()) {
-                                if from != to {
-                                    on_reorder_connection.call((from, to));
-                                }
-                            }
-                            dragging_index.set(None);
-                            drag_over_index.set(None);
-                            drag_preview_offset.set(0.0);
-                        },
-
-                        onmouseleave: move |_| {
-                            dragging_index.set(None);
-                            drag_over_index.set(None);
-                            drag_preview_offset.set(0.0);
-                        },
-                    }
-
-                    // Drag preview floating card
-                    {
-                        let drag_preview = if let Some(drag_idx) = dragging_index() {
-                            connections.get(drag_idx).map(|(drag_id, drag_name)| {
-                                let drag_state = connection_states
+                if let Some(drag_idx) = dragging_index() {
+                    if let Some((drag_id, drag_name)) = connections.get(drag_idx) {
+                        {
+                            let drag_name = drag_name.clone();
+                            let drag_dot_color = state_dot_color(
+                                connection_states
                                     .get(drag_id)
                                     .copied()
-                                    .unwrap_or(ConnectionState::Disconnected);
-                                let drag_dot_color = match drag_state {
-                                    ConnectionState::Connected => colors.state_connected,
-                                    ConnectionState::Connecting => colors.state_connecting,
-                                    ConnectionState::Disconnected => colors.state_disconnected,
-                                    ConnectionState::Error => colors.state_error,
-                                };
-                                let offset_y = drag_preview_offset();
-                                let drag_name = drag_name.clone();
+                                    .unwrap_or(ConnectionState::Disconnected),
+                                colors,
+                            );
 
-                                rsx! {
-                                    div {
-                                        position: "fixed",
-                                        left: "16px",
-                                        right: "16px",
-                                        z_index: "9999",
-                                        pointer_events: "none",
-                                        transform: "translateY({offset_y}px)",
-                                        transition: "transform 0.05s ease-out",
-
-                                        div {
-                                            padding: "12px",
-                                            background: COLOR_BG,
-                                            color: COLOR_TEXT,
-                                            border: format!("2px solid {}", COLOR_ACCENT),
-                                            border_radius: "8px",
-                                            box_shadow: "0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
-                                            opacity: "0.95",
-                                            transform: "scale(1.02)",
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "8px",
-
-                                            div {
-                                                width: "8px",
-                                                height: "8px",
-                                                border_radius: "50%",
-                                                background: "{drag_dot_color}",
-                                                flex_shrink: "0",
-                                                box_shadow: "0 0 4px {drag_dot_color}",
-                                            }
-
-                                            span {
-                                                font_size: "13px",
-                                                font_weight: "600",
-                                                color: COLOR_TEXT,
-                                                flex: "1",
-
-                                                "{drag_name}"
-                                            }
-
-                                            svg {
-                                                width: "12",
-                                                height: "12",
-                                                view_box: "0 0 24 24",
-                                                fill: "currentColor",
-
-                                                circle {
-                                                    cx: "8",
-                                                    cy: "6",
-                                                    r: "1.5",
-                                                }
-                                                circle {
-                                                    cx: "16",
-                                                    cy: "6",
-                                                    r: "1.5",
-                                                }
-                                                circle {
-                                                    cx: "8",
-                                                    cy: "12",
-                                                    r: "1.5",
-                                                }
-                                                circle {
-                                                    cx: "16",
-                                                    cy: "12",
-                                                    r: "1.5",
-                                                }
-                                                circle {
-                                                    cx: "8",
-                                                    cy: "18",
-                                                    r: "1.5",
-                                                }
-                                                circle {
-                                                    cx: "16",
-                                                    cy: "18",
-                                                    r: "1.5",
-                                                }
+                            rsx! {
+                                ConnectionDragOverlay {
+                                    width: width(),
+                                    drag_start_y: drag_start_y(),
+                                    item_height: item_height,
+                                    gap_height: gap_height,
+                                    item_count: connections.len(),
+                                    drag_index: drag_idx,
+                                    drag_name: drag_name,
+                                    drag_dot_color: drag_dot_color,
+                                    on_drag_over_change: move |to| {
+                                        drag_over_index.set(Some(to));
+                                    },
+                                    on_drop: move |to| {
+                                        if let Some(from) = dragging_index() {
+                                            if from != to {
+                                                on_reorder_connection.call((from, to));
                                             }
                                         }
-                                    }
+                                        dragging_index.set(None);
+                                        drag_over_index.set(None);
+                                    },
+                                    on_cancel: move |_| {
+                                        dragging_index.set(None);
+                                        drag_over_index.set(None);
+                                    },
                                 }
-                            })
-                        } else {
-                            None
-                        };
-                        drag_preview
+                            }
+                        }
                     }
                 }
 
