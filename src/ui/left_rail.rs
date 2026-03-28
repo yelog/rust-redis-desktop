@@ -56,6 +56,10 @@ pub fn LeftRail(
     let mut dragging_index = use_signal(|| None::<usize>);
     let mut drag_over_index = use_signal(|| None::<usize>);
     let mut drag_start_y = use_signal(|| 0.0);
+    let mut drag_current_y = use_signal(|| 0.0);
+    let mut drag_preview_offset = use_signal(|| 0.0);
+    let item_height = 58.0;
+    let gap_height = 6.0;
     let has_connections = !connections.is_empty();
     let selected_name = selected_connection.and_then(|id| {
         connections
@@ -347,14 +351,14 @@ pub fn LeftRail(
                                 key: "{id}",
                                 padding: "12px",
                                 background: if is_dragging {
-                                    COLOR_SURFACE_HIGH
+                                    COLOR_SURFACE_LOW
                                 } else if is_selected {
                                     COLOR_BG
                                 } else {
                                     COLOR_SURFACE_LOW
                                 },
                                 color: if is_selected { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
-                                border: if is_drag_over {
+                                border: if is_drag_over && !is_dragging {
                                     format!("2px solid {}", COLOR_ACCENT)
                                 } else if is_selected {
                                     format!("1px solid {}", COLOR_BORDER)
@@ -362,11 +366,22 @@ pub fn LeftRail(
                                     "1px solid transparent".to_string()
                                 },
                                 border_radius: "8px",
-                                cursor: "pointer",
+                                cursor: if is_dragging { "grabbing" } else { "pointer" },
                                 text_align: "left",
                                 display: "flex",
                                 align_items: "center",
-                                opacity: if is_dragging { "0.5" } else { "1" },
+                                opacity: if is_dragging { "0.3" } else { "1" },
+                                transform: if is_drag_over && !is_dragging {
+                                    "scale(1.02)"
+                                } else {
+                                    "scale(1)"
+                                },
+                                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                                box_shadow: if is_drag_over && !is_dragging {
+                                    format!("0 0 0 1px {}, 0 4px 12px rgba(0, 0, 0, 0.2)", COLOR_ACCENT)
+                                } else {
+                                    "none".to_string()
+                                },
                                 onclick: move |_| on_select_connection.call(id),
                                 oncontextmenu: move |e| {
                                     e.prevent_default();
@@ -398,6 +413,9 @@ pub fn LeftRail(
                                             height: "8px",
                                             border_radius: "50%",
                                             background: "{dot_color}",
+                                            flex_shrink: "0",
+                                            box_shadow: "0 0 4px {dot_color}",
+                                            transition: "box-shadow 0.2s ease",
                                         }
 
                                         div {
@@ -422,12 +440,21 @@ pub fn LeftRail(
                                         display: "flex",
                                         align_items: "center",
                                         margin_left: "auto",
+                                        border_radius: "4px",
+                                        transition: "opacity 0.15s ease, background 0.15s ease",
+
+                                        onmouseenter: move |_| {},
+                                        onmouseleave: move |_| {},
+
                                         onmousedown: move |e| {
                                             e.prevent_default();
                                             e.stop_propagation();
+                                            let y = e.client_coordinates().y;
                                             dragging_index.set(Some(index));
                                             drag_over_index.set(Some(index));
-                                            drag_start_y.set(e.client_coordinates().y);
+                                            drag_start_y.set(y);
+                                            drag_current_y.set(y);
+                                            drag_preview_offset.set(0.0);
                                         },
 
                                         svg {
@@ -483,14 +510,20 @@ pub fn LeftRail(
                         left: "0",
                         right: "0",
                         bottom: "0",
-                        z_index: "9999",
+                        z_index: "9998",
                         cursor: "grabbing",
 
                         onmousemove: move |e| {
                             let current_y = e.client_coordinates().y;
+                            drag_current_y.set(current_y);
+
+                            // Update preview offset for smooth animation
+                            let offset = current_y - drag_start_y();
+                            drag_preview_offset.set(offset);
+
+                            // Calculate target index based on mouse position
                             let delta_y = current_y - drag_start_y();
-                            let item_height = 58.0_f64;
-                            let move_count = (delta_y.abs() / item_height).floor() as i32;
+                            let move_count = (delta_y.abs() / (item_height + gap_height)).floor() as i32;
 
                             if let Some(drag_idx) = dragging_index() {
                                 if move_count > 0 {
@@ -516,12 +549,119 @@ pub fn LeftRail(
                             }
                             dragging_index.set(None);
                             drag_over_index.set(None);
+                            drag_preview_offset.set(0.0);
                         },
 
                         onmouseleave: move |_| {
                             dragging_index.set(None);
                             drag_over_index.set(None);
+                            drag_preview_offset.set(0.0);
                         },
+                    }
+
+                    // Drag preview floating card
+                    {
+                        let drag_preview = if let Some(drag_idx) = dragging_index() {
+                            connections.get(drag_idx).map(|(drag_id, drag_name)| {
+                                let drag_state = connection_states
+                                    .get(drag_id)
+                                    .copied()
+                                    .unwrap_or(ConnectionState::Disconnected);
+                                let drag_dot_color = match drag_state {
+                                    ConnectionState::Connected => colors.state_connected,
+                                    ConnectionState::Connecting => colors.state_connecting,
+                                    ConnectionState::Disconnected => colors.state_disconnected,
+                                    ConnectionState::Error => colors.state_error,
+                                };
+                                let offset_y = drag_preview_offset();
+                                let drag_name = drag_name.clone();
+
+                                rsx! {
+                                    div {
+                                        position: "fixed",
+                                        left: "16px",
+                                        right: "16px",
+                                        z_index: "9999",
+                                        pointer_events: "none",
+                                        transform: "translateY({offset_y}px)",
+                                        transition: "transform 0.05s ease-out",
+
+                                        div {
+                                            padding: "12px",
+                                            background: COLOR_BG,
+                                            color: COLOR_TEXT,
+                                            border: format!("2px solid {}", COLOR_ACCENT),
+                                            border_radius: "8px",
+                                            box_shadow: "0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
+                                            opacity: "0.95",
+                                            transform: "scale(1.02)",
+                                            display: "flex",
+                                            align_items: "center",
+                                            gap: "8px",
+
+                                            div {
+                                                width: "8px",
+                                                height: "8px",
+                                                border_radius: "50%",
+                                                background: "{drag_dot_color}",
+                                                flex_shrink: "0",
+                                                box_shadow: "0 0 4px {drag_dot_color}",
+                                            }
+
+                                            span {
+                                                font_size: "13px",
+                                                font_weight: "600",
+                                                color: COLOR_TEXT,
+                                                flex: "1",
+
+                                                "{drag_name}"
+                                            }
+
+                                            svg {
+                                                width: "12",
+                                                height: "12",
+                                                view_box: "0 0 24 24",
+                                                fill: "currentColor",
+
+                                                circle {
+                                                    cx: "8",
+                                                    cy: "6",
+                                                    r: "1.5",
+                                                }
+                                                circle {
+                                                    cx: "16",
+                                                    cy: "6",
+                                                    r: "1.5",
+                                                }
+                                                circle {
+                                                    cx: "8",
+                                                    cy: "12",
+                                                    r: "1.5",
+                                                }
+                                                circle {
+                                                    cx: "16",
+                                                    cy: "12",
+                                                    r: "1.5",
+                                                }
+                                                circle {
+                                                    cx: "8",
+                                                    cy: "18",
+                                                    r: "1.5",
+                                                }
+                                                circle {
+                                                    cx: "16",
+                                                    cy: "18",
+                                                    r: "1.5",
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            })
+                        } else {
+                            None
+                        };
+                        drag_preview
                     }
                 }
 
