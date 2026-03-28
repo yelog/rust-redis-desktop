@@ -114,6 +114,11 @@ pub fn ContextMenu(
                     r#"
                     let handler = function(e) {
                         if (e.button === 2) return;
+                        let target = e.target;
+                        while (target && target !== document) {
+                            if (target.getAttribute('data-context-menu') === 'true') return;
+                            target = target.parentElement;
+                        }
                         dioxus.send('close');
                     };
                     document.addEventListener('mousedown', handler, true);
@@ -153,6 +158,7 @@ pub fn ContextMenu(
 
     rsx! {
         div {
+            "data-context-menu": "true",
             position: "fixed",
             left: "{x}px",
             top: "{y}px",
@@ -211,6 +217,7 @@ pub fn ContextMenuItem(
 
     rsx! {
         button {
+            "data-context-menu": "true",
             padding: "8px 12px",
             display: "flex",
             align_items: "center",

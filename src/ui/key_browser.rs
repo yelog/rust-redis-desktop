@@ -635,6 +635,7 @@ pub fn KeyBrowser(
                                     }
                                 }
                             },
+                            context_menu: context_menu,
                         }
                     } else {
                         for node in tree_nodes.read().iter() {

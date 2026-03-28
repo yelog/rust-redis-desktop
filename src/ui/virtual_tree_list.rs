@@ -1,5 +1,6 @@
 use crate::redis::{KeyType, TreeNode};
 use crate::theme::{COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_TEXT, COLOR_TEXT_SECONDARY};
+use crate::ui::context_menu::ContextMenuState;
 use crate::ui::{FlatNode, FlatTreeAdapter};
 use dioxus::prelude::*;
 use std::collections::HashSet;
@@ -69,6 +70,7 @@ pub fn VirtualTreeList(
     expanded_paths: Signal<HashSet<String>>,
     on_select: EventHandler<String>,
     on_toggle: EventHandler<String>,
+    context_menu: Signal<Option<ContextMenuState<(String, bool)>>>,
 ) -> Element {
     let mut scroll_top = use_signal(|| 0.0f32);
     let viewport_height = use_signal(|| 600.0f32);
@@ -133,6 +135,7 @@ pub fn VirtualTreeList(
                                             on_toggle.call(path.clone());
                                         }
                                     },
+                                    context_menu: context_menu,
                                 }
                             }
                         }
@@ -151,6 +154,7 @@ fn VirtualTreeItem(
     is_selected: bool,
     on_select: EventHandler<()>,
     on_toggle: EventHandler<()>,
+    context_menu: Signal<Option<ContextMenuState<(String, bool)>>>,
 ) -> Element {
     let bg_color = if is_selected {
         COLOR_BG_TERTIARY
@@ -191,6 +195,23 @@ fn VirtualTreeItem(
                     } else {
                         on_select.call(());
                     }
+                }
+            },
+
+            oncontextmenu: {
+                let path = node.path.clone();
+                let is_leaf = !node.is_folder;
+                move |e| {
+                    e.prevent_default();
+                    crate::ui::context_menu::close_all_context_menus();
+                    let data = e.data();
+                    let client_x = data.client_coordinates().x as i32;
+                    let client_y = data.client_coordinates().y as i32;
+                    context_menu.set(Some(ContextMenuState::new(
+                        (path.clone(), is_leaf),
+                        client_x,
+                        client_y,
+                    )));
                 }
             },
 

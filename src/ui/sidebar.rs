@@ -216,6 +216,7 @@ pub fn Sidebar(
         if let Some((menu_id, (x, y))) = context_menu() {
             if !context_menu_exiting() {
                 div {
+                    "data-context-menu": "true",
                     position: "fixed",
                     left: "{x}px",
                     top: "{y}px",
