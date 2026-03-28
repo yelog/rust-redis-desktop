@@ -380,9 +380,9 @@ pub fn ConnectionForm(
                         for (mode_name, mode_val) in [("Direct", ConnectionMode::Direct), ("Cluster", ConnectionMode::Cluster), ("Sentinel", ConnectionMode::Sentinel)] {
                             {
                                 let is_selected = mode() == mode_val;
-                                let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
-                                let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
-                                let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                                let bg = if is_selected { colors.primary } else { colors.background_tertiary };
+                                let border_color = if is_selected { colors.primary } else { colors.border };
+                                let text_color = if is_selected { colors.primary_text } else { colors.text };
                                 rsx! {
                                     div {
                                         key: "{mode_name}",

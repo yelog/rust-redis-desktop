@@ -105,7 +105,10 @@ pub fn AnimatedDialog(
                             let mut vis = visibility_clone.clone();
                             let on_close = on_close.clone();
                             spawn(async move {
-                                tokio::time::sleep(Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                                tokio::time::sleep(Duration::from_millis(
+                                    EXIT_ANIMATION_DURATION_MS,
+                                ))
+                                .await;
                                 vis.set(VisibilityState::Hidden);
                                 on_close.call(());
                             });
@@ -467,8 +470,16 @@ pub fn SimpleAnimatedModal(
     }
 
     let is_exiting = state == VisibilityState::Exiting;
-    let backdrop_animation = if is_exiting { "backdropFadeOut" } else { "backdropFadeIn" };
-    let modal_animation = if is_exiting { "modalFadeOut" } else { "modalFadeIn" };
+    let backdrop_animation = if is_exiting {
+        "backdropFadeOut"
+    } else {
+        "backdropFadeIn"
+    };
+    let modal_animation = if is_exiting {
+        "modalFadeOut"
+    } else {
+        "modalFadeIn"
+    };
 
     rsx! {
         div {

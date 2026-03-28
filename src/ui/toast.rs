@@ -82,7 +82,7 @@ impl ToastManager {
     pub fn cleanup_expired(&mut self) -> Vec<Uuid> {
         let now = Instant::now();
         let mut to_exit = Vec::new();
-        
+
         for toast in self.toasts.iter() {
             if now.duration_since(toast.created_at) >= Duration::from_secs(TOAST_DURATION_SECS)
                 && !self.exiting_ids.contains(&toast.id)
@@ -90,11 +90,11 @@ impl ToastManager {
                 to_exit.push(toast.id);
             }
         }
-        
+
         for id in &to_exit {
             self.exiting_ids.insert(*id);
         }
-        
+
         to_exit
     }
 
@@ -114,13 +114,16 @@ pub fn ToastContainer(manager: Signal<ToastManager>) -> Element {
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 let to_exit = manager.write().cleanup_expired();
-                
+
                 for id in to_exit {
                     pending_removals.write().insert(id, true);
                     let mut manager_clone = manager.clone();
                     let mut pending_clone = pending_removals.clone();
                     spawn(async move {
-                        tokio::time::sleep(std::time::Duration::from_millis(EXIT_ANIMATION_DURATION_MS)).await;
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            EXIT_ANIMATION_DURATION_MS,
+                        ))
+                        .await;
                         manager_clone.write().remove(id);
                         pending_clone.write().remove(&id);
                     });

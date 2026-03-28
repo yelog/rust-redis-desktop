@@ -46,9 +46,7 @@ pub fn ConnectionExportDialog(
 
                         let exported = ExportedConnections {
                             version: "1.0".to_string(),
-                            exported_at: chrono::Utc::now()
-                                .format("%Y-%m-%d %H:%M:%S")
-                                .to_string(),
+                            exported_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
                             connections,
                         };
 
@@ -122,11 +120,7 @@ pub fn ConnectionExportDialog(
 }
 
 #[component]
-fn ExportSuccessView(
-    json: String,
-    colors: ThemeColors,
-    on_close: EventHandler<()>,
-) -> Element {
+fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<()>) -> Element {
     let mut toast_manager = use_context::<Signal<ToastManager>>();
 
     let copy_to_clipboard = {
@@ -155,7 +149,9 @@ fn ExportSuccessView(
                             toast_manager.write().success("Exported to file");
                         }
                         Err(e) => {
-                            toast_manager.write().error(&format!("Failed to save: {}", e));
+                            toast_manager
+                                .write()
+                                .error(&format!("Failed to save: {}", e));
                         }
                     }
                 }

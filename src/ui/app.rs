@@ -5,13 +5,13 @@ use crate::theme::{
     COLOR_BG, COLOR_BG_SECONDARY, COLOR_BORDER, COLOR_ERROR, COLOR_PRIMARY, COLOR_SURFACE_LOW,
     COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
 };
+use crate::ui::value_viewer::ImagePreview;
 use crate::ui::{
     ClientsPanel, ConnectionExportDialog, ConnectionForm, ConnectionImportDialog,
     DeleteConnectionConfirmDialog, FlushConfirmDialog, ImportPanel, KeyBrowser, LeftRail,
     MonitorPanel, PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog, SlowLogPanel,
     Terminal, ToastContainer, ToastManager,
 };
-use crate::ui::value_viewer::ImagePreview;
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
@@ -1003,7 +1003,7 @@ await new Promise(() => {});
                                         let conn = conns.remove(from);
                                         conns.insert(to, conn);
                                         drop(conns);
-                                        
+
                                         spawn(async move {
                                             if let Some(storage) = config_storage.read().as_ref() {
                                                 let _ = storage.reorder_connections(from, to);

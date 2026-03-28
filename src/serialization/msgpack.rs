@@ -113,7 +113,9 @@ mod tests {
 
     #[test]
     fn test_detect_msgpack_string() {
-        assert!(is_msgpack_serialization(&[0xA5, b'H', b'e', b'l', b'l', b'o']));
+        assert!(is_msgpack_serialization(&[
+            0xA5, b'H', b'e', b'l', b'l', b'o'
+        ]));
     }
 
     #[test]

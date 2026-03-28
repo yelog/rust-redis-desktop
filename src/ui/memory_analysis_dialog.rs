@@ -110,14 +110,18 @@ pub fn MemoryAnalysisDialog(
             let min_size = min_size_filter();
             let ratio = sample_ratio();
             let sep = separator();
-            state.set(ScanState::Scanning { checked: 0, found: 0 });
+            state.set(ScanState::Scanning {
+                checked: 0,
+                found: 0,
+            });
 
             spawn(async move {
                 let flag = flag.clone();
                 let mut cursor: u64 = 0;
                 let mut all_entries = Vec::new();
                 let mut checked_count = 0usize;
-                let mut prefix_map: HashMap<String, (u64, u64, Vec<String>, i64, u64)> = HashMap::new();
+                let mut prefix_map: HashMap<String, (u64, u64, Vec<String>, i64, u64)> =
+                    HashMap::new();
 
                 loop {
                     if !flag.load(Ordering::Relaxed) {
@@ -164,7 +168,13 @@ pub fn MemoryAnalysisDialog(
                                         });
 
                                         if let Some(prefix) = extract_prefix(&key, &sep) {
-                                            let entry = prefix_map.entry(prefix).or_insert((0, 0, Vec::new(), 0, 0));
+                                            let entry = prefix_map.entry(prefix).or_insert((
+                                                0,
+                                                0,
+                                                Vec::new(),
+                                                0,
+                                                0,
+                                            ));
                                             entry.0 += 1;
                                             entry.1 += bytes;
                                             if !entry.2.contains(&key_type) {
@@ -200,13 +210,19 @@ pub fn MemoryAnalysisDialog(
 
                 let mut prefixes: Vec<PrefixStats> = prefix_map
                     .into_iter()
-                    .map(|(prefix, (count, mem, types, ttl_sum, ttl_count))| PrefixStats {
-                        prefix: format!("{}{}*", prefix, sep),
-                        key_count: count,
-                        memory_bytes: mem,
-                        types,
-                        avg_ttl_secs: if ttl_count > 0 { ttl_sum as f64 / ttl_count as f64 } else { -1.0 },
-                    })
+                    .map(
+                        |(prefix, (count, mem, types, ttl_sum, ttl_count))| PrefixStats {
+                            prefix: format!("{}{}*", prefix, sep),
+                            key_count: count,
+                            memory_bytes: mem,
+                            types,
+                            avg_ttl_secs: if ttl_count > 0 {
+                                ttl_sum as f64 / ttl_count as f64
+                            } else {
+                                -1.0
+                            },
+                        },
+                    )
                     .collect();
                 prefixes.sort_by(|a, b| b.memory_bytes.cmp(&a.memory_bytes));
                 prefixes.truncate(50);
@@ -214,7 +230,10 @@ pub fn MemoryAnalysisDialog(
                 let found = all_entries.len();
                 entries.set(all_entries);
                 prefix_stats.set(prefixes);
-                state.set(ScanState::Completed { checked: checked_count, found });
+                state.set(ScanState::Completed {
+                    checked: checked_count,
+                    found,
+                });
             });
         }
     };

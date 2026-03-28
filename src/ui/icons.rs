@@ -677,3 +677,26 @@ pub fn IconUpload(size: Option<i32>, color: Option<String>) -> Element {
         }
     }
 }
+
+#[component]
+pub fn IconMoreHorizontal(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            circle { cx: "5", cy: "12", r: "1" }
+            circle { cx: "12", cy: "12", r: "1" }
+            circle { cx: "19", cy: "12", r: "1" }
+        }
+    }
+}

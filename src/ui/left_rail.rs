@@ -1,13 +1,13 @@
 use crate::connection::ConnectionState;
 use crate::theme::{
-    ThemeColors, COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BORDER, COLOR_ERROR, COLOR_PRIMARY,
+    ThemeColors, COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BORDER, COLOR_PRIMARY,
     COLOR_SURFACE_HIGH, COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
     COLOR_TEXT_SUBTLE,
 };
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem, ContextMenuState};
 use crate::ui::icons::{
-    IconAlert, IconDownload, IconEdit, IconPlus, IconRefresh, IconSettings, IconTrash, IconUpload,
-    IconX,
+    IconAlert, IconDownload, IconEdit, IconMoreHorizontal, IconPlus, IconRefresh, IconSettings,
+    IconTrash, IconUpload, IconX,
 };
 use crate::ui::status_indicator::StatusIndicatorWithLabel;
 use dioxus::prelude::*;
@@ -20,6 +20,14 @@ fn state_label(state: ConnectionState) -> &'static str {
         ConnectionState::Connecting => "连接中",
         ConnectionState::Disconnected => "未连接",
         ConnectionState::Error => "连接异常",
+    }
+}
+
+fn primary_connection_action_label(state: ConnectionState) -> &'static str {
+    match state {
+        ConnectionState::Connecting => "连接中",
+        ConnectionState::Connected => "重连",
+        ConnectionState::Disconnected | ConnectionState::Error => "连接",
     }
 }
 
@@ -105,7 +113,7 @@ pub fn LeftRail(
                 border_bottom: "1px solid {COLOR_BORDER}",
 
                 div {
-                    padding: "14px",
+                    padding: "12px",
                     background: COLOR_BG,
                     border: "1px solid {COLOR_BORDER}",
                     border_radius: "8px",
@@ -176,109 +184,54 @@ pub fn LeftRail(
                     if let Some(id) = selected_connection {
                         div {
                             display: "flex",
-                            flex_wrap: "wrap",
                             gap: "8px",
 
                             button {
-                                padding: "7px 10px",
-                                background: COLOR_SURFACE_HIGH,
-                                color: COLOR_TEXT,
-                                border: "1px solid {COLOR_BORDER}",
+                                flex: "1",
+                                height: "32px",
+                                padding: "0 10px",
+                                background: COLOR_PRIMARY,
+                                color: COLOR_TEXT_CONTRAST,
+                                border: "1px solid {COLOR_PRIMARY}",
                                 border_radius: "6px",
-                                cursor: "pointer",
+                                cursor: if selected_state == ConnectionState::Connecting { "default" } else { "pointer" },
+                                opacity: if selected_state == ConnectionState::Connecting { "0.65" } else { "1" },
                                 font_size: "12px",
+                                font_weight: "600",
                                 display: "flex",
                                 align_items: "center",
+                                justify_content: "center",
                                 gap: "6px",
-                                onclick: move |_| on_edit_connection.call(id),
-
-                                IconEdit { size: Some(13) }
-                                "编辑"
-                            }
-
-                            button {
-                                padding: "7px 10px",
-                                background: COLOR_SURFACE_HIGH,
-                                color: COLOR_TEXT,
-                                border: "1px solid {COLOR_BORDER}",
-                                border_radius: "6px",
-                                cursor: "pointer",
-                                font_size: "12px",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "6px",
+                                disabled: selected_state == ConnectionState::Connecting,
                                 onclick: move |_| on_reconnect_connection.call(id),
 
                                 IconRefresh { size: Some(13) }
-                                "重连"
+                                "{primary_connection_action_label(selected_state)}"
                             }
 
                             button {
-                                padding: "7px 10px",
+                                width: "32px",
+                                height: "32px",
                                 background: COLOR_SURFACE_HIGH,
-                                color: COLOR_TEXT,
+                                color: COLOR_TEXT_SECONDARY,
                                 border: "1px solid {COLOR_BORDER}",
                                 border_radius: "6px",
                                 cursor: "pointer",
-                                font_size: "12px",
                                 display: "flex",
                                 align_items: "center",
-                                gap: "6px",
-                                onclick: move |_| on_close_connection.call(id),
+                                justify_content: "center",
+                                onclick: {
+                                    let mut context_menu = context_menu.clone();
+                                    move |event| {
+                                        event.stop_propagation();
+                                        crate::ui::context_menu::close_all_context_menus();
+                                        let x = event.client_coordinates().x as i32;
+                                        let y = event.client_coordinates().y as i32;
+                                        context_menu.set(Some(ContextMenuState::new(id, x, y)));
+                                    }
+                                },
 
-                                IconX { size: Some(13) }
-                                "断开"
-                            }
-
-                            button {
-                                padding: "7px 10px",
-                                background: "rgba(255, 180, 171, 0.08)",
-                                color: COLOR_ERROR,
-                                border: "1px solid {COLOR_ERROR}",
-                                border_radius: "6px",
-                                cursor: "pointer",
-                                font_size: "12px",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "6px",
-                                onclick: move |_| on_delete_connection.call(id),
-
-                                IconTrash { size: Some(13) }
-                                "删除"
-                            }
-
-                            button {
-                                padding: "7px 10px",
-                                background: "rgba(255, 180, 171, 0.08)",
-                                color: COLOR_ERROR,
-                                border: "1px solid {COLOR_ERROR}",
-                                border_radius: "6px",
-                                cursor: "pointer",
-                                font_size: "12px",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "6px",
-                                onclick: move |_| on_flush_connection.call(id),
-
-                                IconAlert { size: Some(13) }
-                                "清空"
-                            }
-
-                            button {
-                                padding: "7px 10px",
-                                background: COLOR_SURFACE_HIGH,
-                                color: COLOR_TEXT,
-                                border: "1px solid {COLOR_BORDER}",
-                                border_radius: "6px",
-                                cursor: "pointer",
-                                font_size: "12px",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "6px",
-                                onclick: move |_| on_import_connection.call(id),
-
-                                IconUpload { size: Some(13) }
-                                "导入"
+                                IconMoreHorizontal { size: Some(14), color: None }
                             }
                         }
                     }
@@ -286,7 +239,8 @@ pub fn LeftRail(
 
                 button {
                     width: "100%",
-                    padding: "10px 12px",
+                    height: "36px",
+                    padding: "0 12px",
                     background: COLOR_PRIMARY,
                     color: COLOR_TEXT_CONTRAST,
                     border: "none",
@@ -303,60 +257,62 @@ pub fn LeftRail(
                     IconPlus { size: Some(14) }
                     "新建连接"
                 }
-
-                div {
-                    display: "flex",
-                    gap: "8px",
-                    margin_top: "8px",
-
-                    button {
-                        flex: "1",
-                        padding: "8px 10px",
-                        background: COLOR_SURFACE_HIGH,
-                        color: COLOR_TEXT,
-                        border: "1px solid {COLOR_BORDER}",
-                        border_radius: "6px",
-                        cursor: "pointer",
-                        font_size: "12px",
-                        display: "flex",
-                        align_items: "center",
-                        justify_content: "center",
-                        gap: "6px",
-                        onclick: move |_| on_export_connections.call(()),
-
-                        IconDownload { size: Some(12) }
-                        "导出"
-                    }
-
-                    button {
-                        flex: "1",
-                        padding: "8px 10px",
-                        background: COLOR_SURFACE_HIGH,
-                        color: COLOR_TEXT,
-                        border: "1px solid {COLOR_BORDER}",
-                        border_radius: "6px",
-                        cursor: "pointer",
-                        font_size: "12px",
-                        display: "flex",
-                        align_items: "center",
-                        justify_content: "center",
-                        gap: "6px",
-                        onclick: move |_| on_import_connections.call(()),
-
-                        IconUpload { size: Some(12) }
-                        "导入"
-                    }
-                }
             }
 
             div {
                 padding: "12px 16px 8px",
-                color: COLOR_TEXT_SUBTLE,
-                font_size: "11px",
-                text_transform: "uppercase",
-                letter_spacing: "0.16em",
+                display: "flex",
+                align_items: "center",
+                justify_content: "space_between",
+                gap: "8px",
 
-                "Connections"
+                span {
+                    color: COLOR_TEXT_SUBTLE,
+                    font_size: "11px",
+                    text_transform: "uppercase",
+                    letter_spacing: "0.16em",
+
+                    "Connections"
+                }
+
+                div {
+                    display: "flex",
+                    gap: "6px",
+
+                    button {
+                        width: "28px",
+                        height: "28px",
+                        background: COLOR_SURFACE_LOW,
+                        color: COLOR_TEXT_SECONDARY,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "6px",
+                        cursor: "pointer",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        title: "导出连接",
+                        onclick: move |_| on_export_connections.call(()),
+
+                        IconDownload { size: Some(12) }
+                    }
+
+                    button {
+                        width: "28px",
+                        height: "28px",
+                        background: COLOR_SURFACE_LOW,
+                        color: COLOR_TEXT_SECONDARY,
+                        border: "1px solid {COLOR_BORDER}",
+                        border_radius: "6px",
+                        cursor: "pointer",
+                        display: "flex",
+                        align_items: "center",
+                        justify_content: "center",
+                        title: "导入连接",
+                        onclick: move |_| on_import_connections.call(()),
+
+                        IconUpload { size: Some(12) }
+                    }
+                }
             }
 
             div {
@@ -675,6 +631,20 @@ pub fn LeftRail(
                                     move |_| {
                                         context_menu.set(None);
                                         on_close_connection.call(ctx_id);
+                                    }
+                                },
+                            }
+
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconUpload { size: Some(14) } }),
+                                label: "导入数据".to_string(),
+                                danger: false,
+                                disabled: false,
+                                onclick: {
+                                    let ctx_id = ctx_id;
+                                    move |_| {
+                                        context_menu.set(None);
+                                        on_import_connection.call(ctx_id);
                                     }
                                 },
                             }

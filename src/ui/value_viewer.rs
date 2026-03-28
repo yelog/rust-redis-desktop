@@ -1,18 +1,20 @@
 use crate::connection::ConnectionPool;
-use crate::protobuf_schema::{ProtoRegistry, PROTO_REGISTRY};
+use crate::protobuf_schema::PROTO_REGISTRY;
 use crate::redis::{KeyInfo, KeyType};
 use crate::serialization::{
     detect_serialization_format, is_java_serialization, is_protobuf_data, parse_to_json,
     SerializationFormat,
 };
 use crate::theme::{
-    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
-    COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_ROW_CREATE_BG, COLOR_ROW_EDIT_BG, COLOR_SUCCESS,
-    COLOR_SUCCESS_BG, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SOFT,
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
+    COLOR_BUTTON_SECONDARY, COLOR_BUTTON_SECONDARY_BORDER, COLOR_ERROR, COLOR_ERROR_BG, COLOR_INFO,
+    COLOR_INFO_BG, COLOR_OVERLAY_BACKDROP, COLOR_PRIMARY, COLOR_ROW_CREATE_BG, COLOR_ROW_EDIT_BG,
+    COLOR_SUCCESS, COLOR_SUCCESS_BG, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
     COLOR_TEXT_SUBTLE, COLOR_WARNING,
 };
+use crate::ui::context_menu::{ContextMenu, ContextMenuItem, ContextMenuState};
 use crate::ui::editable_field::EditableField;
-use crate::ui::icons::{IconCopy, IconEdit, IconTrash};
+use crate::ui::icons::{IconCopy, IconEdit, IconMoreHorizontal, IconTrash};
 use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
@@ -64,7 +66,7 @@ pub fn ImagePreview() -> Element {
             left: "0",
             right: "0",
             bottom: "0",
-            background: "rgba(0, 0, 0, 0.9)",
+            background: COLOR_OVERLAY_BACKDROP,
             display: "flex",
             flex_direction: "column",
             align_items: "center",
@@ -106,13 +108,7 @@ pub fn ImagePreview() -> Element {
                 z_index: "10",
 
                 button {
-                    padding: "8px 16px",
-                    background: "rgba(255, 255, 255, 0.1)",
-                    color: "white",
-                    border: "1px solid rgba(255, 255, 255, 0.2)",
-                    border_radius: "6px",
-                    cursor: "pointer",
-                    font_size: "14px",
+                    style: "{image_preview_button_style()}",
 
                     onclick: move |e| {
                         e.stop_propagation();
@@ -135,13 +131,7 @@ pub fn ImagePreview() -> Element {
                 }
 
                 button {
-                    padding: "8px 12px",
-                    background: "rgba(255, 255, 255, 0.1)",
-                    color: "white",
-                    border: "1px solid rgba(255, 255, 255, 0.2)",
-                    border_radius: "6px",
-                    cursor: "pointer",
-                    font_size: "14px",
+                    style: "{image_preview_button_style()}",
 
                     onclick: move |e| {
                         e.stop_propagation();
@@ -152,13 +142,7 @@ pub fn ImagePreview() -> Element {
                 }
 
                 button {
-                    padding: "8px 16px",
-                    background: "rgba(255, 255, 255, 0.1)",
-                    color: "white",
-                    border: "1px solid rgba(255, 255, 255, 0.2)",
-                    border_radius: "6px",
-                    cursor: "pointer",
-                    font_size: "14px",
+                    style: "{image_preview_button_style()}",
 
                     onclick: move |e| {
                         e.stop_propagation();
@@ -221,21 +205,13 @@ pub fn ImagePreview() -> Element {
                 align_items: "center",
 
                 div {
-                    padding: "8px 16px",
-                    background: "rgba(0, 0, 0, 0.6)",
-                    border_radius: "6px",
-                    color: "rgba(255, 255, 255, 0.8)",
-                    font_size: "13px",
+                    style: "{image_preview_info_chip_style()}",
 
                     "{format} - {size}"
                 }
 
                 div {
-                    padding: "8px 16px",
-                    background: "rgba(0, 0, 0, 0.6)",
-                    border_radius: "6px",
-                    color: "rgba(255, 255, 255, 0.8)",
-                    font_size: "13px",
+                    style: "{image_preview_info_chip_style()}",
 
                     "缩放: {(zoom_level() * 100.0) as i32}%"
                 }
@@ -494,6 +470,174 @@ fn format_ttl_label(ttl: Option<i64>) -> String {
         Some(ttl) => format!("{ttl}s"),
         None => "永久".to_string(),
     }
+}
+
+fn secondary_action_button_style() -> String {
+    format!(
+        "height: 32px; padding: 0 10px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500;",
+        COLOR_BUTTON_SECONDARY, COLOR_TEXT, COLOR_BUTTON_SECONDARY_BORDER
+    )
+}
+
+fn primary_action_button_style(disabled: bool) -> String {
+    let cursor = if disabled { "default" } else { "pointer" };
+    let opacity = if disabled { "0.55" } else { "1" };
+
+    format!(
+        "height: 32px; padding: 0 12px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; cursor: {}; opacity: {}; display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500;",
+        COLOR_PRIMARY, COLOR_TEXT_CONTRAST, COLOR_PRIMARY, cursor, opacity
+    )
+}
+
+fn destructive_action_button_style(disabled: bool) -> String {
+    let cursor = if disabled { "default" } else { "pointer" };
+    let opacity = if disabled { "0.55" } else { "1" };
+
+    format!(
+        "height: 32px; padding: 0 12px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; cursor: {}; opacity: {}; display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500;",
+        COLOR_ERROR_BG, COLOR_ERROR, COLOR_BORDER, cursor, opacity
+    )
+}
+
+fn data_section_toolbar_style() -> &'static str {
+    "display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;"
+}
+
+fn data_section_controls_style() -> &'static str {
+    "display: flex; gap: 8px; align-items: center; flex-wrap: wrap;"
+}
+
+fn data_section_count_style() -> String {
+    format!(
+        "color: {}; font-size: 12px; font-weight: 500;",
+        COLOR_TEXT_SECONDARY
+    )
+}
+
+fn status_banner_style(is_error: bool) -> String {
+    let background = if is_error {
+        STATUS_ERROR_BG
+    } else {
+        STATUS_SUCCESS_BG
+    };
+    let color = if is_error { COLOR_ERROR } else { COLOR_SUCCESS };
+
+    format!(
+        "margin-bottom: 12px; padding: 8px 12px; background: {}; border: 1px solid {}; border-radius: 8px; color: {}; font-size: 13px; line-height: 1.45;",
+        background, COLOR_BORDER, color
+    )
+}
+
+fn data_table_header_row_style() -> String {
+    format!(
+        "background: {}; border-bottom: 1px solid {}; position: sticky; top: 0; z-index: 1;",
+        COLOR_BG_TERTIARY, COLOR_BORDER
+    )
+}
+
+fn data_table_header_cell_style(width: Option<&str>, align: &str) -> String {
+    let mut style = format!(
+        "padding: 12px; color: {}; font-size: 12px; font-weight: 600; text-align: {};",
+        COLOR_TEXT_SECONDARY, align
+    );
+
+    if let Some(width) = width {
+        style.push_str(&format!(" width: {};", width));
+    }
+
+    style
+}
+
+fn compact_icon_action_button_style(danger: bool, disabled: bool) -> String {
+    let (background, color, border) = if danger {
+        (COLOR_ERROR_BG, COLOR_ERROR, COLOR_BORDER)
+    } else {
+        (
+            COLOR_BUTTON_SECONDARY,
+            COLOR_TEXT_SECONDARY,
+            COLOR_BUTTON_SECONDARY_BORDER,
+        )
+    };
+    let cursor = if disabled { "default" } else { "pointer" };
+    let opacity = if disabled { "0.55" } else { "1" };
+
+    format!(
+        "width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; cursor: {}; opacity: {};",
+        background, color, border, cursor, opacity
+    )
+}
+
+fn image_preview_button_style() -> String {
+    format!(
+        "height: 40px; padding: 0 14px; background: {}; color: {}; border: 1px solid {}; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500;",
+        COLOR_BUTTON_SECONDARY, COLOR_TEXT, COLOR_BUTTON_SECONDARY_BORDER
+    )
+}
+
+fn image_preview_info_chip_style() -> String {
+    format!(
+        "padding: 8px 14px; background: {}; color: {}; border: 1px solid {}; border-radius: 999px; font-size: 13px; font-weight: 500;",
+        COLOR_BG_SECONDARY, COLOR_TEXT, COLOR_BORDER
+    )
+}
+
+fn overlay_modal_keyframes() -> &'static str {
+    r#"
+    @keyframes backdropFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    @keyframes backdropFadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+    @keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes modalFadeOut {
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0; transform: scale(0.95); }
+    }
+    "#
+}
+
+fn overlay_modal_backdrop_style(exiting: bool) -> String {
+    let animation = if exiting {
+        "backdropFadeOut 0.2s ease-out forwards"
+    } else {
+        "backdropFadeIn 0.2s ease-out"
+    };
+
+    format!(
+        "position: fixed; inset: 0; background: {}; display: flex; align-items: center; justify-content: center; z-index: 1000; animation: {};",
+        COLOR_OVERLAY_BACKDROP, animation
+    )
+}
+
+fn overlay_modal_surface_style(max_width: &str, exiting: bool) -> String {
+    let animation = if exiting {
+        "modalFadeOut 0.2s ease-out forwards"
+    } else {
+        "modalFadeIn 0.2s ease-out"
+    };
+
+    format!(
+        "width: 90%; max-width: {}; padding: 24px; background: {}; border: 1px solid {}; border-radius: 12px; animation: {};",
+        max_width, COLOR_BG_SECONDARY, COLOR_BORDER, animation
+    )
+}
+
+fn overlay_modal_title_style() -> &'static str {
+    "margin: 0 0 16px 0; color: var(--theme-text); font-size: 16px; font-weight: 600;"
+}
+
+fn overlay_modal_body_style() -> &'static str {
+    "margin: 0 0 24px 0; color: var(--theme-text-secondary); font-size: 14px; line-height: 1.55; word-break: break-all;"
+}
+
+fn overlay_modal_actions_style() -> &'static str {
+    "display: flex; justify-content: flex-end; gap: 12px;"
 }
 
 fn value_metric_label(
@@ -862,7 +1006,7 @@ async fn load_more_hash(
     mut hash_cursor: Signal<u64>,
     mut hash_has_more: Signal<bool>,
     mut hash_loading_more: Signal<bool>,
-    mut hash_total: Signal<usize>,
+    _hash_total: Signal<usize>,
 ) {
     if hash_loading_more() || !hash_has_more() {
         return;
@@ -1166,7 +1310,7 @@ pub fn ValueViewer(
     let mut is_binary = use_signal(|| false);
     let mut binary_format = use_signal(BinaryFormat::default);
     let mut serialization_data = use_signal(|| None::<(SerializationFormat, Vec<u8>)>);
-    let mut binary_bytes = use_signal(Vec::<u8>::new);
+    let binary_bytes = use_signal(Vec::<u8>::new);
 
     let mut hash_search = use_signal(String::new);
     let mut hash_status_message = use_signal(String::new);
@@ -1178,7 +1322,7 @@ pub fn ValueViewer(
     let mut new_hash_key = use_signal(String::new);
     let mut new_hash_value = use_signal(String::new);
     let mut deleting_hash_field = use_signal(|| None::<HashDeleteTarget>);
-    let mut deleting_hash_field_exiting = use_signal(|| false);
+    let deleting_hash_field_exiting = use_signal(|| false);
     let mut hash_action = use_signal(|| None::<String>);
 
     let mut list_status_message = use_signal(String::new);
@@ -1209,40 +1353,42 @@ pub fn ValueViewer(
 
     let mut list_page = use_signal(|| 0usize);
     let mut list_total = use_signal(|| 0usize);
-    let mut list_cursor = use_signal(|| 0u64);
-    let mut list_has_more = use_signal(|| false);
-    let mut list_loading_more = use_signal(|| false);
+    let _list_cursor = use_signal(|| 0u64);
+    let list_has_more = use_signal(|| false);
+    let list_loading_more = use_signal(|| false);
     let mut set_page = use_signal(|| 0usize);
     let mut set_total = use_signal(|| 0usize);
-    let mut set_cursor = use_signal(|| 0u64);
-    let mut set_has_more = use_signal(|| false);
-    let mut set_loading_more = use_signal(|| false);
+    let set_cursor = use_signal(|| 0u64);
+    let set_has_more = use_signal(|| false);
+    let set_loading_more = use_signal(|| false);
     let mut zset_page = use_signal(|| 0usize);
     let mut zset_total = use_signal(|| 0usize);
-    let mut zset_cursor = use_signal(|| 0u64);
-    let mut zset_has_more = use_signal(|| false);
-    let mut zset_loading_more = use_signal(|| false);
-    let mut hash_cursor = use_signal(|| 0u64);
-    let mut hash_total = use_signal(|| 0usize);
-    let mut hash_has_more = use_signal(|| false);
-    let mut hash_loading_more = use_signal(|| false);
+    let zset_cursor = use_signal(|| 0u64);
+    let zset_has_more = use_signal(|| false);
+    let zset_loading_more = use_signal(|| false);
+    let hash_cursor = use_signal(|| 0u64);
+    let hash_total = use_signal(|| 0usize);
+    let hash_has_more = use_signal(|| false);
+    let hash_loading_more = use_signal(|| false);
     let mut show_large_key_warning = use_signal(|| false);
     let mut memory_usage = use_signal(|| None::<u64>);
     let mut ttl_input = use_signal(String::new);
     let mut toast_manager = use_context::<Signal<ToastManager>>();
+    let mut ttl_editing = use_signal(|| false);
     let mut ttl_processing = use_signal(|| false);
+    let mut header_menu = use_signal(|| None::<ContextMenuState<()>>);
     let mut delete_key_confirm = use_signal(|| false);
     let mut delete_key_processing = use_signal(|| false);
 
     let mut bitmap_info = use_signal(|| None::<crate::redis::BitmapInfo>);
-    let mut bitmap_editing_offset = use_signal(String::new);
-    let mut bitmap_editing_value = use_signal(String::new);
+    let _bitmap_editing_offset = use_signal(String::new);
+    let _bitmap_editing_value = use_signal(String::new);
 
     let mut stream_status_message = use_signal(String::new);
     let mut stream_status_error = use_signal(|| false);
     let mut stream_search = use_signal(String::new);
     let mut deleting_stream_entry = use_signal(|| None::<String>);
-    let mut deleting_stream_entry_exiting = use_signal(|| false);
+    let deleting_stream_entry_exiting = use_signal(|| false);
 
     let pool = connection_pool.clone();
     let pool_for_edit = connection_pool.clone();
@@ -1302,7 +1448,9 @@ pub fn ValueViewer(
         show_large_key_warning.set(false);
         memory_usage.set(None);
         ttl_input.set(String::new());
+        ttl_editing.set(false);
         ttl_processing.set(false);
+        header_menu.set(None);
         delete_key_confirm.set(false);
         delete_key_processing.set(false);
 
@@ -1374,6 +1522,7 @@ pub fn ValueViewer(
                     .map(|ttl| ttl.to_string())
                     .unwrap_or_else(|| "-1".to_string()),
             );
+            ttl_editing.set(false);
 
             let pool = pool_for_meta.clone();
             spawn(async move {
@@ -1387,6 +1536,7 @@ pub fn ValueViewer(
             });
         } else {
             ttl_input.set(String::new());
+            ttl_editing.set(false);
             memory_usage.set(None);
         }
     });
@@ -1403,15 +1553,8 @@ pub fn ValueViewer(
     let stream_val = stream_value();
     let display_key = selected_key.read().clone();
 
-    let status_message = hash_status_message();
-    let status_color = if hash_status_error() {
-        COLOR_ERROR
-    } else {
-        COLOR_ACCENT
-    };
     let active_hash_action = hash_action();
     let editing_field_name = editing_hash_field();
-    let delete_target = deleting_hash_field();
 
     let sorted_entries = sorted_hash_entries(&hash_val);
     let search_value = hash_search();
@@ -1466,349 +1609,374 @@ pub fn ValueViewer(
 
                         if !display_key.is_empty() {
                             div {
-                                padding: "18px 20px 16px",
+                                padding: "16px 18px 12px",
                                 border_bottom: "1px solid {COLOR_BORDER}",
                                 background: COLOR_BG,
 
-                                div {
-                                display: "flex",
-                                justify_content: "space_between",
-                                align_items: "flex_end",
-                                gap: "16px",
-                                flex_wrap: "wrap",
+                                if let Some(ref info) = info {
+                                    {
+                                        let value_metric = value_metric_label(
+                                            &info.key_type,
+                                            &str_val,
+                                            &hash_val,
+                                            &list_val,
+                                            &set_val,
+                                            &zset_val,
+                                            &stream_val,
+                                        );
+                                        let ttl_badge = format_ttl_label(info.ttl);
+                                        let ttl_reset_value = info
+                                            .ttl
+                                            .map(|ttl| ttl.to_string())
+                                            .unwrap_or_else(|| "-1".to_string());
+                                        let memory_badge = format_memory_usage(memory_usage());
 
-                                div {
-                                    display: "flex",
-                                    flex_direction: "column",
-                                    gap: "6px",
-
-                                    span {
-                                        color: COLOR_PRIMARY,
-                                        font_size: "11px",
-                                        font_weight: "800",
-                                        text_transform: "uppercase",
-                                        letter_spacing: "0.18em",
-
-                                        "值编辑器"
-                                    }
-
-                                    if let Some(ref info) = info {
-                                        div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "10px",
-                                            flex_wrap: "wrap",
-
-                                            span {
-                                                color: COLOR_ACCENT,
-                                                font_size: "15px",
-                                                font_weight: "700",
-                                                font_family: "Consolas, 'Courier New', monospace",
-
-                                                "{display_key}"
-                                            }
-
-                                            button {
-                                                width: "22px",
-                                                height: "22px",
-                                                background: "transparent",
-                                                border: "1px solid {COLOR_BORDER}",
-                                                border_radius: "4px",
-                                                cursor: "pointer",
+                                        rsx! {
+                                            div {
                                                 display: "flex",
-                                                align_items: "center",
-                                                justify_content: "center",
-                                                color: COLOR_TEXT_SECONDARY,
-                                                title: "复制路径",
-                                                onclick: {
-                                                    let key = display_key.clone();
-                                                    move |_| match copy_value_to_clipboard(&key) {
-                                                        Ok(_) => {
-            toast_manager.write().success("Key 路径已复制");
-                                                        }
-                                                        Err(error) => {
-            toast_manager.write().error(&format!("复制失败：{error}"));
+                                                flex_direction: "column",
+                                                gap: "10px",
+
+                                                div {
+                                                    display: "flex",
+                                                    justify_content: "space_between",
+                                                    align_items: "center",
+                                                    gap: "12px",
+
+                                                    div {
+                                                        flex: "1",
+                                                        min_width: "0",
+
+                                                        div {
+                                                            color: COLOR_ACCENT,
+                                                            font_size: "16px",
+                                                            font_weight: "700",
+                                                            font_family: "Consolas, 'Courier New', monospace",
+                                                            white_space: "nowrap",
+                                                            overflow: "hidden",
+                                                            text_overflow: "ellipsis",
+                                                            title: "{display_key}",
+
+                                                            "{display_key}"
                                                         }
                                                     }
-                                                },
 
-                                                IconCopy { size: Some(12) }
-                                            }
+                                                    div {
+                                                        display: "flex",
+                                                        align_items: "center",
+                                                        gap: "6px",
+                                                        flex_shrink: "0",
 
-                                            if delete_key_confirm() {
+                                                        button {
+                                                            width: "28px",
+                                                            height: "28px",
+                                                            background: COLOR_BG_TERTIARY,
+                                                            border: "1px solid {COLOR_BORDER}",
+                                                            border_radius: "6px",
+                                                            cursor: "pointer",
+                                                            display: "flex",
+                                                            align_items: "center",
+                                                            justify_content: "center",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            title: "复制路径",
+                                                            aria_label: "复制路径",
+                                                            onclick: {
+                                                                let key = display_key.clone();
+                                                                move |_| match copy_value_to_clipboard(&key) {
+                                                                    Ok(_) => {
+                                                                        toast_manager.write().success("Key 路径已复制");
+                                                                    }
+                                                                    Err(error) => {
+                                                                        toast_manager.write().error(&format!("复制失败：{error}"));
+                                                                    }
+                                                                }
+                                                            },
+
+                                                            IconCopy { size: Some(14) }
+                                                        }
+
+                                                        button {
+                                                            width: "28px",
+                                                            height: "28px",
+                                                            background: COLOR_BG_TERTIARY,
+                                                            border: "1px solid {COLOR_BORDER}",
+                                                            border_radius: "6px",
+                                                            cursor: "pointer",
+                                                            display: "flex",
+                                                            align_items: "center",
+                                                            justify_content: "center",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            title: "更多操作",
+                                                            aria_label: "更多操作",
+                                                            onclick: move |event| {
+                                                                let coords = event.client_coordinates();
+                                                                header_menu.set(Some(ContextMenuState::new(
+                                                                    (),
+                                                                    coords.x as i32,
+                                                                    coords.y as i32,
+                                                                )));
+                                                            },
+
+                                                            IconMoreHorizontal { size: Some(14) }
+                                                        }
+                                                    }
+                                                }
+
                                                 div {
                                                     display: "flex",
                                                     align_items: "center",
-                                                    gap: "4px",
+                                                    gap: "8px",
+                                                    flex_wrap: "wrap",
 
-                                                    button {
-                                                        padding: "3px 8px",
-                                                        background: COLOR_ERROR,
-                                                        color: COLOR_TEXT_CONTRAST,
-                                                        border: "none",
-                                                        border_radius: "4px",
-                                                        cursor: "pointer",
-                                                        font_size: "11px",
-                                                        disabled: delete_key_processing(),
-                                                        onclick: {
-                                                            let pool = connection_pool.clone();
-                                                            let key = display_key.clone();
-                                                            move |_| {
-                                                                let pool = pool.clone();
-                                                                let key = key.clone();
-                                                                spawn(async move {
-                                                                    delete_key_processing.set(true);
-
-                                                                    match pool.delete_key(&key).await {
-                                                                        Ok(_) => {
-                                                                            delete_key_confirm.set(false);
-                                                                            toast_manager.write().success("Key 已删除");
-                                                                            selected_key.set(String::new());
-                                                                            on_refresh.call(());
-                                                                        }
-                                                                        Err(error) => {
-                                                                            toast_manager.write().error(&format!("删除失败：{error}"));
-                                                                        }
-                                                                    }
-
-                                                                    delete_key_processing.set(false);
-                                                                });
-                                                            }
-                                                        },
-
-                                                        if delete_key_processing() { "..." } else { "确认" }
-                                                    }
-
-                                                    button {
-                                                        padding: "3px 8px",
-                                                        background: COLOR_BG_TERTIARY,
-                                                        color: COLOR_TEXT,
-                                                        border: "1px solid {COLOR_BORDER}",
-                                                        border_radius: "4px",
-                                                        cursor: "pointer",
-                                                        font_size: "11px",
-                                                        onclick: move |_| delete_key_confirm.set(false),
-
-                                                        "取消"
-                                                    }
-                                                }
-                                            } else {
-                                                button {
-                                                    width: "22px",
-                                                    height: "22px",
-                                                    background: "transparent",
-                                                    border: "1px solid rgba(255, 180, 171, 0.30)",
-                                                    border_radius: "4px",
-                                                    cursor: "pointer",
-                                                    display: "flex",
-                                                    align_items: "center",
-                                                    justify_content: "center",
-                                                    color: COLOR_ERROR,
-                                                    title: "删除",
-                                                    onclick: move |_| delete_key_confirm.set(true),
-
-                                                    IconTrash { size: Some(12) }
-                                                }
-                                            }
-
-                                            span {
-                                                padding: "4px 8px",
-                                                border_radius: "999px",
-                                                background: "rgba(255, 180, 166, 0.10)",
-                                                border: "1px solid rgba(255, 180, 166, 0.20)",
-                                                color: COLOR_PRIMARY,
-                                                font_size: "11px",
-                                                font_weight: "700",
-                                                text_transform: "uppercase",
-                                                letter_spacing: "0.12em",
-
-                                                "{info.key_type}"
-                                            }
-
-                                            {
-                                                let memory_badge = format_memory_usage(memory_usage());
-
-                                                rsx! {
                                                     span {
-                                                        padding: "4px 8px",
-                                                        border_radius: "6px",
+                                                        padding: "0 10px",
+                                                        height: "22px",
+                                                        border_radius: "999px",
                                                         background: COLOR_BG_TERTIARY,
+                                                        border: "1px solid {COLOR_BORDER}",
+                                                        color: COLOR_PRIMARY,
+                                                        font_size: "11px",
+                                                        font_weight: "700",
+                                                        display: "inline-flex",
+                                                        align_items: "center",
+                                                        text_transform: "uppercase",
+                                                        letter_spacing: "0.08em",
+
+                                                        "{info.key_type}"
+                                                    }
+
+                                                    span {
+                                                        padding: "0 10px",
+                                                        height: "22px",
+                                                        border_radius: "999px",
+                                                        background: COLOR_BG_TERTIARY,
+                                                        border: "1px solid {COLOR_BORDER}",
                                                         color: COLOR_TEXT_SECONDARY,
                                                         font_size: "11px",
+                                                        display: "inline-flex",
+                                                        align_items: "center",
 
-                                                        "内存: {memory_badge}"
+                                                        "{value_metric}"
+                                                    }
+
+                                                    span {
+                                                        padding: "0 10px",
+                                                        height: "22px",
+                                                        border_radius: "999px",
+                                                        background: COLOR_BG_TERTIARY,
+                                                        border: "1px solid {COLOR_BORDER}",
+                                                        color: COLOR_TEXT_SECONDARY,
+                                                        font_size: "11px",
+                                                        display: "inline-flex",
+                                                        align_items: "center",
+
+                                                        "内存 {memory_badge}"
+                                                    }
+
+                                                    if ttl_editing() {
+                                                        div {
+                                                            display: "flex",
+                                                            align_items: "center",
+                                                            gap: "6px",
+
+                                                            input {
+                                                                width: "80px",
+                                                                min_width: "80px",
+                                                                height: "26px",
+                                                                box_sizing: "border-box",
+                                                                padding: "0 8px",
+                                                                background: COLOR_BG_TERTIARY,
+                                                                border: "1px solid {COLOR_BORDER}",
+                                                                border_radius: "6px",
+                                                                color: COLOR_TEXT,
+                                                                font_size: "11px",
+                                                                font_family: "Consolas, 'Courier New', monospace",
+                                                                text_align: "center",
+                                                                r#type: "text",
+                                                                value: "{ttl_input}",
+                                                                placeholder: "秒",
+                                                                oninput: move |event| ttl_input.set(event.value()),
+                                                            }
+
+                                                            button {
+                                                                width: "26px",
+                                                                height: "26px",
+                                                                background: COLOR_PRIMARY,
+                                                                color: COLOR_TEXT_CONTRAST,
+                                                                border: "none",
+                                                                border_radius: "6px",
+                                                                cursor: "pointer",
+                                                                font_size: "11px",
+                                                                disabled: ttl_processing(),
+                                                                title: "应用 TTL",
+                                                                onclick: {
+                                                                    let pool = connection_pool.clone();
+                                                                    let key = display_key.clone();
+                                                                    move |_| {
+                                                                        let ttl_text = ttl_input().trim().to_string();
+                                                                        if ttl_text.is_empty() {
+                                                                            toast_manager.write().error("请输入 TTL");
+                                                                            return;
+                                                                        }
+
+                                                                        let ttl = match ttl_text.parse::<i64>() {
+                                                                            Ok(ttl) if ttl > 0 || ttl == -1 => ttl,
+                                                                            _ => {
+                                                                                toast_manager.write().error("TTL 必须大于 0 或 -1 表示永久");
+                                                                                return;
+                                                                            }
+                                                                        };
+
+                                                                        let pool = pool.clone();
+                                                                        let key = key.clone();
+                                                                        spawn(async move {
+                                                                            ttl_processing.set(true);
+
+                                                                            if ttl == -1 {
+                                                                                match pool.remove_ttl(&key).await {
+                                                                                    Ok(_) => {
+                                                                                        toast_manager.write().success("已设为永久");
+                                                                                        ttl_editing.set(false);
+                                                                                        if let Err(error) = load_key_data(
+                                                                                            pool.clone(),
+                                                                                            key.clone(),
+                                                                                            key_info,
+                                                                                            string_value,
+                                                                                            hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
+                                                                                            stream_value,
+                                                                                            is_binary,
+                                                                                            binary_format,
+                                                                                            serialization_data,
+                                                                                            binary_bytes,
+                                                                                            bitmap_info,
+                                                                                            loading,
+                                                                                            hash_cursor,
+                                                                                            hash_total,
+                                                                                            hash_has_more,
+                                                                                            list_has_more,
+                                                                                            list_total,
+                                                                                            set_cursor,
+                                                                                            set_total,
+                                                                                            set_has_more,
+                                                                                            zset_cursor,
+                                                                                            zset_total,
+                                                                                            zset_has_more,
+                                                                                        ).await {
+                                                                                            tracing::error!("{error}");
+                                                                                        } else {
+                                                                                            on_refresh.call(());
+                                                                                        }
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        toast_manager.write().error(&format!("设置失败：{error}"));
+                                                                                    }
+                                                                                }
+                                                                            } else {
+                                                                                match pool.set_ttl(&key, ttl).await {
+                                                                                    Ok(_) => {
+                                                                                        toast_manager.write().success("TTL 已更新");
+                                                                                        ttl_editing.set(false);
+                                                                                        if let Err(error) = load_key_data(
+                                                                                            pool.clone(),
+                                                                                            key.clone(),
+                                                                                            key_info,
+                                                                                            string_value,
+                                                                                            hash_value,
+                                                                                            list_value,
+                                                                                            set_value,
+                                                                                            zset_value,
+                                                                                            stream_value,
+                                                                                            is_binary,
+                                                                                            binary_format,
+                                                                                            serialization_data,
+                                                                                            binary_bytes,
+                                                                                            bitmap_info,
+                                                                                            loading,
+                                                                                            hash_cursor,
+                                                                                            hash_total,
+                                                                                            hash_has_more,
+                                                                                            list_has_more,
+                                                                                            list_total,
+                                                                                            set_cursor,
+                                                                                            set_total,
+                                                                                            set_has_more,
+                                                                                            zset_cursor,
+                                                                                            zset_total,
+                                                                                            zset_has_more,
+                                                                                        ).await {
+                                                                                            tracing::error!("{error}");
+                                                                                        } else {
+                                                                                            on_refresh.call(());
+                                                                                        }
+                                                                                    }
+                                                                                    Err(error) => {
+                                                                                        toast_manager.write().error(&format!("TTL 更新失败：{error}"));
+                                                                                    }
+                                                                                }
+                                                                            }
+
+                                                                            ttl_processing.set(false);
+                                                                        });
+                                                                    }
+                                                                },
+
+                                                                if ttl_processing() { "…" } else { "✓" }
+                                                            }
+
+                                                            button {
+                                                                width: "26px",
+                                                                height: "26px",
+                                                                background: COLOR_BG_TERTIARY,
+                                                                color: COLOR_TEXT_SECONDARY,
+                                                                border: "1px solid {COLOR_BORDER}",
+                                                                border_radius: "6px",
+                                                                cursor: "pointer",
+                                                                font_size: "11px",
+                                                                title: "取消 TTL 编辑",
+                                                                onclick: {
+                                                                    let ttl_reset_value = ttl_reset_value.clone();
+                                                                    move |_| {
+                                                                        ttl_input.set(ttl_reset_value.clone());
+                                                                        ttl_editing.set(false);
+                                                                    }
+                                                                },
+
+                                                                "×"
+                                                            }
+                                                        }
+                                                    } else {
+                                                        button {
+                                                            padding: "0 10px",
+                                                            height: "22px",
+                                                            background: COLOR_BG_TERTIARY,
+                                                            border: "1px solid {COLOR_BORDER}",
+                                                            border_radius: "999px",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            cursor: "pointer",
+                                                            font_size: "11px",
+                                                            display: "inline-flex",
+                                                            align_items: "center",
+                                                            onclick: move |_| ttl_editing.set(true),
+
+                                                            "TTL {ttl_badge}"
+                                                        }
                                                     }
                                                 }
                                             }
-
-                                            div {
-                                                display: "flex",
-                                                align_items: "center",
-                                                gap: "4px",
-
-                                                span {
-                                                    color: COLOR_TEXT_SECONDARY,
-                                                    font_size: "11px",
-
-                                                    "TTL:"
-                                                }
-
-                                                input {
-                                                    width: "72px",
-                                                    min_width: "72px",
-                                                    max_width: "72px",
-                                                    box_sizing: "border-box",
-                                                    flex_shrink: "0",
-                                                    padding: "2px 6px",
-                                                    background: COLOR_BG_TERTIARY,
-                                                    border: "1px solid {COLOR_BORDER}",
-                                                    border_radius: "4px",
-                                                    color: COLOR_TEXT,
-                                                    font_size: "11px",
-                                                    font_family: "Consolas, 'Courier New', monospace",
-                                                    text_align: "center",
-                                                    r#type: "text",
-                                                    value: "{ttl_input}",
-                                                    placeholder: "秒",
-                                                    oninput: move |event| ttl_input.set(event.value()),
-                                                }
-
-                                                button {
-                                                    padding: "2px 6px",
-                                                    background: COLOR_PRIMARY,
-                                                    color: COLOR_TEXT_CONTRAST,
-                                                    border: "none",
-                                                    border_radius: "4px",
-                                                    cursor: "pointer",
-                                                    font_size: "10px",
-                                                    disabled: ttl_processing(),
-                                                    onclick: {
-                                                        let pool = connection_pool.clone();
-                                                        let key = display_key.clone();
-                                                        move |_| {
-                                                            let ttl_text = ttl_input().trim().to_string();
-                                                            if ttl_text.is_empty() {
-                                                                toast_manager.write().error("请输入 TTL");
-                                                                return;
-                                                            }
-
-                                                            let ttl = match ttl_text.parse::<i64>() {
-                                                                Ok(ttl) if ttl > 0 || ttl == -1 => ttl,
-                                                                _ => {
-                                                                    toast_manager.write().error("TTL 必须大于 0 或 -1 表示永久");
-                                                                    return;
-                                                                }
-                                                            };
-
-                                                            let pool = pool.clone();
-                                                            let key = key.clone();
-                                                            spawn(async move {
-                                                                ttl_processing.set(true);
-
-                                                                if ttl == -1 {
-                                                                    match pool.remove_ttl(&key).await {
-                                                                        Ok(_) => {
-                                                                            toast_manager.write().success("已设为永久");
-                                                                            if let Err(error) = load_key_data(
-                                                                                pool.clone(),
-                                                                                key.clone(),
-                                                                                key_info,
-                                                                                string_value,
-                                                                                hash_value,
-                                                                                list_value,
-                                                                                set_value,
-                                                                                zset_value,
-                                                                                stream_value,
-                                                                                is_binary,
-                                                                                binary_format,
-                                                                                serialization_data,
-                    binary_bytes,
-                                                                                bitmap_info,
-                                                                                loading,
-                                                                                hash_cursor,
-                                                                                hash_total,
-                                                                                hash_has_more,
-                                                                                list_has_more,
-                                                                                list_total,
-                                                                                set_cursor,
-                                                                                set_total,
-                                                                                set_has_more,
-                                                                                zset_cursor,
-                                                                                zset_total,
-                                                                                zset_has_more,
-                                                                            ).await {
-                                                                                tracing::error!("{error}");
-                                                                            } else {
-                                                                                on_refresh.call(());
-                                                                            }
-                                                                        }
-                                                                        Err(error) => {
-                                                                            toast_manager.write().error(&format!("设置失败：{error}"));
-                                                                        }
-                                                                    }
-                                                                } else {
-                                                                    match pool.set_ttl(&key, ttl).await {
-                                                                        Ok(_) => {
-                                                                            toast_manager.write().success("TTL 已更新");
-                                                                            if let Err(error) = load_key_data(
-                                                                                pool.clone(),
-                                                                                key.clone(),
-                                                                                key_info,
-                                                                                string_value,
-                                                                                hash_value,
-                                                                                list_value,
-                                                                                set_value,
-                                                                                zset_value,
-                                                                                stream_value,
-                                                                                is_binary,
-                                                                                binary_format,
-                                                                                serialization_data,
-                    binary_bytes,
-                                                                                bitmap_info,
-                                                                                loading,
-                                                                                hash_cursor,
-                                                                                hash_total,
-                                                                                hash_has_more,
-                                                                                list_has_more,
-                                                                                list_total,
-                                                                                set_cursor,
-                                                                                set_total,
-                                                                                set_has_more,
-                                                                                zset_cursor,
-                                                                                zset_total,
-                                                                                zset_has_more,
-                                                                            ).await {
-                                                                                tracing::error!("{error}");
-                                                                            } else {
-                                                                                on_refresh.call(());
-                                                                            }
-                                                                        }
-                                                                        Err(error) => {
-                                                                            toast_manager.write().error(&format!("TTL 更新失败：{error}"));
-                                                                        }
-                                                                    }
-                                                                }
-
-                                                                ttl_processing.set(false);
-                                                            });
-                                                        }
-                                                    },
-
-                                                    if ttl_processing() { "..." } else { "✓" }
-                                                }
-                                            }
                                         }
-                                    } else {
-                                        span {
-                                            color: COLOR_TEXT_SECONDARY,
-                                            font_size: "13px",
+                                    }
+                                } else {
+                                    span {
+                                        color: COLOR_TEXT_SECONDARY,
+                                        font_size: "13px",
 
-                                            "选择一个 Key 以查看和编辑详情"
-                                        }
+                                        "选择一个 Key 以查看和编辑详情"
                                     }
                                 }
                             }
-                        }
                         }
 
                         div {
@@ -1838,18 +2006,6 @@ pub fn ValueViewer(
                                 }
                             } else if let Some(info) = info.clone() {
                                 {
-                                    let value_metric = value_metric_label(
-                                        &info.key_type,
-                                        &str_val,
-                                        &hash_val,
-                                        &list_val,
-                                        &set_val,
-                                        &zset_val,
-                                        &stream_val,
-                                    );
-                                    let ttl_badge = format_ttl_label(info.ttl);
-                                    let memory_badge = format_memory_usage(memory_usage());
-
                                     rsx! {
                                     div {
                                         height: "100%",
@@ -2110,16 +2266,7 @@ pub fn ValueViewer(
                                                                 }
 
                                                                 button {
-                                                                    padding: "4px 10px",
-                                                                    background: "rgba(47, 133, 90, 0.16)",
-                                                                    color: COLOR_SUCCESS,
-                                                                    border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                    border_radius: "6px",
-                                                                    cursor: "pointer",
-                                                                    font_size: "12px",
-                                                                    display: "flex",
-                                                                    align_items: "center",
-                                                                    gap: "4px",
+                                                                    style: "{secondary_action_button_style()}",
                                                                     title: "复制",
                                                                     onclick: move |_| {
                                                                         let current_format = binary_format();
@@ -2625,18 +2772,10 @@ pub fn ValueViewer(
                                                     min_height: "0",
 
                                                     div {
-                                                        display: "flex",
-                                                        justify_content: "space_between",
-                                                        align_items: "center",
-                                                        gap: "12px",
-                                                        flex_wrap: "wrap",
-                                                        margin_bottom: "12px",
+                                                        style: "{data_section_toolbar_style()}",
 
                                                         div {
-                                                            display: "flex",
-                                                            gap: "8px",
-                                                            align_items: "center",
-                                                            flex_wrap: "wrap",
+                                                            style: "{data_section_controls_style()}",
 
                                                             input {
                                                                 width: "280px",
@@ -2732,12 +2871,7 @@ pub fn ValueViewer(
                                                             }
 
                                                             button {
-                                                                padding: "8px 12px",
-                                                                background: "#0e639c",
-                                                                color: COLOR_TEXT_CONTRAST,
-                                                                border: "none",
-                                                                border_radius: "6px",
-                                                                cursor: "pointer",
+                                                                style: "{primary_action_button_style(active_hash_action.is_some())}",
                                                                 disabled: active_hash_action.is_some(),
                                                                 onclick: move |_| {
                                                                     creating_hash_row.set(true);
@@ -2754,8 +2888,7 @@ pub fn ValueViewer(
                                                             }
 
                                                             div {
-                                                                color: COLOR_TEXT_SECONDARY,
-                                                                font_size: "13px",
+                                                                style: "{data_section_count_style()}",
 
                                                                 "Hash Fields ({hash_val.len()}/{hash_total()})"
                                                             }
@@ -2764,15 +2897,7 @@ pub fn ValueViewer(
                                                         button {
                                                             margin_left: "auto",
                                                             flex_shrink: "0",
-                                                            padding: "6px 10px",
-                                                            background: "rgba(47, 133, 90, 0.16)",
-                                                            color: COLOR_SUCCESS,
-                                                            border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                            border_radius: "6px",
-                                                            cursor: "pointer",
-                                                            display: "flex",
-                                                            align_items: "center",
-                                                            gap: "4px",
+                                                            style: "{secondary_action_button_style()}",
                                                             title: "复制",
                                                             onclick: {
                                                                 let hash = hash_val.clone();
@@ -2793,6 +2918,22 @@ pub fn ValueViewer(
                                                             "复制"
                                                         }
                                                     }
+
+                                                if !hash_status_message.read().is_empty() {
+                                                    div {
+                                                        style: "{status_banner_style(hash_status_error())}",
+
+                                                        "{hash_status_message}"
+                                                    }
+                                                }
+
+                                                if hash_total().max(hash_val.len()) > LARGE_KEY_THRESHOLD {
+                                                    LargeKeyWarning {
+                                                        key_type: "Hash".to_string(),
+                                                        size: hash_total().max(hash_val.len()),
+                                                        threshold: LARGE_KEY_THRESHOLD,
+                                                    }
+                                                }
 
                                                 div {
                                                     flex: "1",
@@ -2816,7 +2957,6 @@ pub fn ValueViewer(
                                                                 let pool = pool.clone();
                                                                 let key = key.clone();
                                                                 let cursor = hash_cursor();
-                                                                let total = hash_total();
                                                                 spawn(async move {
                                                                     load_more_hash(
                                                                         pool,
@@ -2839,51 +2979,28 @@ pub fn ValueViewer(
 
                                                         thead {
                                                             tr {
-                                                                background: COLOR_BG_TERTIARY,
-                                                                border_bottom: "1px solid {COLOR_BORDER}",
-                                                                position: "sticky",
-                                                                top: "0",
-                                                                z_index: "1",
+                                                                style: "{data_table_header_row_style()}",
 
                                                                 th {
-                                                                    width: "72px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(Some(\"72px\"), \"left\")}",
 
                                                                     "ID"
                                                                 }
 
                                                                 th {
-                                                                    width: "32%",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(Some(\"32%\"), \"left\")}",
 
                                                                     "key"
                                                                 }
 
                                                                 th {
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(None, \"left\")}",
 
                                                                     "value"
                                                                 }
 
                                                                 th {
-                                                                    width: "156px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(Some(\"156px\"), \"left\")}",
 
                                                                     "action"
                                                                 }
@@ -2952,12 +3069,7 @@ pub fn ValueViewer(
                                                                             flex_wrap: "wrap",
 
                                                                             button {
-                                                                                padding: "6px 10px",
-                                                                                background: "#38a169",
-                                                                                color: COLOR_TEXT_CONTRAST,
-                                                                                border: "none",
-                                                                                border_radius: "6px",
-                                                                                cursor: "pointer",
+                                                                                style: "{primary_action_button_style(active_hash_action.is_some())}",
                                                                                 disabled: active_hash_action.is_some(),
                                                                                 onclick: {
                                                                                     let pool = connection_pool.clone();
@@ -3127,12 +3239,7 @@ pub fn ValueViewer(
                                                                                 flex_wrap: "wrap",
 
                                                                                 button {
-                                                                                    padding: "6px 10px",
-                                                                                    background: "#38a169",
-                                                                                    color: COLOR_TEXT_CONTRAST,
-                                                                                    border: "none",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
+                                                                                    style: "{primary_action_button_style(active_hash_action.is_some())}",
                                                                                     disabled: active_hash_action.is_some(),
                                                                                     onclick: {
                                                                                         let pool = connection_pool.clone();
@@ -3304,16 +3411,7 @@ pub fn ValueViewer(
                                                                                 flex_wrap: "nowrap",
 
                                                                                 button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(47, 133, 90, 0.16)",
-                                                                                    color: "#68d391",
-                                                                                    border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
+                                                                                    style: "{compact_icon_action_button_style(false, active_hash_action.is_some())}",
                                                                                     disabled: active_hash_action.is_some(),
                                                                                     title: "复制值",
                                                                                     aria_label: "复制值",
@@ -3336,16 +3434,7 @@ pub fn ValueViewer(
                                                                                 }
 
                                                                                 button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(49, 130, 206, 0.18)",
-                                                                                    color: "#63b3ed",
-                                                                                    border: "1px solid rgba(99, 179, 237, 0.30)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
+                                                                                    style: "{compact_icon_action_button_style(false, active_hash_action.is_some())}",
                                                                                     disabled: active_hash_action.is_some(),
                                                                                     title: "编辑 key-value",
                                                                                     aria_label: "编辑 key-value",
@@ -3368,16 +3457,7 @@ pub fn ValueViewer(
                                                                                 }
 
                                                                                 button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(197, 48, 48, 0.18)",
-                                                                                    color: "#f87171",
-                                                                                    border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
+                                                                                    style: "{compact_icon_action_button_style(true, active_hash_action.is_some())}",
                                                                                     disabled: active_hash_action.is_some(),
                                                                                     onclick: {
                                                                                         let field = field.clone();
@@ -3418,80 +3498,35 @@ pub fn ValueViewer(
 
                                                 if let Some(target) = deleting_hash_field() {
                                                     div {
-                                                        position: "fixed",
-                                                        top: "0",
-                                                        left: "0",
-                                                        right: "0",
-                                                        bottom: "0",
-                                                        background: "rgba(0, 0, 0, 0.7)",
-                                                        display: "flex",
-                                                        align_items: "center",
-                                                        justify_content: "center",
-                                                        z_index: "1000",
-                                                        animation: if deleting_hash_field_exiting() { "backdropFadeOut 0.2s ease-out forwards" } else { "backdropFadeIn 0.2s ease-out" },
+                                                        style: "{overlay_modal_backdrop_style(deleting_hash_field_exiting())}",
 
                                                         style {
-                                                            r#"
-                                                        @keyframes backdropFadeIn {{
-                                                            from {{ opacity: 0; }}
-                                                            to {{ opacity: 1; }}
-                                                        }}
-                                                        @keyframes backdropFadeOut {{
-                                                            from {{ opacity: 1; }}
-                                                            to {{ opacity: 0; }}
-                                                        }}
-                                                        @keyframes modalFadeIn {{
-                                                            from {{ opacity: 0; transform: scale(0.9); }}
-                                                            to {{ opacity: 1; transform: scale(1); }}
-                                                        }}
-                                                        @keyframes modalFadeOut {{
-                                                            from {{ opacity: 1; transform: scale(1); }}
-                                                            to {{ opacity: 0; transform: scale(0.9); }}
-                                                        }}
-                                                        "#
+                                                            "{overlay_modal_keyframes()}"
                                                         }
 
                                                         div {
-                                                            width: "420px",
-                                                            max_width: "calc(100vw - 32px)",
-                                                            background: COLOR_BG_SECONDARY,
-                                                            border: "1px solid {COLOR_BORDER}",
-                                                            border_radius: "10px",
-                                                            padding: "20px",
-                                                            animation: if deleting_hash_field_exiting() { "modalFadeOut 0.2s ease-out forwards" } else { "modalFadeIn 0.2s ease-out" },
+                                                            style: "{overlay_modal_surface_style(\"420px\", deleting_hash_field_exiting())}",
 
                                                             h3 {
-                                                                color: COLOR_TEXT,
-                                                                margin: "0 0 12px 0",
-                                                                font_size: "18px",
+                                                                style: "{overlay_modal_title_style()}",
 
                                                                 "确认删除"
                                                             }
 
                                                             p {
-                                                                color: COLOR_TEXT_SOFT,
-                                                                margin: "0 0 18px 0",
-                                                                line_height: "1.6",
-                                                                word_break: "break-all",
+                                                                style: "{overlay_modal_body_style()}",
 
                                                                 "确定删除 hash field '{target.field}' 吗？"
                                                             }
 
                                                             div {
-                                                                display: "flex",
-                                                                justify_content: "flex_end",
-                                                                gap: "8px",
+                                                                style: "{overlay_modal_actions_style()}",
 
                                                                 button {
-                                                                    padding: "8px 12px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    color: COLOR_TEXT,
-                                                                    border: "none",
-                                                                    border_radius: "6px",
-                                                                    cursor: "pointer",
+                                                                    style: "{secondary_action_button_style()}",
                                                                     disabled: active_hash_action.is_some(),
                                                                     onclick: {
-                                                                        let mut deleting_hash_field = deleting_hash_field.clone();
+                                                                        let deleting_hash_field = deleting_hash_field.clone();
                                                                         let mut deleting_hash_field_exiting = deleting_hash_field_exiting.clone();
                                                                         move |_| {
                                                                             deleting_hash_field_exiting.set(true);
@@ -3509,19 +3544,14 @@ pub fn ValueViewer(
                                                                 }
 
                                                                 button {
-                                                                    padding: "8px 12px",
-                                                                    background: "#c53030",
-                                                                    color: COLOR_TEXT_CONTRAST,
-                                                                    border: "none",
-                                                                    border_radius: "6px",
-                                                                    cursor: "pointer",
+                                                                    style: "{destructive_action_button_style(active_hash_action.is_some())}",
                                                                     disabled: active_hash_action.is_some(),
                                                                     onclick: {
                                                                         let pool = connection_pool.clone();
                                                                         let key = display_key.clone();
                                                                         let field = target.field.clone();
                                                                         let delete_action = format!("delete:{}", target.field);
-                                                                        let mut deleting_hash_field = deleting_hash_field.clone();
+                                                                        let deleting_hash_field = deleting_hash_field.clone();
                                                                         let mut deleting_hash_field_exiting = deleting_hash_field_exiting.clone();
                                                                         move |_| {
                                                                             let pool = pool.clone();
@@ -3641,18 +3671,10 @@ pub fn ValueViewer(
                                                     min_height: "0",
 
                                                     div {
-                                                        display: "flex",
-                                                        justify_content: "space_between",
-                                                        align_items: "center",
-                                                        gap: "12px",
-                                                        flex_wrap: "wrap",
-                                                        margin_bottom: "12px",
+                                                        style: "{data_section_toolbar_style()}",
 
                                                         div {
-                                                            display: "flex",
-                                                            gap: "8px",
-                                                            align_items: "center",
-                                                            flex_wrap: "wrap",
+                                                            style: "{data_section_controls_style()}",
 
                                                             input {
                                                                 width: "300px",
@@ -3668,12 +3690,7 @@ pub fn ValueViewer(
                                                             }
 
                                                             button {
-                                                                padding: "8px 12px",
-                                                                background: "#38a169",
-                                                                color: COLOR_TEXT_CONTRAST,
-                                                                border: "none",
-                                                                border_radius: "6px",
-                                                                cursor: "pointer",
+                                                                style: "{primary_action_button_style(list_action().is_some())}",
                                                                 disabled: list_action().is_some(),
                                                                 onclick: {
                                                                     let pool = connection_pool.clone();
@@ -3745,12 +3762,7 @@ pub fn ValueViewer(
                                                             }
 
                                                             button {
-                                                                padding: "8px 12px",
-                                                                background: "#0e639c",
-                                                                color: COLOR_TEXT_CONTRAST,
-                                                                border: "none",
-                                                                border_radius: "6px",
-                                                                cursor: "pointer",
+                                                                style: "{primary_action_button_style(list_action().is_some())}",
                                                                 disabled: list_action().is_some(),
                                                                 onclick: {
                                                                     let pool = connection_pool.clone();
@@ -3819,8 +3831,7 @@ pub fn ValueViewer(
                                                             }
 
                                                             div {
-                                                                color: COLOR_TEXT_SECONDARY,
-                                                                font_size: "13px",
+                                                                style: "{data_section_count_style()}",
 
                                                                 "List Items ({list_val.len()}/{list_total()})"
                                                             }
@@ -3828,15 +3839,7 @@ pub fn ValueViewer(
 
                                                         button {
                                                             flex_shrink: "0",
-                                                            padding: "6px 10px",
-                                                            background: "rgba(47, 133, 90, 0.16)",
-                                                            color: COLOR_SUCCESS,
-                                                            border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                            border_radius: "6px",
-                                                            cursor: "pointer",
-                                                            display: "flex",
-                                                            align_items: "center",
-                                                            gap: "4px",
+                                                            style: "{secondary_action_button_style()}",
                                                             title: "复制",
                                                             onclick: {
                                                                 let list = list_val.clone();
@@ -3860,12 +3863,7 @@ pub fn ValueViewer(
 
                                                 if !list_status_message.read().is_empty() {
                                                     div {
-                                                        margin_bottom: "12px",
-                                                        padding: "8px 12px",
-                                                        background: if list_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
-                                                        border_radius: "6px",
-                                                        color: if list_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
-                                                        font_size: "13px",
+                                                        style: "{status_banner_style(list_status_error())}",
 
                                                         "{list_status_message}"
                                                     }
@@ -3921,40 +3919,22 @@ pub fn ValueViewer(
 
                                                         thead {
                                                             tr {
-                                                                background: COLOR_BG_TERTIARY,
-                                                                border_bottom: "1px solid {COLOR_BORDER}",
-                                                                position: "sticky",
-                                                                top: "0",
-                                                                z_index: "1",
+                                                                style: "{data_table_header_row_style()}",
 
                                                                 th {
-                                                                    width: "72px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(Some(\"72px\"), \"left\")}",
 
                                                                     "Index"
                                                                 }
 
                                                                 th {
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(None, \"left\")}",
 
                                                                     "Value"
                                                                 }
 
                                                                 th {
-                                                                    width: "156px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(Some(\"156px\"), \"left\")}",
 
                                                                     "Action"
                                                                 }
@@ -4010,12 +3990,7 @@ pub fn ValueViewer(
                                                                                     gap: "8px",
 
                                                                                     button {
-                                                                                        padding: "6px 10px",
-                                                                                        background: "#38a169",
-                                                                                        color: COLOR_TEXT_CONTRAST,
-                                                                                        border: "none",
-                                                                                        border_radius: "6px",
-                                                                                        cursor: "pointer",
+                                                                                        style: "{primary_action_button_style(list_action().is_some())}",
                                                                                         disabled: list_action().is_some(),
                                                                                         onclick: {
                                                                                             let pool = connection_pool.clone();
@@ -4125,16 +4100,7 @@ pub fn ValueViewer(
                                                                                     gap: "6px",
 
                                                                                     button {
-                                                                                        width: "32px",
-                                                                                        height: "32px",
-                                                                                        display: "flex",
-                                                                                        align_items: "center",
-                                                                                        justify_content: "center",
-                                                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                                                        color: "#68d391",
-                                                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                                        border_radius: "6px",
-                                                                                        cursor: "pointer",
+                                                                                        style: "{compact_icon_action_button_style(false, false)}",
                                                                                         title: "复制",
                                                                                         onclick: {
                                                                                             let value = value.clone();
@@ -4154,16 +4120,7 @@ pub fn ValueViewer(
                                                                                     }
 
                                                                                     button {
-                                                                                        width: "32px",
-                                                                                        height: "32px",
-                                                                                        display: "flex",
-                                                                                        align_items: "center",
-                                                                                        justify_content: "center",
-                                                                                        background: "rgba(49, 130, 206, 0.18)",
-                                                                                        color: "#63b3ed",
-                                                                                        border: "1px solid rgba(99, 179, 237, 0.30)",
-                                                                                        border_radius: "6px",
-                                                                                        cursor: "pointer",
+                                                                                        style: "{compact_icon_action_button_style(false, false)}",
                                                                                         title: "编辑",
                                                                                         onclick: {
                                                                                             let value = value.clone();
@@ -4177,16 +4134,7 @@ pub fn ValueViewer(
                                                                                     }
 
                                                                                     button {
-                                                                                        width: "32px",
-                                                                                        height: "32px",
-                                                                                        display: "flex",
-                                                                                        align_items: "center",
-                                                                                        justify_content: "center",
-                                                                                        background: "rgba(197, 48, 48, 0.18)",
-                                                                                        color: "#f87171",
-                                                                                        border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                                        border_radius: "6px",
-                                                                                        cursor: "pointer",
+                                                                                        style: "{compact_icon_action_button_style(true, false)}",
                                                                                         title: "删除",
                                                                                         onclick: {
                                                                                             let pool = connection_pool.clone();
@@ -4267,155 +4215,37 @@ pub fn ValueViewer(
                                                     height: "100%",
                                                     min_height: "0",
 
-                                                    display: "flex",
-                                                    justify_content: "space_between",
-                                                    align_items: "center",
-                                                    gap: "12px",
-                                                    margin_bottom: "12px",
-
                                                     div {
-                                                        display: "flex",
-                                                        gap: "8px",
-                                                        align_items: "center",
+                                                        style: "{data_section_toolbar_style()}",
 
-                                                        input {
-                                                            width: "200px",
-                                                            padding: "8px 10px",
-                                                            background: COLOR_BG_TERTIARY,
-                                                            border: "1px solid {COLOR_BORDER}",
-                                                            border_radius: "6px",
-                                                            color: COLOR_TEXT,
-                                                            value: "{set_search}",
-                                                            placeholder: "搜索成员",
-                                                            oninput: {
-                                                                let pool = connection_pool.clone();
-                                                                let key = display_key.clone();
-                                                                move |event| {
-                                                                    let value = event.value();
-                                                                    let was_empty = set_search().is_empty();
-                                                                    set_search.set(value.clone());
+                                                        div {
+                                                            style: "{data_section_controls_style()}",
 
-                                                                    if value.is_empty() && !was_empty {
-                                                                        let pool = pool.clone();
-                                                                        let key = key.clone();
-                                                                        spawn(async move {
-                                                                            if let Err(e) = load_key_data(
-                                                                                pool,
-                                                                                key,
-                                                                                key_info,
-                                                                                string_value,
-                                                                                hash_value,
-                                                                                list_value,
-                                                                                set_value,
-                                                                                zset_value,
-                                                                                stream_value,
-                                                                                is_binary,
-                                                                                binary_format,
-                                                                                serialization_data,
-                    binary_bytes,
-                                                                                bitmap_info,
-                                                                                loading,
-                                                                                hash_cursor,
-                                                                                hash_total,
-                                                                                hash_has_more,
-                                                                                list_has_more,
-                                                                                list_total,
-                                                                                set_cursor,
-                                                                                set_total,
-                                                                                set_has_more,
-                                                                                zset_cursor,
-                                                                                zset_total,
-                                                                                zset_has_more,
-                                                                            ).await {
-                                                                                tracing::error!("重新加载 set 数据失败: {}", e);
-                                                                            }
-                                                                        });
-                                                                    }
-                                                                }
-                                                            },
-                                                        }
-
-                                                        if set_total() > PAGE_SIZE {
-                                                            button {
-                                                                padding: "6px 10px",
-                                                                background: if set_search().len() >= 2 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
-                                                                color: if set_search().len() >= 2 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT_SECONDARY },
+                                                            input {
+                                                                width: "220px",
+                                                                max_width: "100%",
+                                                                padding: "8px 10px",
+                                                                background: COLOR_BG_TERTIARY,
                                                                 border: "1px solid {COLOR_BORDER}",
                                                                 border_radius: "6px",
-                                                                cursor: if set_search().len() >= 2 { "pointer" } else { "not-allowed" },
-                                                                font_size: "12px",
-                                                                disabled: set_search().len() < 2 || set_loading_more(),
-                                                                onclick: {
+                                                                color: COLOR_TEXT,
+                                                                value: "{set_search}",
+                                                                placeholder: "搜索成员",
+                                                                oninput: {
                                                                     let pool = connection_pool.clone();
                                                                     let key = display_key.clone();
-                                                                    move |_| {
-                                                                        let pool = pool.clone();
-                                                                        let key = key.clone();
-                                                                        let pattern = set_search();
-                                                                        spawn(async move {
-                                                                            search_set_server(
-                                                                                pool,
-                                                                                key,
-                                                                                pattern,
-                                                                                set_value,
-                                                                                set_cursor,
-                                                                                set_has_more,
-                                                                                set_loading_more,
-                                                                            ).await;
-                                                                        });
-                                                                    }
-                                                                },
+                                                                    move |event| {
+                                                                        let value = event.value();
+                                                                        let was_empty = set_search().is_empty();
+                                                                        set_search.set(value.clone());
 
-                                                                if set_loading_more() { "搜索中..." } else { "服务端搜索" }
-                                                            }
-                                                        }
-
-                                                        input {
-                                                            width: "200px",
-                                                            padding: "8px 10px",
-                                                            background: COLOR_BG_TERTIARY,
-                                                            border: "1px solid {COLOR_BORDER}",
-                                                            border_radius: "6px",
-                                                            color: COLOR_TEXT,
-                                                            value: "{new_set_member}",
-                                                            placeholder: "输入新成员",
-                                                            oninput: move |event| new_set_member.set(event.value()),
-                                                        }
-
-                                                        button {
-                                                            padding: "8px 12px",
-                                                            background: "#38a169",
-                                                            color: COLOR_TEXT_CONTRAST,
-                                                            border: "none",
-                                                            border_radius: "6px",
-                                                            cursor: "pointer",
-                                                            disabled: set_action().is_some(),
-                                                            onclick: {
-                                                                let pool = connection_pool.clone();
-                                                                let key = display_key.clone();
-                                                                move |_| {
-                                                                    let pool = pool.clone();
-                                                                    let key = key.clone();
-                                                                    let member = new_set_member();
-                                                                    spawn(async move {
-                                                                        if member.trim().is_empty() {
-                                                                            set_status_message.set("成员不能为空".to_string());
-                                                                            set_status_error.set(true);
-                                                                            return;
-                                                                        }
-
-                                                                        set_action.set(Some("add".to_string()));
-                                                                        set_status_message.set(String::new());
-                                                                        set_status_error.set(false);
-
-                                                                        match pool.set_add(&key, &member).await {
-                                                                            Ok(true) => {
-                                                                                new_set_member.set(String::new());
-                                                                                set_status_message.set("添加成功".to_string());
-                                                                                set_status_error.set(false);
+                                                                        if value.is_empty() && !was_empty {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            spawn(async move {
                                                                                 if let Err(error) = load_key_data(
-                                                                                    pool.clone(),
-                                                                                    key.clone(),
+                                                                                    pool,
+                                                                                    key,
                                                                                     key_info,
                                                                                     string_value,
                                                                                     hash_value,
@@ -4426,7 +4256,7 @@ pub fn ValueViewer(
                                                                                     is_binary,
                                                                                     binary_format,
                                                                                     serialization_data,
-                    binary_bytes,
+                                                                                    binary_bytes,
                                                                                     bitmap_info,
                                                                                     loading,
                                                                                     hash_cursor,
@@ -4440,473 +4270,549 @@ pub fn ValueViewer(
                                                                                     zset_cursor,
                                                                                     zset_total,
                                                                                     zset_has_more,
-                                                                                ).await {
-                                                                                    tracing::error!("{error}");
-                                                                                } else {
-                                                                                    on_refresh.call(());
+                                                                                )
+                                                                                .await
+                                                                                {
+                                                                                    tracing::error!(
+                                                                                        "重新加载 set 数据失败: {}",
+                                                                                        error
+                                                                                    );
+                                                                                }
+                                                                            });
+                                                                        }
+                                                                    }
+                                                                },
+                                                            }
+
+                                                            if set_total() > PAGE_SIZE {
+                                                                button {
+                                                                    padding: "6px 10px",
+                                                                    background: if set_search().len() >= 2 { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                    color: if set_search().len() >= 2 { COLOR_TEXT_CONTRAST } else { COLOR_TEXT_SECONDARY },
+                                                                    border: "1px solid {COLOR_BORDER}",
+                                                                    border_radius: "6px",
+                                                                    cursor: if set_search().len() >= 2 { "pointer" } else { "not-allowed" },
+                                                                    font_size: "12px",
+                                                                    disabled: set_search().len() < 2 || set_loading_more(),
+                                                                    onclick: {
+                                                                        let pool = connection_pool.clone();
+                                                                        let key = display_key.clone();
+                                                                        move |_| {
+                                                                            let pool = pool.clone();
+                                                                            let key = key.clone();
+                                                                            let pattern = set_search();
+                                                                            spawn(async move {
+                                                                                search_set_server(
+                                                                                    pool,
+                                                                                    key,
+                                                                                    pattern,
+                                                                                    set_value,
+                                                                                    set_cursor,
+                                                                                    set_has_more,
+                                                                                    set_loading_more,
+                                                                                )
+                                                                                .await;
+                                                                            });
+                                                                        }
+                                                                    },
+
+                                                                    if set_loading_more() { "搜索中..." } else { "服务端搜索" }
+                                                                }
+                                                            }
+
+                                                            input {
+                                                                width: "220px",
+                                                                max_width: "100%",
+                                                                padding: "8px 10px",
+                                                                background: COLOR_BG_TERTIARY,
+                                                                border: "1px solid {COLOR_BORDER}",
+                                                                border_radius: "6px",
+                                                                color: COLOR_TEXT,
+                                                                value: "{new_set_member}",
+                                                                placeholder: "输入新成员",
+                                                                oninput: move |event| new_set_member.set(event.value()),
+                                                            }
+
+                                                            button {
+                                                                style: "{primary_action_button_style(set_action().is_some())}",
+                                                                disabled: set_action().is_some(),
+                                                                onclick: {
+                                                                    let pool = connection_pool.clone();
+                                                                    let key = display_key.clone();
+                                                                    move |_| {
+                                                                        let pool = pool.clone();
+                                                                        let key = key.clone();
+                                                                        let member = new_set_member();
+                                                                        spawn(async move {
+                                                                            if member.trim().is_empty() {
+                                                                                set_status_message.set("成员不能为空".to_string());
+                                                                                set_status_error.set(true);
+                                                                                return;
+                                                                            }
+
+                                                                            set_action.set(Some("add".to_string()));
+                                                                            set_status_message.set(String::new());
+                                                                            set_status_error.set(false);
+
+                                                                            match pool.set_add(&key, &member).await {
+                                                                                Ok(true) => {
+                                                                                    new_set_member.set(String::new());
+                                                                                    set_status_message.set("添加成功".to_string());
+                                                                                    set_status_error.set(false);
+                                                                                    if let Err(error) = load_key_data(
+                                                                                        pool.clone(),
+                                                                                        key.clone(),
+                                                                                        key_info,
+                                                                                        string_value,
+                                                                                        hash_value,
+                                                                                        list_value,
+                                                                                        set_value,
+                                                                                        zset_value,
+                                                                                        stream_value,
+                                                                                        is_binary,
+                                                                                        binary_format,
+                                                                                        serialization_data,
+                                                                                        binary_bytes,
+                                                                                        bitmap_info,
+                                                                                        loading,
+                                                                                        hash_cursor,
+                                                                                        hash_total,
+                                                                                        hash_has_more,
+                                                                                        list_has_more,
+                                                                                        list_total,
+                                                                                        set_cursor,
+                                                                                        set_total,
+                                                                                        set_has_more,
+                                                                                        zset_cursor,
+                                                                                        zset_total,
+                                                                                        zset_has_more,
+                                                                                    )
+                                                                                    .await
+                                                                                    {
+                                                                                        tracing::error!("{error}");
+                                                                                    } else {
+                                                                                        on_refresh.call(());
+                                                                                    }
+                                                                                }
+                                                                                Ok(false) => {
+                                                                                    set_status_message.set("成员已存在".to_string());
+                                                                                    set_status_error.set(true);
+                                                                                }
+                                                                                Err(error) => {
+                                                                                    set_status_message.set(format!("添加失败：{error}"));
+                                                                                    set_status_error.set(true);
                                                                                 }
                                                                             }
-                                                                            Ok(false) => {
-                                                                                set_status_message.set("成员已存在".to_string());
-                                                                                set_status_error.set(true);
-                                                                            }
-                                                                            Err(error) => {
-                                                                                set_status_message.set(format!("添加失败：{error}"));
-                                                                                set_status_error.set(true);
-                                                                            }
+                                                                            set_action.set(None);
+                                                                        });
+                                                                    }
+                                                                },
+
+                                                                if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                                                            }
+
+                                                            div {
+                                                                style: "{data_section_count_style()}",
+
+                                                                "Set Members ({filtered_set_members.len()}/{set_total()})"
+                                                            }
+                                                        }
+
+                                                        button {
+                                                            margin_left: "auto",
+                                                            flex_shrink: "0",
+                                                            style: "{secondary_action_button_style()}",
+                                                            title: "复制",
+                                                            onclick: {
+                                                                let set = set_val.clone();
+                                                                move |_| {
+                                                                    let json = serde_json::to_string_pretty(&set).unwrap_or_default();
+                                                                    match copy_value_to_clipboard(&json) {
+                                                                        Ok(_) => {
+                                                                            toast_manager.write().success("复制成功");
                                                                         }
-                                                                        set_action.set(None);
-                                                                    });
+                                                                        Err(error) => {
+                                                                            toast_manager.write().error(&format!("复制失败：{error}"));
+                                                                        }
+                                                                    }
                                                                 }
                                                             },
 
-                                                            if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
-                                                        }
-
-                                                        div {
-                                                            color: COLOR_TEXT_SECONDARY,
-                                                            font_size: "13px",
-
-                                                            "Set Members ({set_val.len()}/{set_total()})"
+                                                            IconCopy { size: Some(14) }
+                                                            "复制"
                                                         }
                                                     }
 
-                                                    button {
-                                                        margin_left: "auto",
-                                                        flex_shrink: "0",
-                                                        padding: "6px 10px",
-                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                        color: COLOR_SUCCESS,
-                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        display: "flex",
-                                                        align_items: "center",
-                                                        gap: "4px",
-                                                        title: "复制",
-                                                        onclick: {
-                                                            let set = set_val.clone();
-                                                            move |_| {
-                                                                let json = serde_json::to_string_pretty(&set).unwrap_or_default();
-                                                                match copy_value_to_clipboard(&json) {
-                                                                    Ok(_) => {
-                                                                        toast_manager.write().success("复制成功");
-                                                                    }
-                                                                    Err(error) => {
-                                                                        toast_manager.write().error(&format!("复制失败：{error}"));
-                                                                    }
+                                                    if !set_status_message.read().is_empty() {
+                                                        div {
+                                                            style: "{status_banner_style(set_status_error())}",
+
+                                                            "{set_status_message}"
+                                                        }
+                                                    }
+
+                                                    if set_total().max(set_val.len()) > LARGE_KEY_THRESHOLD {
+                                                        LargeKeyWarning {
+                                                            key_type: "Set".to_string(),
+                                                            size: set_total().max(set_val.len()),
+                                                            threshold: LARGE_KEY_THRESHOLD,
+                                                        }
+                                                    }
+
+                                                    div {
+                                                        flex: "1",
+                                                        min_height: "0",
+                                                        width: "100%",
+                                                        align_self: "stretch",
+                                                        overflow_x: "auto",
+                                                        overflow_y: "auto",
+                                                        border: "1px solid {COLOR_BORDER}",
+                                                        border_radius: "8px",
+                                                        background: COLOR_BG_SECONDARY,
+                                                        onscroll: {
+                                                            let pool = connection_pool.clone();
+                                                            let key = display_key.clone();
+                                                            move |e| {
+                                                                let scroll_top = e.data().scroll_top() as i32;
+                                                                let scroll_height = e.data().scroll_height() as i32;
+                                                                let client_height = e.data().client_height() as i32;
+
+                                                                if set_has_more()
+                                                                    && !set_loading_more()
+                                                                    && scroll_height - scroll_top - client_height < 200
+                                                                {
+                                                                    let pool = pool.clone();
+                                                                    let key = key.clone();
+                                                                    let cursor = set_cursor();
+                                                                    spawn(async move {
+                                                                        load_more_set(
+                                                                            pool,
+                                                                            key,
+                                                                            set_value,
+                                                                            cursor,
+                                                                            set_cursor,
+                                                                            set_has_more,
+                                                                            set_loading_more,
+                                                                        )
+                                                                        .await;
+                                                                    });
                                                                 }
                                                             }
                                                         },
 
-                                                        IconCopy { size: Some(14) }
-                                                        "复制"
-                                                    }
-                                                }
+                                                        table {
+                                                            width: "100%",
+                                                            border_collapse: "collapse",
 
-                                                if !set_status_message.read().is_empty() {
-                                                    div {
-                                                        margin_bottom: "12px",
-                                                        padding: "8px 12px",
-                                                        background: if set_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
-                                                        border_radius: "6px",
-                                                        color: if set_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
-                                                        font_size: "13px",
+                                                            thead {
+                                                                tr {
+                                                                    style: "{data_table_header_row_style()}",
 
-                                                        "{set_status_message}"
-                                                    }
-                                                }
+                                                                    th {
+                                                                        style: "{data_table_header_cell_style(Some(\"72px\"), \"left\")}",
 
-                                                if set_val.len() > LARGE_KEY_THRESHOLD {
-                                                    LargeKeyWarning {
-                                                        key_type: "Set".to_string(),
-                                                        size: set_val.len(),
-                                                        threshold: LARGE_KEY_THRESHOLD,
-                                                    }
-                                                }
+                                                                        "#"
+                                                                    }
 
-                                                div {
-                                                    flex: "1",
-                                                    min_height: "0",
-                                                    overflow_x: "auto",
-                                                    border: "1px solid {COLOR_BORDER}",
-                                                    border_radius: "8px",
-                                                    background: COLOR_BG_SECONDARY,
-                                                    overflow_y: "auto",
-                                                    onscroll: {
-                                                        let pool = connection_pool.clone();
-                                                        let key = display_key.clone();
-                                                        move |e| {
-                                                            let scroll_top = e.data().scroll_top() as i32;
-                                                            let scroll_height = e.data().scroll_height() as i32;
-                                                            let client_height = e.data().client_height() as i32;
+                                                                    th {
+                                                                        style: "{data_table_header_cell_style(None, \"left\")}",
 
-                                                            if set_has_more() && !set_loading_more() && scroll_height - scroll_top - client_height < 200 {
-                                                                let pool = pool.clone();
-                                                                let key = key.clone();
-                                                                let cursor = set_cursor();
-                                                                spawn(async move {
-                                                                    load_more_set(
-                                                                        pool,
-                                                                        key,
-                                                                        set_value,
-                                                                        cursor,
-                                                                        set_cursor,
-                                                                        set_has_more,
-                                                                        set_loading_more,
-                                                                    ).await;
-                                                                });
-                                                            }
-                                                        }
-                                                    },
+                                                                        "Member"
+                                                                    }
 
-                                                    table {
-                                                        width: "100%",
-                                                        border_collapse: "collapse",
+                                                                    th {
+                                                                        style: "{data_table_header_cell_style(Some(\"156px\"), \"left\")}",
 
-                                                        thead {
-                                                            tr {
-                                                                background: COLOR_BG_TERTIARY,
-                                                                position: "sticky",
-                                                                top: "0",
-
-                                                                th {
-                                                                    width: "72px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
-                                                                    border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                                    "#"
-                                                                }
-
-                                                                th {
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
-                                                                    border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                                    "Member"
-                                                                }
-
-                                                                th {
-                                                                    width: "100px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
-                                                                    border_bottom: "1px solid {COLOR_BORDER}",
-
-                                                                    "Action"
+                                                                        "Action"
+                                                                    }
                                                                 }
                                                             }
-                                                        }
 
-                                                        tbody {
-                                                            for (idx, member) in filtered_set_members.iter().enumerate() {
-                                                                if editing_set_member() == Some(member.clone()) {
+                                                            tbody {
+                                                                if filtered_set_members.is_empty() {
                                                                     tr {
-                                                                        key: "edit-{member}",
-                                                                        background: ROW_EDIT_BG,
-                                                                        border_bottom: "1px solid {COLOR_BORDER}",
-
                                                                         td {
-                                                                            padding: "10px 12px",
-                                                                            color: COLOR_TEXT_SECONDARY,
+                                                                            colspan: "3",
+                                                                            padding: "20px 12px",
+                                                                            color: COLOR_TEXT_SUBTLE,
+                                                                            text_align: "center",
 
-                                                                            "{idx + 1}"
-                                                                        }
-
-                                                                        td {
-                                                                            padding: "10px 12px",
-
-                                                                            input {
-                                                                                width: "100%",
-                                                                                padding: "8px 10px",
-                                                                                background: COLOR_BG,
-                                                                                border: "1px solid {COLOR_BORDER}",
-                                                                                border_radius: "6px",
-                                                                                color: COLOR_TEXT,
-                                                                                font_family: "Consolas, monospace",
-                                                                                font_size: "13px",
-                                                                                value: "{editing_set_member_value}",
-                                                                                oninput: move |event| editing_set_member_value.set(event.value()),
-                                                                            }
-                                                                        }
-
-                                                                        td {
-                                                                            padding: "10px 12px",
-
-                                                                            div {
-                                                                                display: "flex",
-                                                                                gap: "6px",
-
-                                                                                button {
-                                                                                    padding: "6px 10px",
-                                                                                    background: "#38a169",
-                                                                                    color: COLOR_TEXT_CONTRAST,
-                                                                                    border: "none",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
-                                                                                    disabled: set_action().is_some(),
-                                                                                    onclick: {
-                                                                                        let pool = connection_pool.clone();
-                                                                                        let key = display_key.clone();
-                                                                                        let old_member = member.clone();
-                                                                                        move |_| {
-                                                                                            let pool = pool.clone();
-                                                                                            let key = key.clone();
-                                                                                            let old_member = old_member.clone();
-                                                                                            let new_member = editing_set_member_value();
-                                                                                            spawn(async move {
-                                                                                                if new_member.trim().is_empty() {
-                                                                                                    set_status_message.set("成员不能为空".to_string());
-                                                                                                    set_status_error.set(true);
-                                                                                                    return;
-                                                                                                }
-
-                                                                                                set_action.set(Some(format!("edit:{}", old_member)));
-                                                                                                set_status_message.set(String::new());
-                                                                                                set_status_error.set(false);
-
-                                                                                                let edit_result = if new_member == old_member {
-                                                                                                    Ok(())
-                                                                                                } else {
-                                                                                                    match pool.set_remove(&key, &old_member).await {
-                                                                                                        Ok(_) => pool.set_add(&key, &new_member).await.map(|_| ()),
-                                                                                                        Err(e) => Err(e),
-                                                                                                    }
-                                                                                                };
-
-                                                                                                match edit_result {
-                                                                                                    Ok(_) => {
-                                                                                                        editing_set_member.set(None);
-                                                                                                        editing_set_member_value.set(String::new());
-                                                                                                        set_status_message.set("修改成功".to_string());
-                                                                                                        set_status_error.set(false);
-    if let Err(error) = load_key_data(
-                                                                                                             pool.clone(),
-                                                                                                             key.clone(),
-                                                                                                             key_info,
-                                                                                                             string_value,
-                                                                                                             hash_value,
-                                                                                                             list_value,
-                                                                                                             set_value,
-                                                                                                             zset_value,
-                                                                                                             stream_value,
-                                                                                                             is_binary,
-                                                                                                             binary_format,
-                                                                                                             serialization_data,
-                    binary_bytes,
-                                                                                                             bitmap_info,
-                                                                                                             loading,
-                                                                                                             hash_cursor,
-                                                                                                             hash_total,
-                                                                                                             hash_has_more,
-                                                                                                             list_has_more,
-                                                                                                             list_total,
-                                                                                                             set_cursor,
-                                                                                                             set_total,
-                                                                                                             set_has_more,
-                                                                                                             zset_cursor,
-                                                                                                             zset_total,
-                                                                                                             zset_has_more,
-                                                                                                         ).await {
-                                                                                                            tracing::error!("{error}");
-                                                                                                        } else {
-                                                                                                            on_refresh.call(());
-                                                                                                        }
-                                                                                                    }
-                                                                                                    Err(error) => {
-                                                                                                        set_status_message.set(format!("修改失败：{error}"));
-                                                                                                        set_status_error.set(true);
-                                                                                                    }
-                                                                                                }
-
-                                                                                                set_action.set(None);
-                                                                                            });
-                                                                                        }
-                                                                                    },
-
-                                                                                    if set_action().as_deref() == Some(format!("edit:{}", member).as_str()) { "保存中..." } else { "保存" }
-                                                                                }
-
-                                                                                button {
-                                                                                    padding: "6px 10px",
-                                                                                    background: COLOR_BG_TERTIARY,
-                                                                                    color: COLOR_TEXT,
-                                                                                    border: "none",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
-                                                                                    onclick: move |_| {
-                                                                                        editing_set_member.set(None);
-                                                                                        editing_set_member_value.set(String::new());
-                                                                                    },
-
-                                                                                    "取消"
-                                                                                }
+                                                                            if set_search().trim().is_empty() {
+                                                                                "当前集合没有成员"
+                                                                            } else {
+                                                                                "未找到匹配的成员"
                                                                             }
                                                                         }
                                                                     }
                                                                 } else {
-                                                                    tr {
-                                                                        key: "{member}",
-                                                                        border_bottom: "1px solid {COLOR_BORDER}",
-                                                                        background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
+                                                                    for (idx, member) in filtered_set_members.iter().enumerate() {
+                                                                        if editing_set_member() == Some(member.clone()) {
+                                                                            tr {
+                                                                                key: "edit-{member}",
+                                                                                background: ROW_EDIT_BG,
+                                                                                border_bottom: "1px solid {COLOR_BORDER}",
 
-                                                                        td {
-                                                                            padding: "10px 12px",
-                                                                            color: COLOR_TEXT_SECONDARY,
+                                                                                td {
+                                                                                    padding: "10px 12px",
+                                                                                    color: COLOR_TEXT_SECONDARY,
 
-                                                                            "{idx + 1}"
-                                                                        }
-
-                                                                        td {
-                                                                            padding: "10px 12px",
-                                                                            color: COLOR_TEXT,
-                                                                            font_family: "Consolas, monospace",
-                                                                            font_size: "13px",
-                                                                            word_break: "break-all",
-
-                                                                            "{member}"
-                                                                        }
-
-                                                                        td {
-                                                                            padding: "10px 12px",
-
-                                                                            div {
-                                                                                display: "flex",
-                                                                                gap: "6px",
-
-                                                                                button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(47, 133, 90, 0.16)",
-                                                                                    color: "#68d391",
-                                                                                    border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
-                                                                                    title: "复制",
-                                                                                    onclick: {
-                                                                                        let member = member.clone();
-                                                                                        move |_| {
-                                                                                            match copy_value_to_clipboard(&member) {
-                                                                                                Ok(_) => {
-                                                                                                    toast_manager.write().success("复制成功");
-                                                                                                }
-                                                                                                Err(error) => {
-                                                                                                    toast_manager.write().error(&format!("复制失败：{error}"));
-                                                                                                }
-                                                                                            }
-                                                                                        }
-                                                                                    },
-
-                                                                                    IconCopy { size: Some(15) }
+                                                                                    "{idx + 1}"
                                                                                 }
 
-                                                                                button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(49, 130, 206, 0.18)",
-                                                                                    color: "#63b3ed",
-                                                                                    border: "1px solid rgba(99, 179, 237, 0.30)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
-                                                                                    disabled: set_action().is_some(),
-                                                                                    title: "编辑",
-                                                                                    onclick: {
-                                                                                        let member = member.clone();
-                                                                                        move |_| {
-                                                                                            editing_set_member.set(Some(member.clone()));
-                                                                                            editing_set_member_value.set(member.clone());
-                                                                                        }
-                                                                                    },
+                                                                                td {
+                                                                                    padding: "10px 12px",
 
-                                                                                    IconEdit { size: Some(15) }
+                                                                                    input {
+                                                                                        width: "100%",
+                                                                                        padding: "8px 10px",
+                                                                                        background: COLOR_BG,
+                                                                                        border: "1px solid {COLOR_BORDER}",
+                                                                                        border_radius: "6px",
+                                                                                        color: COLOR_TEXT,
+                                                                                        font_family: "Consolas, monospace",
+                                                                                        font_size: "13px",
+                                                                                        value: "{editing_set_member_value}",
+                                                                                        oninput: move |event| editing_set_member_value.set(event.value()),
+                                                                                    }
                                                                                 }
 
-                                                                                button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(197, 48, 48, 0.18)",
-                                                                                    color: "#f87171",
-                                                                                    border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
-                                                                                    disabled: set_action().is_some(),
-                                                                                    title: "删除",
-                                                                                    onclick: {
-                                                                                        let pool = connection_pool.clone();
-                                                                                        let key = display_key.clone();
-                                                                                        let member = member.clone();
-                                                                                        move |_| {
-                                                                                            let pool = pool.clone();
-                                                                                            let key = key.clone();
-                                                                                            let member = member.clone();
-                                                                                            spawn(async move {
-                                                                                                set_action.set(Some(format!("delete:{}", member)));
-                                                                                                match pool.set_remove(&key, &member).await {
-                                                                                                    Ok(_) => {
-                                                                                                        set_status_message.set("删除成功".to_string());
+                                                                                td {
+                                                                                    padding: "10px 12px",
+
+                                                                                    div {
+                                                                                        display: "flex",
+                                                                                        gap: "6px",
+
+                                                                                        button {
+                                                                                            style: "{primary_action_button_style(set_action().is_some())}",
+                                                                                            disabled: set_action().is_some(),
+                                                                                            onclick: {
+                                                                                                let pool = connection_pool.clone();
+                                                                                                let key = display_key.clone();
+                                                                                                let old_member = member.clone();
+                                                                                                move |_| {
+                                                                                                    let pool = pool.clone();
+                                                                                                    let key = key.clone();
+                                                                                                    let old_member = old_member.clone();
+                                                                                                    let new_member = editing_set_member_value();
+                                                                                                    spawn(async move {
+                                                                                                        if new_member.trim().is_empty() {
+                                                                                                            set_status_message.set("成员不能为空".to_string());
+                                                                                                            set_status_error.set(true);
+                                                                                                            return;
+                                                                                                        }
+
+                                                                                                        set_action.set(Some(format!("edit:{old_member}")));
+                                                                                                        set_status_message.set(String::new());
                                                                                                         set_status_error.set(false);
-    if let Err(error) = load_key_data(
-                                                                                                             pool.clone(),
-                                                                                                             key.clone(),
-                                                                                                             key_info,
-                                                                                                             string_value,
-                                                                                                             hash_value,
-                                                                                                             list_value,
-                                                                                                             set_value,
-                                                                                                             zset_value,
-                                                                                                             stream_value,
-                                                                                                             is_binary,
-                                                                                                             binary_format,
-                                                                                                             serialization_data,
-                    binary_bytes,
-                                                                                                             bitmap_info,
-                                                                                                             loading,
-                                                                                                             hash_cursor,
-                                                                                                             hash_total,
-                                                                                                             hash_has_more,
-                                                                                                             list_has_more,
-                                                                                                             list_total,
-                                                                                                             set_cursor,
-                                                                                                             set_total,
-                                                                                                             set_has_more,
-                                                                                                             zset_cursor,
-                                                                                                             zset_total,
-                                                                                                             zset_has_more,
-                                                                                                         ).await {
-                                                                                                            tracing::error!("{error}");
+
+                                                                                                        let edit_result = if new_member == old_member {
+                                                                                                            Ok(())
                                                                                                         } else {
-                                                                                                            on_refresh.call(());
+                                                                                                            match pool.set_remove(&key, &old_member).await {
+                                                                                                                Ok(_) => pool.set_add(&key, &new_member).await.map(|_| ()),
+                                                                                                                Err(error) => Err(error),
+                                                                                                            }
+                                                                                                        };
+
+                                                                                                        match edit_result {
+                                                                                                            Ok(_) => {
+                                                                                                                editing_set_member.set(None);
+                                                                                                                editing_set_member_value.set(String::new());
+                                                                                                                set_status_message.set("修改成功".to_string());
+                                                                                                                set_status_error.set(false);
+                                                                                                                if let Err(error) = load_key_data(
+                                                                                                                    pool.clone(),
+                                                                                                                    key.clone(),
+                                                                                                                    key_info,
+                                                                                                                    string_value,
+                                                                                                                    hash_value,
+                                                                                                                    list_value,
+                                                                                                                    set_value,
+                                                                                                                    zset_value,
+                                                                                                                    stream_value,
+                                                                                                                    is_binary,
+                                                                                                                    binary_format,
+                                                                                                                    serialization_data,
+                                                                                                                    binary_bytes,
+                                                                                                                    bitmap_info,
+                                                                                                                    loading,
+                                                                                                                    hash_cursor,
+                                                                                                                    hash_total,
+                                                                                                                    hash_has_more,
+                                                                                                                    list_has_more,
+                                                                                                                    list_total,
+                                                                                                                    set_cursor,
+                                                                                                                    set_total,
+                                                                                                                    set_has_more,
+                                                                                                                    zset_cursor,
+                                                                                                                    zset_total,
+                                                                                                                    zset_has_more,
+                                                                                                                )
+                                                                                                                .await
+                                                                                                                {
+                                                                                                                    tracing::error!("{error}");
+                                                                                                                } else {
+                                                                                                                    on_refresh.call(());
+                                                                                                                }
+                                                                                                            }
+                                                                                                            Err(error) => {
+                                                                                                                set_status_message.set(format!("修改失败：{error}"));
+                                                                                                                set_status_error.set(true);
+                                                                                                            }
+                                                                                                        }
+
+                                                                                                        set_action.set(None);
+                                                                                                    });
+                                                                                                }
+                                                                                            },
+
+                                                                                            "保存"
+                                                                                        }
+
+                                                                                        button {
+                                                                                            style: "{secondary_action_button_style()}",
+                                                                                            onclick: move |_| {
+                                                                                                editing_set_member.set(None);
+                                                                                                editing_set_member_value.set(String::new());
+                                                                                            },
+
+                                                                                            "取消"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        } else {
+                                                                            tr {
+                                                                                key: "{member}",
+                                                                                border_bottom: "1px solid {COLOR_BORDER}",
+                                                                                background: if idx % 2 == 0 { COLOR_BG_SECONDARY } else { COLOR_BG },
+
+                                                                                td {
+                                                                                    padding: "10px 12px",
+                                                                                    color: COLOR_TEXT_SECONDARY,
+
+                                                                                    "{idx + 1}"
+                                                                                }
+
+                                                                                td {
+                                                                                    padding: "10px 12px",
+                                                                                    color: COLOR_TEXT,
+                                                                                    font_family: "Consolas, monospace",
+                                                                                    font_size: "13px",
+                                                                                    word_break: "break-all",
+
+                                                                                    "{member}"
+                                                                                }
+
+                                                                                td {
+                                                                                    padding: "10px 12px",
+
+                                                                                    div {
+                                                                                        display: "flex",
+                                                                                        gap: "6px",
+
+                                                                                        button {
+                                                                                            style: "{compact_icon_action_button_style(false, false)}",
+                                                                                            title: "复制",
+                                                                                            onclick: {
+                                                                                                let member = member.clone();
+                                                                                                move |_| {
+                                                                                                    match copy_value_to_clipboard(&member) {
+                                                                                                        Ok(_) => {
+                                                                                                            toast_manager.write().success("复制成功");
+                                                                                                        }
+                                                                                                        Err(error) => {
+                                                                                                            toast_manager.write().error(&format!("复制失败：{error}"));
                                                                                                         }
                                                                                                     }
-                                                                                                    Err(error) => {
-                                                                                                        set_status_message.set(format!("删除失败：{error}"));
-                                                                                                        set_status_error.set(true);
-                                                                                                    }
                                                                                                 }
-                                                                                                set_action.set(None);
-                                                                                            });
-                                                                                        }
-                                                                                    },
+                                                                                            },
 
-                                                                                    IconTrash { size: Some(15) }
+                                                                                            IconCopy { size: Some(15) }
+                                                                                        }
+
+                                                                                        button {
+                                                                                            style: "{compact_icon_action_button_style(false, set_action().is_some())}",
+                                                                                            disabled: set_action().is_some(),
+                                                                                            title: "编辑",
+                                                                                            onclick: {
+                                                                                                let member = member.clone();
+                                                                                                move |_| {
+                                                                                                    editing_set_member.set(Some(member.clone()));
+                                                                                                    editing_set_member_value.set(member.clone());
+                                                                                                }
+                                                                                            },
+
+                                                                                            IconEdit { size: Some(15) }
+                                                                                        }
+
+                                                                                        button {
+                                                                                            style: "{compact_icon_action_button_style(true, set_action().is_some())}",
+                                                                                            disabled: set_action().is_some(),
+                                                                                            title: "删除",
+                                                                                            onclick: {
+                                                                                                let pool = connection_pool.clone();
+                                                                                                let key = display_key.clone();
+                                                                                                let member = member.clone();
+                                                                                                move |_| {
+                                                                                                    let pool = pool.clone();
+                                                                                                    let key = key.clone();
+                                                                                                    let member = member.clone();
+                                                                                                    spawn(async move {
+                                                                                                        set_action.set(Some(format!("delete:{member}")));
+                                                                                                        match pool.set_remove(&key, &member).await {
+                                                                                                            Ok(_) => {
+                                                                                                                set_status_message.set("删除成功".to_string());
+                                                                                                                set_status_error.set(false);
+                                                                                                                if let Err(error) = load_key_data(
+                                                                                                                    pool.clone(),
+                                                                                                                    key.clone(),
+                                                                                                                    key_info,
+                                                                                                                    string_value,
+                                                                                                                    hash_value,
+                                                                                                                    list_value,
+                                                                                                                    set_value,
+                                                                                                                    zset_value,
+                                                                                                                    stream_value,
+                                                                                                                    is_binary,
+                                                                                                                    binary_format,
+                                                                                                                    serialization_data,
+                                                                                                                    binary_bytes,
+                                                                                                                    bitmap_info,
+                                                                                                                    loading,
+                                                                                                                    hash_cursor,
+                                                                                                                    hash_total,
+                                                                                                                    hash_has_more,
+                                                                                                                    list_has_more,
+                                                                                                                    list_total,
+                                                                                                                    set_cursor,
+                                                                                                                    set_total,
+                                                                                                                    set_has_more,
+                                                                                                                    zset_cursor,
+                                                                                                                    zset_total,
+                                                                                                                    zset_has_more,
+                                                                                                                )
+                                                                                                                .await
+                                                                                                                {
+                                                                                                                    tracing::error!("{error}");
+                                                                                                                } else {
+                                                                                                                    on_refresh.call(());
+                                                                                                                }
+                                                                                                            }
+                                                                                                            Err(error) => {
+                                                                                                                set_status_message.set(format!("删除失败：{error}"));
+                                                                                                                set_status_error.set(true);
+                                                                                                            }
+                                                                                                        }
+                                                                                                        set_action.set(None);
+                                                                                                    });
+                                                                                                }
+                                                                                            },
+
+                                                                                            IconTrash { size: Some(15) }
+                                                                                        }
+                                                                                    }
                                                                                 }
                                                                             }
                                                                         }
@@ -4915,27 +4821,27 @@ pub fn ValueViewer(
                                                             }
                                                         }
                                                     }
-                                                }
 
-                                                if set_loading_more() {
-                                                    div {
-                                                        padding: "12px",
-                                                        text_align: "center",
-                                                        color: COLOR_TEXT_SECONDARY,
-                                                        font_size: "13px",
+                                                    if set_loading_more() {
+                                                        div {
+                                                            padding: "12px",
+                                                            text_align: "center",
+                                                            color: COLOR_TEXT_SECONDARY,
+                                                            font_size: "13px",
 
-                                                        "加载中..."
+                                                            "加载中..."
+                                                        }
                                                     }
-                                                }
 
-                                                if set_has_more() && !set_loading_more() {
-                                                    div {
-                                                        padding: "8px",
-                                                        text_align: "center",
-                                                        color: COLOR_TEXT_SUBTLE,
-                                                        font_size: "12px",
+                                                    if set_has_more() && !set_loading_more() {
+                                                        div {
+                                                            padding: "8px",
+                                                            text_align: "center",
+                                                            color: COLOR_TEXT_SUBTLE,
+                                                            font_size: "12px",
 
-                                                        "向下滚动加载更多..."
+                                                            "向下滚动加载更多..."
+                                                        }
                                                     }
                                                 }
                                             }
@@ -4948,18 +4854,11 @@ pub fn ValueViewer(
                                                     height: "100%",
                                                     min_height: "0",
 
-                                                    display: "flex",
-                                                    justify_content: "space_between",
-                                                    align_items: "center",
-                                                    gap: "12px",
-                                                    margin_bottom: "12px",
-                                                    flex_wrap: "wrap",
-
                                                     div {
-                                                        display: "flex",
-                                                        gap: "8px",
-                                                        align_items: "center",
-                                                        flex_wrap: "wrap",
+                                                        style: "{data_section_toolbar_style()}",
+
+                                                        div {
+                                                            style: "{data_section_controls_style()}",
 
                                                         input {
                                                             width: "160px",
@@ -5078,12 +4977,7 @@ pub fn ValueViewer(
                                                         }
 
                                                         button {
-                                                            padding: "8px 12px",
-                                                            background: "#38a169",
-                                                            color: COLOR_TEXT_CONTRAST,
-                                                            border: "none",
-                                                            border_radius: "6px",
-                                                            cursor: "pointer",
+                                                            style: "{primary_action_button_style(zset_action().is_some())}",
                                                             disabled: zset_action().is_some(),
                                                             onclick: {
                                                                 let pool = connection_pool.clone();
@@ -5165,55 +5059,42 @@ pub fn ValueViewer(
                                                             if zset_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
                                                         }
 
-                                                        div {
-                                                            color: COLOR_TEXT_SECONDARY,
-                                                            font_size: "13px",
+                                                            div {
+                                                                style: "{data_section_count_style()}",
 
-                                                            "ZSet Members ({zset_val.len()}/{zset_total()})"
+                                                                "ZSet Members ({zset_val.len()}/{zset_total()})"
+                                                            }
                                                         }
-                                                    }
 
-                                                    button {
-                                                        margin_left: "auto",
-                                                        flex_shrink: "0",
-                                                        padding: "6px 10px",
-                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                        color: COLOR_SUCCESS,
-                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        display: "flex",
-                                                        align_items: "center",
-                                                        gap: "4px",
-                                                        title: "复制",
-                                                        onclick: {
-                                                            let zset = zset_val.clone();
-                                                            move |_| {
-                                                                let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
-                                                                match copy_value_to_clipboard(&json) {
-                                                                    Ok(_) => {
-                                                                        toast_manager.write().success("复制成功");
-                                                                    }
-                                                                    Err(error) => {
-                                                                        toast_manager.write().error(&format!("复制失败：{error}"));
+                                                        button {
+                                                            margin_left: "auto",
+                                                            flex_shrink: "0",
+                                                            style: "{secondary_action_button_style()}",
+                                                            title: "复制",
+                                                            onclick: {
+                                                                let zset = zset_val.clone();
+                                                                move |_| {
+                                                                    let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
+                                                                    match copy_value_to_clipboard(&json) {
+                                                                        Ok(_) => {
+                                                                            toast_manager.write().success("复制成功");
+                                                                        }
+                                                                        Err(error) => {
+                                                                            toast_manager.write().error(&format!("复制失败：{error}"));
+                                                                        }
                                                                     }
                                                                 }
-                                                            }
-                                                        },
+                                                            },
 
-                                                        IconCopy { size: Some(14) }
-                                                        "复制"
+                                                            IconCopy { size: Some(14) }
+                                                            "复制"
+                                                        }
                                                     }
                                                 }
 
                                                 if !zset_status_message.read().is_empty() {
                                                     div {
-                                                        margin_bottom: "12px",
-                                                        padding: "8px 12px",
-                                                        background: if zset_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
-                                                        border_radius: "6px",
-                                                        color: if zset_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
-                                                        font_size: "13px",
+                                                        style: "{status_banner_style(zset_status_error())}",
 
                                                         "{zset_status_message}"
                                                     }
@@ -5268,48 +5149,28 @@ pub fn ValueViewer(
 
                                                         thead {
                                                             tr {
-                                                                background: COLOR_BG_TERTIARY,
-                                                                border_bottom: "1px solid {COLOR_BORDER}",
+                                                                style: "{data_table_header_row_style()}",
 
                                                                 th {
-                                                                    width: "72px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(Some(\"72px\"), \"left\")}",
 
                                                                     "#"
                                                                 }
 
                                                                 th {
-                                                                    width: "100px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(Some(\"100px\"), \"left\")}",
 
                                                                     "Score"
                                                                 }
 
                                                                 th {
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(None, \"left\")}",
 
                                                                     "Member"
                                                                 }
 
                                                                 th {
-                                                                    width: "100px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                                    style: "{data_table_header_cell_style(Some(\"100px\"), \"left\")}",
 
                                                                     "Action"
                                                                 }
@@ -5360,12 +5221,7 @@ pub fn ValueViewer(
                                                                                 gap: "8px",
 
                                                                                 button {
-                                                                                    padding: "6px 10px",
-                                                                                    background: "#38a169",
-                                                                                    color: COLOR_TEXT_CONTRAST,
-                                                                                    border: "none",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
+                                                                                    style: "{primary_action_button_style(zset_action().is_some())}",
                                                                                     disabled: zset_action().is_some(),
                                                                                     onclick: {
                                                                                         let pool = connection_pool.clone();
@@ -5494,16 +5350,7 @@ pub fn ValueViewer(
                                                                                 gap: "6px",
 
                                                                                 button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(47, 133, 90, 0.16)",
-                                                                                    color: "#68d391",
-                                                                                    border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
+                                                                                    style: "{compact_icon_action_button_style(false, false)}",
                                                                                     title: "复制",
                                                                                     onclick: {
                                                                                         let member = member.clone();
@@ -5523,16 +5370,7 @@ pub fn ValueViewer(
                                                                                 }
 
                                                                                 button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(49, 130, 206, 0.18)",
-                                                                                    color: "#63b3ed",
-                                                                                    border: "1px solid rgba(99, 179, 237, 0.30)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
+                                                                                    style: "{compact_icon_action_button_style(false, false)}",
                                                                                     title: "修改 Score",
                                                                                     onclick: {
                                                                                         let member = member.clone();
@@ -5547,16 +5385,7 @@ pub fn ValueViewer(
                                                                                 }
 
                                                                                 button {
-                                                                                    width: "32px",
-                                                                                    height: "32px",
-                                                                                    display: "flex",
-                                                                                    align_items: "center",
-                                                                                    justify_content: "center",
-                                                                                    background: "rgba(197, 48, 48, 0.18)",
-                                                                                    color: "#f87171",
-                                                                                    border: "1px solid rgba(248, 113, 113, 0.30)",
-                                                                                    border_radius: "6px",
-                                                                                    cursor: "pointer",
+                                                                                    style: "{compact_icon_action_button_style(true, zset_action().is_some())}",
                                                                                     disabled: zset_action().is_some(),
                                                                                     title: "删除",
                                                                                     onclick: {
@@ -5651,18 +5480,33 @@ pub fn ValueViewer(
                                             }
                                         }
                                         KeyType::Stream => {
-                                            let stream_val = stream_value.read().clone();
-                                            let filtered_entries: Vec<_> = if stream_search.read().is_empty() {
-                                                stream_val.clone()
-                                            } else {
-                                                stream_val.iter().filter(|(id, fields)| {
-                                                    id.to_lowercase().contains(&stream_search.read().to_lowercase()) ||
-                                                    fields.iter().any(|(k, v)| {
-                                                        k.to_lowercase().contains(&stream_search.read().to_lowercase()) ||
-                                                        v.to_lowercase().contains(&stream_search.read().to_lowercase())
+                                            let stream_search_value = stream_search();
+                                            let normalized_stream_search =
+                                                stream_search_value.trim().to_lowercase();
+                                            let filtered_stream_entries: Vec<(String, Vec<(String, String)>)> =
+                                                stream_val
+                                                    .iter()
+                                                    .filter(|(entry_id, fields)| {
+                                                        if normalized_stream_search.is_empty() {
+                                                            true
+                                                        } else {
+                                                            entry_id
+                                                                .to_lowercase()
+                                                                .contains(&normalized_stream_search)
+                                                                || fields.iter().any(|(field_key, field_value)| {
+                                                                    field_key
+                                                                        .to_lowercase()
+                                                                        .contains(&normalized_stream_search)
+                                                                        || field_value
+                                                                            .to_lowercase()
+                                                                            .contains(
+                                                                                &normalized_stream_search,
+                                                                            )
+                                                                })
+                                                        }
                                                     })
-                                                }).cloned().collect()
-                                            };
+                                                    .cloned()
+                                                    .collect();
 
                                             rsx! {
                                                 div {
@@ -5671,428 +5515,325 @@ pub fn ValueViewer(
                                                     height: "100%",
                                                     min_height: "0",
 
-                                                    display: "flex",
-                                                    justify_content: "space_between",
-                                                    align_items: "center",
-                                                    gap: "12px",
-                                                    margin_bottom: "12px",
-                                                    flex_wrap: "wrap",
-
                                                     div {
-                                                        display: "flex",
-                                                        gap: "8px",
-                                                        align_items: "center",
-                                                        flex_wrap: "wrap",
+                                                        style: "{data_section_toolbar_style()}",
 
-                                                        input {
-                                                            width: "200px",
-                                                            padding: "8px 10px",
-                                                            background: COLOR_BG_TERTIARY,
-                                                            border: "1px solid {COLOR_BORDER}",
-                                                            border_radius: "6px",
-                                                            color: COLOR_TEXT,
-                                                            value: "{stream_search}",
-                                                            placeholder: "搜索 ID 或字段",
-                                                            oninput: move |event| stream_search.set(event.value()),
-                                                        }
+                                                        div {
+                                                            style: "{data_section_controls_style()}",
 
-                                                        if stream_search.read().is_empty() {
-                                                            div {
-                                                                color: COLOR_TEXT_SECONDARY,
-                                                                font_size: "13px",
-
-                                                                "Stream Entries ({stream_val.len()})"
-                                                            }
-                                                        } else {
-                                                            div {
-                                                                color: COLOR_TEXT_SECONDARY,
-                                                                font_size: "13px",
-
-                                                                "Stream Entries ({filtered_entries.len()}/{stream_val.len()})"
-                                                            }
-                                                        }
-                                                    }
-
-                                                    button {
-                                                        margin_left: "auto",
-                                                        flex_shrink: "0",
-                                                        padding: "6px 10px",
-                                                        background: "rgba(47, 133, 90, 0.16)",
-                                                        color: COLOR_SUCCESS,
-                                                        border: "1px solid rgba(104, 211, 145, 0.28)",
-                                                        border_radius: "6px",
-                                                        cursor: "pointer",
-                                                        display: "flex",
-                                                        align_items: "center",
-                                                        gap: "4px",
-                                                        title: "复制",
-                                                        onclick: {
-                                                            let stream = stream_val.clone();
-                                                            move |_| {
-                                                                let json = serde_json::to_string_pretty(&stream).unwrap_or_default();
-                                                                match copy_value_to_clipboard(&json) {
-                                                                    Ok(_) => {
-                                                                        toast_manager.write().success("复制成功");
-                                                                    }
-                                                                    Err(error) => {
-                                                                        toast_manager.write().error(&format!("复制失败：{error}"));
-                                                                    }
-                                                                }
-                                                            }
-                                                        },
-
-                                                        IconCopy { size: Some(14) }
-                                                        "复制"
-                                                    }
-                                                }
-
-                                                if !stream_status_message.read().is_empty() {
-                                                    div {
-                                                        margin_bottom: "12px",
-                                                        padding: "8px 12px",
-                                                        background: if stream_status_error() { STATUS_ERROR_BG } else { STATUS_SUCCESS_BG },
-                                                        border_radius: "6px",
-                                                        color: if stream_status_error() { COLOR_ERROR } else { COLOR_SUCCESS },
-                                                        font_size: "13px",
-
-                                                        "{stream_status_message}"
-                                                    }
-                                                }
-
-                                                div {
-                                                    flex: "1",
-                                                    min_height: "0",
-                                                    overflow_x: "auto",
-                                                    overflow_y: "auto",
-                                                    border: "1px solid {COLOR_BORDER}",
-                                                    border_radius: "8px",
-                                                    background: COLOR_BG_SECONDARY,
-                                                    onscroll: {
-                                                        let pool = connection_pool.clone();
-                                                        let key = display_key.clone();
-                                                        move |e| {
-                                                            let scroll_top = e.data().scroll_top() as i32;
-                                                            let scroll_height = e.data().scroll_height() as i32;
-                                                            let client_height = e.data().client_height() as i32;
-
-                                                            if hash_has_more() && !hash_loading_more() && scroll_height - scroll_top - client_height < 200 {
-                                                                let pool = pool.clone();
-                                                                let key = key.clone();
-                                                                let cursor = hash_cursor();
-                                                                let total = hash_total();
-                                                                spawn(async move {
-                                                                    load_more_hash(
-                                                                        pool,
-                                                                        key,
-                                                                        hash_value,
-                                                                        cursor,
-                                                                        hash_cursor,
-                                                                        hash_has_more,
-                                                                        hash_loading_more,
-                                                                        hash_total,
-                                                                    ).await;
-                                                                });
-                                                            }
-                                                        }
-                                                    },
-
-                                                    table {
-                                                        width: "100%",
-                                                        border_collapse: "collapse",
-
-                                                        thead {
-                                                            tr {
+                                                            input {
+                                                                width: "260px",
+                                                                max_width: "100%",
+                                                                padding: "8px 10px",
                                                                 background: COLOR_BG_TERTIARY,
-                                                                border_bottom: "1px solid {COLOR_BORDER}",
+                                                                border: "1px solid {COLOR_BORDER}",
+                                                                border_radius: "6px",
+                                                                color: COLOR_TEXT,
+                                                                value: "{stream_search}",
+                                                                placeholder: "搜索 ID 或字段",
+                                                                oninput: move |event| stream_search.set(event.value()),
+                                                            }
 
-                                                                th {
-                                                                    width: "200px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
+                                                            div {
+                                                                style: "{data_section_count_style()}",
 
-                                                                    "Entry ID"
-                                                                }
-
-                                                                th {
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "left",
-
-                                                                    "Fields"
-                                                                }
-
-                                                                th {
-        width: "30px",
-                                                                    padding: "12px",
-                                                                    color: COLOR_TEXT_SECONDARY,
-                                                                    font_size: "12px",
-                                                                    font_weight: "600",
-                                                                    text_align: "center",
-
-                                                                    ""
+                                                                if normalized_stream_search.is_empty() {
+                                                                    "Stream Entries ({stream_val.len()})"
+                                                                } else {
+                                                                    "Stream Entries ({filtered_stream_entries.len()}/{stream_val.len()})"
                                                                 }
                                                             }
                                                         }
 
-                                                        tbody {
-                                                            for (entry_id, fields) in filtered_entries.iter() {
+                                                        button {
+                                                            margin_left: "auto",
+                                                            flex_shrink: "0",
+                                                            style: "{secondary_action_button_style()}",
+                                                            title: "复制",
+                                                            onclick: {
+                                                                let stream = stream_val.clone();
+                                                                move |_| {
+                                                                    let json = serde_json::to_string_pretty(&stream).unwrap_or_default();
+                                                                    match copy_value_to_clipboard(&json) {
+                                                                        Ok(_) => {
+                                                                            toast_manager.write().success("复制成功");
+                                                                        }
+                                                                        Err(error) => {
+                                                                            toast_manager.write().error(&format!("复制失败：{error}"));
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+
+                                                            IconCopy { size: Some(14) }
+                                                            "复制"
+                                                        }
+                                                    }
+
+                                                    if !stream_status_message.read().is_empty() {
+                                                        div {
+                                                            style: "{status_banner_style(stream_status_error())}",
+
+                                                            "{stream_status_message}"
+                                                        }
+                                                    }
+
+                                                    if stream_val.len() > LARGE_KEY_THRESHOLD {
+                                                        LargeKeyWarning {
+                                                            key_type: "Stream".to_string(),
+                                                            size: stream_val.len(),
+                                                            threshold: LARGE_KEY_THRESHOLD,
+                                                        }
+                                                    }
+
+                                                    div {
+                                                        flex: "1",
+                                                        min_height: "0",
+                                                        width: "100%",
+                                                        align_self: "stretch",
+                                                        overflow_x: "auto",
+                                                        overflow_y: "auto",
+                                                        border: "1px solid {COLOR_BORDER}",
+                                                        border_radius: "8px",
+                                                        background: COLOR_BG_SECONDARY,
+
+                                                        table {
+                                                            width: "100%",
+                                                            border_collapse: "collapse",
+
+                                                            thead {
                                                                 tr {
-                                                                    border_bottom: "1px solid {COLOR_BORDER}",
+                                                                    style: "{data_table_header_row_style()}",
 
-                                                                    td {
-                                                                        padding: "10px 12px",
-                                                                        color: COLOR_TEXT,
-                                                                        font_size: "12px",
-                                                                        font_family: "Consolas, monospace",
+                                                                    th {
+                                                                        style: "{data_table_header_cell_style(Some(\"220px\"), \"left\")}",
 
-                                                                        "{entry_id}"
+                                                                        "Entry ID"
                                                                     }
 
-                                                                    td {
-                                                                        padding: "10px 12px",
+                                                                    th {
+                                                                        style: "{data_table_header_cell_style(None, \"left\")}",
 
-                                                                        div {
-                                                                            display: "flex",
-                                                                            flex_wrap: "wrap",
-                                                                            gap: "8px",
+                                                                        "Fields"
+                                                                    }
 
-                                                                            for (field_key, field_value) in fields.iter() {
+                                                                    th {
+                                                                        style: "{data_table_header_cell_style(Some(\"88px\"), \"center\")}",
+
+                                                                        "Action"
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            tbody {
+                                                                if filtered_stream_entries.is_empty() {
+                                                                    tr {
+                                                                        td {
+                                                                            colspan: "3",
+                                                                            padding: "32px 12px",
+                                                                            text_align: "center",
+                                                                            color: COLOR_TEXT_SECONDARY,
+
+                                                                            if normalized_stream_search.is_empty() {
+                                                                                "暂无数据"
+                                                                            } else {
+                                                                                "未找到匹配的条目"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                } else {
+                                                                    for (entry_id, fields) in filtered_stream_entries.iter() {
+                                                                        tr {
+                                                                            key: "{entry_id}",
+                                                                            border_bottom: "1px solid {COLOR_BORDER}",
+                                                                            background: COLOR_BG_SECONDARY,
+
+                                                                            td {
+                                                                                padding: "10px 12px",
+                                                                                color: COLOR_TEXT,
+                                                                                font_size: "12px",
+                                                                                font_family: "Consolas, monospace",
+                                                                                word_break: "break-all",
+
+                                                                                "{entry_id}"
+                                                                            }
+
+                                                                            td {
+                                                                                padding: "10px 12px",
+
                                                                                 div {
-                                                                                    padding: "4px 8px",
-                                                                                    background: COLOR_BG_TERTIARY,
-                                                                                    border_radius: "4px",
-                                                                                    font_size: "11px",
+                                                                                    display: "flex",
+                                                                                    flex_wrap: "wrap",
+                                                                                    gap: "8px",
 
-                                                                                    span {
-                                                                                        color: "#818cf8",
-                                                                                        font_family: "Consolas, monospace",
+                                                                                    for (field_key, field_value) in fields.iter() {
+                                                                                        div {
+                                                                                            padding: "4px 8px",
+                                                                                            background: COLOR_BG_TERTIARY,
+                                                                                            border: "1px solid {COLOR_BORDER}",
+                                                                                            border_radius: "6px",
+                                                                                            font_size: "11px",
+                                                                                            line_height: "1.5",
 
-                                                                                        "{field_key}:"
+                                                                                            span {
+                                                                                                color: COLOR_ACCENT,
+                                                                                                font_family: "Consolas, monospace",
+
+                                                                                                "{field_key}:"
+                                                                                            }
+                                                                                            span {
+                                                                                                color: COLOR_TEXT,
+                                                                                                margin_left: "4px",
+                                                                                                word_break: "break-all",
+
+                                                                                                "{field_value}"
+                                                                                            }
+                                                                                        }
                                                                                     }
-                                                                                    span {
-                                                                                        color: COLOR_TEXT,
-                                                                                        margin_left: "4px",
+                                                                                }
+                                                                            }
 
-                                                                                        "{field_value}"
-                                                                                    }
+                                                                            td {
+                                                                                padding: "10px 12px",
+                                                                                text_align: "center",
+
+                                                                                button {
+                                                                                    style: "{compact_icon_action_button_style(true, false)}",
+                                                                                    title: "删除",
+                                                                                    onclick: {
+                                                                                        let entry_id = entry_id.clone();
+                                                                                        move |_| {
+                                                                                            deleting_stream_entry.set(Some(entry_id.clone()));
+                                                                                        }
+                                                                                    },
+
+                                                                                    IconTrash { size: Some(15) }
                                                                                 }
                                                                             }
                                                                         }
                                                                     }
-
-                                                                    td {
-                                                                        padding: "10px 12px",
-                                                                        text_align: "center",
-
-                                                                        button {
-                                                                            padding: "4px 8px",
-                                                                            background: "transparent",
-                                                                            color: COLOR_ERROR,
-                                                                            border: "none",
-                                                                            border_radius: "4px",
-                                                                            cursor: "pointer",
-                                                                            opacity: 0.7,
-                                                                            onclick: {
-                                                                                let entry_id = entry_id.clone();
-                                                                                move |_| {
-                                                                                    deleting_stream_entry.set(Some(entry_id.clone()));
-                                                                                }
-                                                                            },
-
-                                                                            IconTrash { size: Some(15) }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-
-                                                            if filtered_entries.is_empty() {
-                                                                tr {
-                                                                    td {
-                                                                        colspan: 3,
-                                                                        padding: "32px",
-                                                                        text_align: "center",
-                                                                        color: COLOR_TEXT_SECONDARY,
-
-                                                                        if stream_search.read().is_empty() {
-                                                                            "暂无数据"
-                                                                        } else {
-                                                                            "未找到匹配的条目"
-                                                                        }
-                                                                    }
                                                                 }
                                                             }
                                                         }
                                                     }
-                                                }
 
-                                                if let Some(entry_id) = deleting_stream_entry.read().clone() {
-                                                    div {
-                                                        position: "fixed",
-                                                        top: "0",
-                                                        left: "0",
-                                                        right: "0",
-                                                        bottom: "0",
-                                                        background: "rgba(0, 0, 0, 0.5)",
-                                                        display: "flex",
-                                                        align_items: "center",
-                                                        justify_content: "center",
-                                                        z_index: "1000",
-                                                        animation: if deleting_stream_entry_exiting() { "backdropFadeOut 0.2s ease-out forwards" } else { "backdropFadeIn 0.2s ease-out" },
-
-                                                        style {
-                                                            r#"
-                                                        @keyframes backdropFadeIn {{
-                                                            from {{ opacity: 0; }}
-                                                            to {{ opacity: 1; }}
-                                                        }}
-                                                        @keyframes backdropFadeOut {{
-                                                            from {{ opacity: 1; }}
-                                                            to {{ opacity: 0; }}
-                                                        }}
-                                                        @keyframes modalFadeIn {{
-                                                            from {{ opacity: 0; transform: scale(0.95); }}
-                                                            to {{ opacity: 1; transform: scale(1); }}
-                                                        }}
-                                                        @keyframes modalFadeOut {{
-                                                            from {{ opacity: 1; transform: scale(1); }}
-                                                            to {{ opacity: 0; transform: scale(0.95); }}
-                                                        }}
-                                                        "#
-                                                        }
-
+                                                    if let Some(entry_id) = deleting_stream_entry.read().clone() {
                                                         div {
-                                                            padding: "24px",
-                                                            background: COLOR_BG_SECONDARY,
-                                                            border_radius: "12px",
-                                                            max_width: "400px",
-                                                            width: "90%",
-                                                            animation: if deleting_stream_entry_exiting() { "modalFadeOut 0.2s ease-out forwards" } else { "modalFadeIn 0.2s ease-out" },
+                                                            style: "{overlay_modal_backdrop_style(deleting_stream_entry_exiting())}",
 
-                                                            h3 {
-                                                                margin_bottom: "16px",
-                                                                color: COLOR_TEXT,
-                                                                font_size: "16px",
-                                                                font_weight: "600",
-
-                                                                "删除 Stream Entry"
-                                                            }
-
-                                                            p {
-                                                                margin_bottom: "24px",
-                                                                color: COLOR_TEXT_SECONDARY,
-                                                                font_size: "14px",
-
-                                                                "确定要删除 entry \"{entry_id}\" 吗？"
+                                                            style {
+                                                                "{overlay_modal_keyframes()}"
                                                             }
 
                                                             div {
-                                                                display: "flex",
-                                                                gap: "12px",
-                                                                justify_content: "flex_end",
+                                                                style: "{overlay_modal_surface_style(\"400px\", deleting_stream_entry_exiting())}",
 
-                                                                button {
-                                                                    padding: "8px 16px",
-                                                                    background: COLOR_BG_TERTIARY,
-                                                                    color: COLOR_TEXT,
-                                                                    border: "1px solid {COLOR_BORDER}",
-                                                                    border_radius: "6px",
-                                                                    cursor: "pointer",
-                                                                    onclick: {
-                                                                        let mut deleting_stream_entry = deleting_stream_entry.clone();
-                                                                        let mut deleting_stream_entry_exiting = deleting_stream_entry_exiting.clone();
-                                                                        move |_| {
-                                                                            deleting_stream_entry_exiting.set(true);
-                                                                            let mut dse = deleting_stream_entry.clone();
-                                                                            let mut dsee = deleting_stream_entry_exiting.clone();
-                                                                            spawn(async move {
-                                                                                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                                                                                dse.set(None);
-                                                                                dsee.set(false);
-                                                                            });
-                                                                        }
-                                                                    },
+                                                                h3 {
+                                                                    style: "{overlay_modal_title_style()}",
 
-                                                                    "取消"
+                                                                    "确认删除"
                                                                 }
 
-                                                                button {
-                                                                    padding: "8px 16px",
-                                                                    background: COLOR_ERROR,
-                                                                    color: COLOR_TEXT_CONTRAST,
-                                                                    border: "none",
-                                                                    border_radius: "6px",
-                                                                    cursor: "pointer",
-                                                                    onclick: {
-                                                                        let pool = connection_pool.clone();
-                                                                        let key = display_key.clone();
-                                                                        let entry_id = entry_id.clone();
-                                                                        let mut deleting_stream_entry = deleting_stream_entry.clone();
-                                                                        let mut deleting_stream_entry_exiting = deleting_stream_entry_exiting.clone();
-                                                                        move |_| {
-                                                                            let pool = pool.clone();
-                                                                            let key = key.clone();
+                                                                p {
+                                                                    style: "{overlay_modal_body_style()}",
+
+                                                                    "确定要删除 entry \"{entry_id}\" 吗？"
+                                                                }
+
+                                                                div {
+                                                                    style: "{overlay_modal_actions_style()}",
+
+                                                                    button {
+                                                                        style: "{secondary_action_button_style()}",
+                                                                        onclick: {
+                                                                            let deleting_stream_entry = deleting_stream_entry.clone();
+                                                                            let mut deleting_stream_entry_exiting = deleting_stream_entry_exiting.clone();
+                                                                            move |_| {
+                                                                                deleting_stream_entry_exiting.set(true);
+                                                                                let mut dse = deleting_stream_entry.clone();
+                                                                                let mut dsee = deleting_stream_entry_exiting.clone();
+                                                                                spawn(async move {
+                                                                                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                                                                                    dse.set(None);
+                                                                                    dsee.set(false);
+                                                                                });
+                                                                            }
+                                                                        },
+
+                                                                        "取消"
+                                                                    }
+
+                                                                    button {
+                                                                        style: "{destructive_action_button_style(false)}",
+                                                                        onclick: {
+                                                                            let pool = connection_pool.clone();
+                                                                            let key = display_key.clone();
                                                                             let entry_id = entry_id.clone();
-                                                                            spawn(async move {
-                                                                                match pool.stream_delete(&key, &entry_id).await {
-                                                                                    Ok(true) => {
-                                                                                        stream_status_message.set("删除成功".to_string());
-                                                                                        stream_status_error.set(false);
-                                                                                        deleting_stream_entry_exiting.set(true);
-                                                                                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                                                                                        deleting_stream_entry.set(None);
-                                                                                        deleting_stream_entry_exiting.set(false);
-    if let Err(error) = load_key_data(
-                                                                                             pool.clone(),
-                                                                                             key.clone(),
-                                                                                             key_info,
-                                                                                             string_value,
-                                                                                             hash_value,
-                                                                                             list_value,
-                                                                                             set_value,
-                                                                                             zset_value,
-                                                                                             stream_value,
-                                                                                             is_binary,
-                                                                                             binary_format,
-                                                                                             serialization_data,
-                    binary_bytes,
-                                                                                             bitmap_info,
-                                                                                             loading,
-                                                                                             hash_cursor,
-                                                                                             hash_total,
-                                                                                             hash_has_more,
-                                                                                             list_has_more,
-                                                                                             list_total,
-                                                                                             set_cursor,
-                                                                                             set_total,
-                                                                                             set_has_more,
-                                                                                             zset_cursor,
-                                                                                             zset_total,
-                                                                                             zset_has_more,
-                                                                                         ).await {
-                                                                                            tracing::error!("{error}");
-                                                                                        } else {
-                                                                                            on_refresh.call(());
+                                                                            let mut deleting_stream_entry = deleting_stream_entry.clone();
+                                                                            let mut deleting_stream_entry_exiting = deleting_stream_entry_exiting.clone();
+                                                                            move |_| {
+                                                                                let pool = pool.clone();
+                                                                                let key = key.clone();
+                                                                                let entry_id = entry_id.clone();
+                                                                                spawn(async move {
+                                                                                    match pool.stream_delete(&key, &entry_id).await {
+                                                                                        Ok(true) => {
+                                                                                            stream_status_message.set("删除成功".to_string());
+                                                                                            stream_status_error.set(false);
+                                                                                            deleting_stream_entry_exiting.set(true);
+                                                                                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                                                                                            deleting_stream_entry.set(None);
+                                                                                            deleting_stream_entry_exiting.set(false);
+                                                                                            if let Err(error) = load_key_data(
+                                                                                                pool.clone(),
+                                                                                                key.clone(),
+                                                                                                key_info,
+                                                                                                string_value,
+                                                                                                hash_value,
+                                                                                                list_value,
+                                                                                                set_value,
+                                                                                                zset_value,
+                                                                                                stream_value,
+                                                                                                is_binary,
+                                                                                                binary_format,
+                                                                                                serialization_data,
+                                                                                                binary_bytes,
+                                                                                                bitmap_info,
+                                                                                                loading,
+                                                                                                hash_cursor,
+                                                                                                hash_total,
+                                                                                                hash_has_more,
+                                                                                                list_has_more,
+                                                                                                list_total,
+                                                                                                set_cursor,
+                                                                                                set_total,
+                                                                                                set_has_more,
+                                                                                                zset_cursor,
+                                                                                                zset_total,
+                                                                                                zset_has_more,
+                                                                                            )
+                                                                                            .await
+                                                                                            {
+                                                                                                tracing::error!("{error}");
+                                                                                            } else {
+                                                                                                on_refresh.call(());
+                                                                                            }
+                                                                                        }
+                                                                                        Ok(false) => {
+                                                                                            stream_status_message.set("Entry 不存在".to_string());
+                                                                                            stream_status_error.set(true);
+                                                                                        }
+                                                                                        Err(error) => {
+                                                                                            stream_status_message.set(format!("删除失败：{error}"));
+                                                                                            stream_status_error.set(true);
                                                                                         }
                                                                                     }
-                                                                                    Ok(false) => {
-                                                                                        stream_status_message.set("Entry 不存在".to_string());
-                                                                                        stream_status_error.set(true);
-                                                                                    }
-                                                                                    Err(error) => {
-                                                                                        stream_status_message.set(format!("删除失败：{error}"));
-                                                                                        stream_status_error.set(true);
-                                                                                    }
-                                                                                }
-                                                                            });
-                                                                        }
-                                                                    },
+                                                                                });
+                                                                            }
+                                                                        },
 
-                                                                    "删除"
+                                                                        "删除"
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -6128,6 +5869,129 @@ pub fn ValueViewer(
                                     background: COLOR_BG_SECONDARY,
 
                                     "未能加载 Key 数据"
+                                }
+                            }
+                        }
+
+                        if let Some(menu) = header_menu() {
+                            {
+                                let menu_id = menu.id;
+                                let x = menu.x;
+                                let y = menu.y;
+                                let mut header_menu_for_close = header_menu.clone();
+
+                                rsx! {
+                                    ContextMenu {
+                                        key: "{menu_id}",
+                                        menu_id: menu_id,
+                                        x: x,
+                                        y: y,
+                                        on_close: move |closing_menu_id| {
+                                            if header_menu_for_close()
+                                                .as_ref()
+                                                .map(|menu| menu.id)
+                                                == Some(closing_menu_id)
+                                            {
+                                                header_menu_for_close.set(None);
+                                            }
+                                        },
+
+                                        ContextMenuItem {
+                                            icon: Some(rsx! { IconEdit { size: Some(14) } }),
+                                            label: if ttl_editing() {
+                                                "收起 TTL 编辑".to_string()
+                                            } else {
+                                                "编辑 TTL".to_string()
+                                            },
+                                            danger: false,
+                                            disabled: false,
+                                            onclick: move |_| {
+                                                header_menu.set(None);
+                                                delete_key_confirm.set(false);
+                                                ttl_editing.set(!ttl_editing());
+                                            },
+                                        }
+
+                                        ContextMenuItem {
+                                            icon: Some(rsx! { IconTrash { size: Some(14) } }),
+                                            label: "删除 Key".to_string(),
+                                            danger: true,
+                                            disabled: false,
+                                            onclick: move |_| {
+                                                header_menu.set(None);
+                                                ttl_editing.set(false);
+                                                delete_key_confirm.set(true);
+                                            },
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if delete_key_confirm() {
+                            div {
+                                style: "{overlay_modal_backdrop_style(false)}",
+
+                                style { "{overlay_modal_keyframes()}" }
+
+                                div {
+                                    style: "{overlay_modal_surface_style(\"420px\", false)}",
+
+                                    h3 {
+                                        style: "{overlay_modal_title_style()}",
+
+                                        "确认删除"
+                                    }
+
+                                    p {
+                                        style: "{overlay_modal_body_style()}",
+
+                                        "确定删除当前 Key \"{display_key}\" 吗？此操作不可恢复。"
+                                    }
+
+                                    div {
+                                        style: "{overlay_modal_actions_style()}",
+
+                                        button {
+                                            style: "{secondary_action_button_style()}",
+                                            disabled: delete_key_processing(),
+                                            onclick: move |_| delete_key_confirm.set(false),
+
+                                            "取消"
+                                        }
+
+                                        button {
+                                            style: "{destructive_action_button_style(delete_key_processing())}",
+                                            disabled: delete_key_processing(),
+                                            onclick: {
+                                                let pool = connection_pool.clone();
+                                                let key = display_key.clone();
+                                                move |_| {
+                                                    let pool = pool.clone();
+                                                    let key = key.clone();
+                                                    spawn(async move {
+                                                        delete_key_processing.set(true);
+
+                                                        match pool.delete_key(&key).await {
+                                                            Ok(_) => {
+                                                                delete_key_confirm.set(false);
+                                                                toast_manager.write().success("Key 已删除");
+                                                                selected_key.set(String::new());
+                                                                on_refresh.call(());
+                                                            }
+                                                            Err(error) => {
+                                                                toast_manager.write().error(&format!("删除失败：{error}"));
+                                                            }
+                                                        }
+
+                                                        delete_key_processing.set(false);
+                                                    });
+                                                }
+                                            },
+
+                                            if delete_key_processing() { "删除中..." } else { "确认删除" }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -6198,7 +6062,7 @@ pub fn BitmapViewer(
 
                 div {
                     padding: "8px 12px",
-                    background: "rgba(47, 133, 90, 0.16)",
+                    background: COLOR_SUCCESS_BG,
                     border_radius: "6px",
 
                     span {
@@ -6241,8 +6105,8 @@ pub fn BitmapViewer(
                     for offset in info.set_bits.iter().take(200) {
                         span {
                             padding: "2px 8px",
-                            background: "rgba(99, 102, 241, 0.20)",
-                            color: "#818cf8",
+                            background: COLOR_INFO_BG,
+                            color: COLOR_INFO,
                             border_radius: "4px",
                             font_size: "11px",
                             font_family: "Consolas, monospace",
@@ -6301,7 +6165,7 @@ pub fn BitmapViewer(
                                         div {
                                             width: "12px",
                                             height: "12px",
-                                            background: if bit_val == 1 { "#22c55e" } else { COLOR_BG },
+                                            background: if bit_val == 1 { COLOR_SUCCESS } else { COLOR_BG },
                                             border_radius: "2px",
                                         }
                                     }}

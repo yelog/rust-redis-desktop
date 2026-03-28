@@ -67,9 +67,9 @@ pub fn SettingsDialog(
                         ] {
                             {
                                 let is_selected = theme_mode() == mode;
-                                let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
-                                let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
-                                let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                                let bg = if is_selected { colors.primary } else { colors.background_tertiary };
+                                let border_color = if is_selected { colors.primary } else { colors.border };
+                                let text_color = if is_selected { colors.primary_text } else { colors.text };
                                 rsx! {
                                     div {
                                         key: "{label}",
@@ -157,9 +157,9 @@ pub fn SettingsDialog(
                         for (value, label) in [(0, "关闭"), (5, "5秒"), (10, "10秒"), (30, "30秒"), (60, "60秒")] {
                             {
                                 let is_selected = auto_refresh_interval() == value;
-                                let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
-                                let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
-                                let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                                let bg = if is_selected { colors.primary } else { colors.background_tertiary };
+                                let border_color = if is_selected { colors.primary } else { colors.border };
+                                let text_color = if is_selected { colors.primary_text } else { colors.text };
                                 rsx! {
                                     div {
                                         key: "{value}",
@@ -220,9 +220,9 @@ fn ThemeSelector(
                 for theme_id in options {
                     {
                         let is_selected = selected == theme_id;
-                        let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
-                        let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
-                        let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                        let bg = if is_selected { colors.primary } else { colors.background_tertiary };
+                        let border_color = if is_selected { colors.primary } else { colors.border };
+                        let text_color = if is_selected { colors.primary_text } else { colors.text };
                         rsx! {
                             div {
                                 key: "{theme_id.as_str()}",

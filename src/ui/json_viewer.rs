@@ -1,7 +1,8 @@
 use crate::theme::{
-    COLOR_ACCENT, COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_BUTTON_SECONDARY, COLOR_ERROR,
-    COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST, SYNTAX_BOOLEAN,
-    SYNTAX_BRACKET, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING,
+    COLOR_BG, COLOR_BORDER, COLOR_BUTTON_SECONDARY, COLOR_BUTTON_SECONDARY_BORDER, COLOR_ERROR,
+    COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST,
+    COLOR_TEXT_SECONDARY, SYNTAX_BOOLEAN, SYNTAX_BRACKET, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER,
+    SYNTAX_STRING,
 };
 use crate::ui::{copy_text_to_clipboard, icons::IconCopy, ToastManager};
 use dioxus::prelude::*;
@@ -181,6 +182,9 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
         .as_ref()
         .map(|v| highlight_json_value(v, 0))
         .unwrap_or_default();
+    let is_pretty = view_mode() == ViewMode::Pretty;
+    let is_raw = view_mode() == ViewMode::Raw;
+    let editing = is_editing();
 
     let copy_to_clipboard = {
         let val = formatted.clone();
@@ -203,8 +207,8 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                 display: "flex",
                 justify_content: "space_between",
                 align_items: "center",
-                gap: "12px",
-                margin_bottom: "12px",
+                gap: "8px",
+                margin_bottom: "10px",
                 flex_wrap: "wrap",
 
                 div {
@@ -214,47 +218,64 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                     flex_wrap: "wrap",
 
                     span {
-                        color: COLOR_ACCENT,
-                        font_size: "12px",
+                        color: COLOR_TEXT_SECONDARY,
+                        font_size: "11px",
+                        font_weight: "700",
+                        text_transform: "uppercase",
+                        letter_spacing: "0.08em",
 
                         "JSON"
                     }
 
                     button {
-                        padding: "4px 8px",
-                        background: if view_mode() == ViewMode::Pretty { "var(--theme-primary)" } else { COLOR_BG_TERTIARY },
-                        color: if view_mode() == ViewMode::Pretty { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                        border: "none",
-                        border_radius: "4px",
+                        height: "28px",
+                        padding: "0 10px",
+                        background: if is_pretty { COLOR_PRIMARY } else { COLOR_BUTTON_SECONDARY },
+                        color: if is_pretty { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                        border: if is_pretty {
+                            "1px solid transparent".to_string()
+                        } else {
+                            format!("1px solid {}", COLOR_BUTTON_SECONDARY_BORDER)
+                        },
+                        border_radius: "6px",
                         cursor: "pointer",
                         font_size: "12px",
+                        font_weight: "500",
                         onclick: move |_| view_mode.set(ViewMode::Pretty),
 
                         "格式化"
                     }
 
                     button {
-                        padding: "4px 8px",
-                        background: if view_mode() == ViewMode::Raw { "var(--theme-primary)" } else { COLOR_BG_TERTIARY },
-                        color: if view_mode() == ViewMode::Raw { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
-                        border: "none",
-                        border_radius: "4px",
+                        height: "28px",
+                        padding: "0 10px",
+                        background: if is_raw { COLOR_PRIMARY } else { COLOR_BUTTON_SECONDARY },
+                        color: if is_raw { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                        border: if is_raw {
+                            "1px solid transparent".to_string()
+                        } else {
+                            format!("1px solid {}", COLOR_BUTTON_SECONDARY_BORDER)
+                        },
+                        border_radius: "6px",
                         cursor: "pointer",
                         font_size: "12px",
+                        font_weight: "500",
                         onclick: move |_| view_mode.set(ViewMode::Raw),
 
                         "压缩"
                     }
 
-                    if editable && !is_editing() {
+                    if editable && !editing {
                         button {
-                            padding: "4px 8px",
+                            height: "28px",
+                            padding: "0 10px",
                             background: COLOR_PRIMARY,
                             color: COLOR_TEXT_CONTRAST,
                             border: "none",
-                            border_radius: "4px",
+                            border_radius: "6px",
                             cursor: "pointer",
                             font_size: "12px",
+                            font_weight: "500",
                             onclick: move |_| {
                                 temp_value.set(formatted.clone());
                                 is_editing.set(true);
@@ -269,16 +290,18 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                 button {
                     margin_left: "auto",
                     flex_shrink: "0",
-                    padding: "6px 10px",
-                    background: "rgba(47, 133, 90, 0.16)",
-                    color: COLOR_SUCCESS,
-                    border: "1px solid rgba(104, 211, 145, 0.28)",
+                    height: "28px",
+                    padding: "0 10px",
+                    background: COLOR_BUTTON_SECONDARY,
+                    color: COLOR_TEXT,
+                    border: "1px solid {COLOR_BUTTON_SECONDARY_BORDER}",
                     border_radius: "6px",
                     cursor: "pointer",
                     display: "flex",
                     align_items: "center",
                     gap: "4px",
                     font_size: "12px",
+                    font_weight: "500",
                     onclick: copy_to_clipboard,
 
                     IconCopy { size: Some(14) }
@@ -304,13 +327,15 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                     display: "flex",
                     flex_direction: "column",
                     flex: "1",
+                    min_height: "0",
 
                     textarea {
                         flex: "1",
+                        min_height: "0",
                         padding: "12px",
                         background: COLOR_BG,
                         border: "1px solid {COLOR_BORDER}",
-                        border_radius: "4px",
+                        border_radius: "8px",
                         color: COLOR_TEXT,
                         font_family: "Consolas, 'Courier New', monospace",
                         font_size: "14px",
@@ -329,7 +354,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                             background: COLOR_SUCCESS,
                             color: COLOR_TEXT_CONTRAST,
                             border: "none",
-                            border_radius: "4px",
+                            border_radius: "6px",
                             cursor: "pointer",
                             onclick: move |_| {
                                 let edited = temp_value();
@@ -353,10 +378,10 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
                         button {
                             padding: "6px 12px",
-                            background: COLOR_BG_TERTIARY,
+                            background: COLOR_BUTTON_SECONDARY,
                             color: COLOR_TEXT,
-                            border: "none",
-                            border_radius: "4px",
+                            border: "1px solid {COLOR_BUTTON_SECONDARY_BORDER}",
+                            border_radius: "6px",
                             cursor: "pointer",
                             onclick: move |_| {
                                 is_editing.set(false);
@@ -370,12 +395,12 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
             } else {
                 div {
                     flex: "1",
+                    min_height: "0",
                     overflow: "auto",
-                    padding: "12px",
+                    padding: "14px",
                     background: COLOR_BG,
                     border: "1px solid {COLOR_BORDER}",
-                    border_radius: "4px",
-                    max_height: "600px",
+                    border_radius: "8px",
 
                     pre {
                         margin: "0",

@@ -54,17 +54,29 @@ pub fn AddKeyDialog(
     let mut zset_members = use_signal(Vec::<ZSetMember>::new);
     let mut stream_entries = use_signal(Vec::<StreamEntry>::new);
 
-    let input_style = format!(
-        "width: 100%; padding: 8px 12px; background: {}; border: 1px solid {}; border_radius: 4px; color: {}; font_size: 13px; box_sizing: border-box;",
-        colors.background_tertiary, colors.border, colors.text
-    );
-
     let button_primary_style = format!(
-        "padding: 8px; background: {}; color: {}; border: none; border_radius: 4px; cursor: pointer;",
-        colors.primary, colors.primary_text
+        "height: 32px; padding: 0 12px; background: {}; color: {}; border: 1px solid {}; border_radius: 6px; cursor: pointer; font_size: 12px; font_weight: 600;",
+        colors.primary, colors.primary_text, colors.primary
     );
 
-    let button_danger_style = "padding: 4px 8px; background: #c53030; color: white; border: none; border_radius: 4px; cursor: pointer; font_size: 12px;";
+    let button_danger_style = format!(
+        "width: 28px; height: 28px; padding: 0; background: {}; color: {}; border: 1px solid {}; border_radius: 6px; cursor: pointer; font_size: 12px; display: flex; align_items: center; justify_content: center; flex_shrink: 0;",
+        colors.error_bg, colors.error, colors.error
+    );
+
+    let button_submit_style = format!(
+        "width: 100%; height: 36px; padding: 0 12px; background: {}; color: {}; border: 1px solid {}; border_radius: 8px; cursor: {}; font_size: 13px; font_weight: 700; opacity: {};",
+        colors.primary,
+        colors.primary_text,
+        colors.primary,
+        if processing() { "default" } else { "pointer" },
+        if processing() { "0.65" } else { "1" }
+    );
+
+    let error_banner_style = format!(
+        "color: {}; background: {}; padding: 8px 12px; border_radius: 6px; margin_bottom: 16px; font_size: 13px; border: 1px solid {};",
+        colors.error, colors.error_bg, colors.error
+    );
 
     rsx! {
         AnimatedDialog {
@@ -78,12 +90,7 @@ pub fn AddKeyDialog(
             div {
                 if let Some(err) = error_msg() {
                     div {
-                        color: "{colors.error}",
-                        background: "{colors.error_bg}",
-                        padding: "8px 12px",
-                        border_radius: "4px",
-                        margin_bottom: "16px",
-                        font_size: "13px",
+                        style: "{error_banner_style}",
 
                         "{err}"
                     }
@@ -136,9 +143,9 @@ pub fn AddKeyDialog(
                             {
                                 let kt = KeyType::from(type_name.to_string());
                                 let is_selected = key_type() == kt;
-                                let bg = if is_selected { colors.primary.clone() } else { colors.background_tertiary.clone() };
-                                let border_color = if is_selected { colors.primary.clone() } else { colors.border.clone() };
-                                let text_color = if is_selected { colors.primary_text.clone() } else { colors.text.clone() };
+                                let bg = if is_selected { colors.primary } else { colors.background_tertiary };
+                                let border_color = if is_selected { colors.primary } else { colors.border };
+                                let text_color = if is_selected { colors.primary_text } else { colors.text };
                                 rsx! {
                                     div {
                                         key: "{type_name}",
@@ -151,8 +158,8 @@ pub fn AddKeyDialog(
                                         cursor: "pointer",
                                         user_select: "none",
                                         onclick: {
-                                            let kt = kt.clone();
-                                            move |_| key_type.set(kt.clone())
+                                            let next_key_type = kt.clone();
+                                            move |_| key_type.set(next_key_type.clone())
                                         },
 
                                         "{type_name}"
@@ -252,13 +259,7 @@ pub fn AddKeyDialog(
                                     }
 
                                     button {
-                                        padding: "4px 8px",
-                                        background: "{colors.error}",
-                                        color: "{colors.primary_text}",
-                                        border: "none",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "12px",
+                                        style: "{button_danger_style}",
                                         onclick: {
                                             let mut fields = hash_fields.clone();
                                             move |_| {
@@ -272,13 +273,7 @@ pub fn AddKeyDialog(
                             }
 
                             button {
-                                padding: "6px 12px",
-                                background: "{colors.primary}",
-                                color: "{colors.primary_text}",
-                                border: "none",
-                                border_radius: "4px",
-                                cursor: "pointer",
-                                font_size: "12px",
+                                style: "{button_primary_style}",
                                 onclick: move |_| {
                                     hash_fields.write().push(HashField::default());
                                 },
@@ -327,13 +322,7 @@ pub fn AddKeyDialog(
                                     }
 
                                     button {
-                                        padding: "4px 8px",
-                                        background: "{colors.error}",
-                                        color: "{colors.primary_text}",
-                                        border: "none",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "12px",
+                                        style: "{button_danger_style}",
                                         onclick: {
                                             let mut values = list_values.clone();
                                             move |_| {
@@ -347,13 +336,7 @@ pub fn AddKeyDialog(
                             }
 
                             button {
-                                padding: "6px 12px",
-                                background: "{colors.primary}",
-                                color: "{colors.primary_text}",
-                                border: "none",
-                                border_radius: "4px",
-                                cursor: "pointer",
-                                font_size: "12px",
+                                style: "{button_primary_style}",
                                 onclick: move |_| {
                                     list_values.write().push(ListValue::default());
                                 },
@@ -394,13 +377,7 @@ pub fn AddKeyDialog(
                                     }
 
                                     button {
-                                        padding: "4px 8px",
-                                        background: "{colors.error}",
-                                        color: "{colors.primary_text}",
-                                        border: "none",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "12px",
+                                        style: "{button_danger_style}",
                                         onclick: {
                                             let mut values = set_values.clone();
                                             move |_| {
@@ -414,13 +391,7 @@ pub fn AddKeyDialog(
                             }
 
                             button {
-                                padding: "6px 12px",
-                                background: "{colors.primary}",
-                                color: "{colors.primary_text}",
-                                border: "none",
-                                border_radius: "4px",
-                                cursor: "pointer",
-                                font_size: "12px",
+                                style: "{button_primary_style}",
                                 onclick: move |_| {
                                     set_values.write().push(SetValue::default());
                                 },
@@ -481,13 +452,7 @@ pub fn AddKeyDialog(
                                     }
 
                                     button {
-                                        padding: "4px 8px",
-                                        background: "{colors.error}",
-                                        color: "{colors.primary_text}",
-                                        border: "none",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "12px",
+                                        style: "{button_danger_style}",
                                         onclick: {
                                             let mut members = zset_members.clone();
                                             move |_| {
@@ -501,13 +466,7 @@ pub fn AddKeyDialog(
                             }
 
                             button {
-                                padding: "6px 12px",
-                                background: "{colors.primary}",
-                                color: "{colors.primary_text}",
-                                border: "none",
-                                border_radius: "4px",
-                                cursor: "pointer",
-                                font_size: "12px",
+                                style: "{button_primary_style}",
                                 onclick: move |_| {
                                     zset_members.write().push(ZSetMember::default());
                                 },
@@ -596,14 +555,7 @@ pub fn AddKeyDialog(
                                     }
 
                                     button {
-                                        padding: "4px 8px",
-                                        background: "{colors.error}",
-                                        color: "{colors.primary_text}",
-                                        border: "none",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "12px",
-                                        flex_shrink: "0",
+                                        style: "{button_danger_style}",
                                         onclick: {
                                             let mut entries = stream_entries.clone();
                                             move |_| {
@@ -617,13 +569,7 @@ pub fn AddKeyDialog(
                             }
 
                             button {
-                                padding: "6px 12px",
-                                background: "{colors.primary}",
-                                color: "{colors.primary_text}",
-                                border: "none",
-                                border_radius: "4px",
-                                cursor: "pointer",
-                                font_size: "12px",
+                                style: "{button_primary_style}",
                                 onclick: move |_| {
                                     stream_entries.write().push(StreamEntry::default());
                                 },
@@ -682,14 +628,7 @@ pub fn AddKeyDialog(
 
             div {
                 button {
-                    width: "100%",
-                    padding: "8px",
-                    background: "{colors.primary}",
-                    color: "{colors.primary_text}",
-                    border: "none",
-                    border_radius: "4px",
-                    cursor: "pointer",
-                    font_size: "13px",
+                    style: "{button_submit_style}",
                     disabled: processing(),
                     onclick: move |_| {
                         let key = key_name.read().trim().to_string();

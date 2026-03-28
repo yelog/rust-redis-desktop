@@ -985,7 +985,10 @@ impl ConnectionPool {
                 Ok(LargeKeyData::Stream { entries })
             }
             KeyType::JSON => {
-                let value = self.json_get(key, None).await?.unwrap_or_else(|| "null".to_string());
+                let value = self
+                    .json_get(key, None)
+                    .await?
+                    .unwrap_or_else(|| "null".to_string());
                 Ok(LargeKeyData::JSON { value })
             }
             KeyType::None => Err(ConnectionError::ConnectionFailed(
@@ -1168,10 +1171,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd::<()>(
-                &mut redis::cmd("JSON.SET").arg(key).arg(path).arg(value),
-            )
-            .await
+            conn.execute_cmd::<()>(&mut redis::cmd("JSON.SET").arg(key).arg(path).arg(value))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -1182,10 +1183,8 @@ impl ConnectionPool {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {
-            conn.execute_cmd::<()>(
-                &mut redis::cmd("JSON.MERGE").arg(key).arg(path).arg(value),
-            )
-            .await
+            conn.execute_cmd::<()>(&mut redis::cmd("JSON.MERGE").arg(key).arg(path).arg(value))
+                .await
         } else {
             Err(ConnectionError::Closed)
         }

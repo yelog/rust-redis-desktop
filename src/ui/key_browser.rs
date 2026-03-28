@@ -1,9 +1,9 @@
 use crate::connection::ConnectionPool;
-use crate::redis::{KeyInfo, KeyType, TreeBuilder, TreeNode};
+use crate::redis::{KeyType, TreeBuilder, TreeNode};
 use crate::theme::{
-    ThemeColors, COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY,
-    COLOR_BORDER, COLOR_ERROR, COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_SURFACE_HIGHEST,
-    COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    ThemeColors, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
+    COLOR_ERROR, COLOR_ERROR_BG, COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_TEXT,
+    COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
 };
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
@@ -45,43 +45,68 @@ fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     keys
 }
 
-fn collect_leaf_keys_by_node_id(nodes: &[TreeNode], node_id: &str) -> Vec<String> {
-    fn find_node<'a>(nodes: &'a [TreeNode], node_id: &str) -> Option<&'a TreeNode> {
-        for node in nodes {
-            if node.node_id == node_id {
-                return Some(node);
-            }
-            if let found @ Some(_) = find_node(&node.children, node_id) {
-                return found;
-            }
-        }
-        None
-    }
-
-    fn collect_leaves(node: &TreeNode) -> Vec<String> {
-        let mut keys = Vec::new();
-        if node.is_leaf {
-            keys.push(node.path.clone());
-        }
-        for child in &node.children {
-            keys.extend(collect_leaves(child));
-        }
-        keys
-    }
-
-    if let Some(node) = find_node(nodes, node_id) {
-        collect_leaves(node)
-    } else {
-        Vec::new()
-    }
-}
-
 fn key_match_pattern(search_pattern: &str) -> String {
     if search_pattern.trim().is_empty() {
         "*".to_string()
     } else {
         format!("*{}*", search_pattern.trim())
     }
+}
+
+fn format_db_count_label(keys: u64) -> String {
+    format!("{keys} 个 Key")
+}
+
+fn selection_toolbar_style() -> String {
+    format!(
+        "margin-top: 8px; padding: 6px 8px; background: {}; border: 1px solid {}; \
+         border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px;",
+        COLOR_BG, COLOR_BORDER
+    )
+}
+
+fn selection_count_style() -> String {
+    format!(
+        "padding: 0 8px; height: 24px; display: inline-flex; align-items: center; border-radius: 999px; \
+         background: {}; border: 1px solid {}; color: {}; font-size: 11px; font-weight: 600; white-space: nowrap;",
+        COLOR_BG_LOWEST, COLOR_BORDER, COLOR_TEXT_SECONDARY
+    )
+}
+
+fn compact_secondary_button_style(disabled: bool) -> String {
+    format!(
+        "height: 24px; padding: 0 8px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; \
+         cursor: {}; font-size: 11px; font-weight: 600; opacity: {};",
+        COLOR_BG_LOWEST,
+        COLOR_TEXT,
+        COLOR_BORDER,
+        if disabled { "default" } else { "pointer" },
+        if disabled { "0.55" } else { "1" }
+    )
+}
+
+fn compact_primary_button_style(disabled: bool) -> String {
+    format!(
+        "height: 24px; padding: 0 8px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; \
+         cursor: {}; font-size: 11px; font-weight: 600; opacity: {};",
+        COLOR_PRIMARY,
+        COLOR_TEXT_CONTRAST,
+        COLOR_PRIMARY,
+        if disabled { "default" } else { "pointer" },
+        if disabled { "0.55" } else { "1" }
+    )
+}
+
+fn compact_danger_button_style(disabled: bool) -> String {
+    format!(
+        "height: 24px; padding: 0 8px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; \
+         cursor: {}; font-size: 11px; font-weight: 600; opacity: {};",
+        COLOR_ERROR_BG,
+        COLOR_ERROR,
+        COLOR_ERROR,
+        if disabled { "default" } else { "pointer" },
+        if disabled { "0.55" } else { "1" }
+    )
 }
 
 #[derive(Clone, Default)]
@@ -117,18 +142,20 @@ pub fn KeyBrowser(
     let key_type_cache = use_signal(HashMap::<String, KeyType>::new);
     let mut tree_state = use_signal(TreeState::default);
     let mut context_menu = use_signal(|| None::<ContextMenuState<(String, bool)>>);
-    let mut key_list_width = use_signal(|| 320.0);
+    let key_list_width = use_signal(|| 320.0);
     let mut show_export_dialog = use_signal(|| None::<Vec<ExportTarget>>);
     let mut toast_manager = use_context::<Signal<ToastManager>>();
-    let mut expanded_paths = use_signal(HashSet::<String>::new);
+    let expanded_paths = use_signal(HashSet::<String>::new);
     let use_virtual_scroll = use_signal(|| true);
+    let mut db_menu = use_signal(|| None::<ContextMenuState<()>>);
+    let mut toolbar_menu = use_signal(|| None::<ContextMenuState<()>>);
 
     {
-        let mut show_delete_dialog = show_delete_dialog.clone();
-        let mut show_add_key_dialog = show_add_key_dialog.clone();
-        let mut show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
-        let mut show_export_dialog = show_export_dialog.clone();
-        let mut show_pattern_delete_dialog = show_pattern_delete_dialog.clone();
+        let show_delete_dialog = show_delete_dialog.clone();
+        let show_add_key_dialog = show_add_key_dialog.clone();
+        let show_batch_ttl_dialog = show_batch_ttl_dialog.clone();
+        let show_export_dialog = show_export_dialog.clone();
+        let show_pattern_delete_dialog = show_pattern_delete_dialog.clone();
 
         use_future(move || {
             let mut show_delete_dialog = show_delete_dialog.clone();
@@ -283,27 +310,6 @@ pub fn KeyBrowser(
         }
     };
 
-    let select_db = {
-        let pool = connection_pool.clone();
-        let mut refresh_trigger = refresh_trigger.clone();
-        let mut selected_key = selected_key.clone();
-        move |db: u8| {
-            let pool = pool.clone();
-            spawn(async move {
-                match pool.select_database(db).await {
-                    Ok(_) => {
-                        selected_key.set(String::new());
-                        current_db.set(db);
-                        refresh_trigger.set(refresh_trigger() + 1);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to select database: {}", e);
-                    }
-                }
-            });
-        }
-    };
-
     let toggle_node = {
         let mut tree_state = tree_state.clone();
         move |node_id: String| {
@@ -327,553 +333,626 @@ pub fn KeyBrowser(
     });
 
     let selected_count = tree_state.read().selected_keys.len();
-    let pattern_nodes = tree_nodes.read().clone();
-    let active_match_pattern = key_match_pattern(&search_pattern());
     let current_selection_mode = tree_state.read().selection_mode;
 
     rsx! {
+        div {
+            width: "100%",
+            height: "100%",
+            min_height: "0",
+            background: COLOR_BG,
+            display: "flex",
+            box_sizing: "border-box",
+            overflow: "hidden",
+
             div {
-                width: "100%",
+                width: "{key_list_width()}px",
+                min_width: "200px",
                 height: "100%",
-                min_height: "0",
-                background: COLOR_BG,
+                background: COLOR_BG_SECONDARY,
+                border_right: "1px solid {COLOR_BORDER}",
                 display: "flex",
+                flex_direction: "column",
                 box_sizing: "border-box",
                 overflow: "hidden",
 
                 div {
-                    width: "{key_list_width()}px",
-                    min_width: "200px",
-                    height: "100%",
+                    padding: "12px",
+                    border_bottom: "1px solid {COLOR_BORDER}",
                     background: COLOR_BG_SECONDARY,
-                    border_right: "1px solid {COLOR_BORDER}",
-                    display: "flex",
-                    flex_direction: "column",
-                    box_sizing: "border-box",
-                    overflow: "hidden",
 
                     div {
-                        padding: "14px 16px",
-                        border_bottom: "1px solid {COLOR_BORDER}",
-                        background: COLOR_BG_SECONDARY,
-
-                        div {
-                            display: "flex",
-                            align_items: "center",
-                            gap: "8px",
-                            margin_bottom: "12px",
-
-                            select {
-                                width: "100px",
-                                padding: "7px 10px",
-                                background: COLOR_BG_TERTIARY,
-                                border: "1px solid {COLOR_BORDER}",
-                                border_radius: "6px",
-                                color: COLOR_TEXT,
-                                font_size: "12px",
-                                value: "db{current_db}",
-                                onchange: move |e| {
-                                    if let Some(db_str) = e.value().strip_prefix("db") {
-                                        if let Ok(db) = db_str.parse::<u8>() {
-                                            select_db(db);
-                                        }
-                                    }
-                                },
-
-                                for i in 0..16u8 {
-                                    {
-                                        let keys = db_keys_count.read().get(&i).copied().unwrap_or(0);
-                                        let label = if keys > 0 {
-                                            format!("DB {} ({})", i, keys)
-                                        } else {
-                                            format!("DB {}", i)
-                                        };
-                                        rsx! {
-                                            option {
-                                                value: "db{i}",
-                                                selected: current_db() == i,
-
-                                                "{label}"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            div {
-                                flex: "1",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "6px",
-                                padding: "0 10px",
-                                height: "32px",
-                                background: COLOR_BG_LOWEST,
-                                border: "1px solid {COLOR_OUTLINE_VARIANT}",
-                                border_radius: "6px",
-
-                                IconSearch { size: Some(14) }
-
-                                input {
-                                    flex: "1",
-                                    background: "transparent",
-                                    border: "none",
-                                    color: COLOR_TEXT,
-                                    font_size: "12px",
-                                    placeholder: "搜索 key",
-                                    value: "{search_pattern}",
-                                    autocapitalize: "off",
-                                    autocorrect: "off",
-                                    oninput: move |e| search_pattern.set(e.value()),
-                                    onkeydown: move |e| {
-                                        if e.data().key() == Key::Enter {
-                                            refresh_trigger.set(refresh_trigger() + 1);
-                                        }
-                                    },
-                                }
-                            }
-                        }
-
-                        div {
-                            display: "flex",
-                            align_items: "center",
-                            gap: "6px",
-
-    button {
-                                padding: "6px 10px",
-                                background: COLOR_PRIMARY,
-                                color: COLOR_TEXT_CONTRAST,
-                                border: "none",
-                                border_radius: "6px",
-                                cursor: "pointer",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "6px",
-                                font_size: "12px",
-                                onclick: move |_| show_add_key_dialog.set(true),
-
-                                IconPlus { size: Some(12) }
-                                "新增"
-                            }
-
-                            button {
-                                padding: "6px 10px",
-                                background: COLOR_SURFACE_HIGHEST,
-                                color: COLOR_TEXT,
-                                border: "1px solid {COLOR_BORDER}",
-                                border_radius: "6px",
-                                cursor: "pointer",
-                                display: "flex",
-                                align_items: "center",
-                                gap: "6px",
-                                font_size: "12px",
-                                onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
-
-                                IconRefresh { size: Some(12) }
-                                "刷新"
-                            }
-
-                            button {
-                            padding: "6px 10px",
-                            background: "rgba(255, 180, 171, 0.10)",
-                            color: "#ffb4ab",
-                            border: "1px solid rgba(255, 180, 171, 0.24)",
-                            border_radius: "6px",
-                            cursor: "pointer",
-                            display: "flex",
-                            align_items: "center",
-                            gap: "6px",
-                            font_size: "12px",
-                            onclick: move |_| show_pattern_delete_dialog.set(true),
-
-                            IconTrash { size: Some(12) }
-                            "模式删除"
-                        }
+                        display: "flex",
+                        align_items: "center",
+                        gap: "6px",
 
                         button {
-                            padding: "6px 10px",
-                            background: COLOR_SURFACE_HIGHEST,
-                            color: COLOR_TEXT,
+                            width: "60px",
+                            height: "32px",
+                            padding: "0 8px",
+                            background: COLOR_BG_TERTIARY,
                             border: "1px solid {COLOR_BORDER}",
                             border_radius: "6px",
                             cursor: "pointer",
                             display: "flex",
                             align_items: "center",
-                            gap: "6px",
-                            font_size: "12px",
-                            onclick: move |_| show_memory_analysis_dialog.set(true),
+                            justify_content: "space_between",
+                            color: COLOR_TEXT,
+                            box_sizing: "border-box",
+                            flex_shrink: "0",
+                            title: "选择数据库",
+                            onclick: move |e| {
+                                let coords = e.client_coordinates();
+                                toolbar_menu.set(None);
+                                db_menu.set(Some(ContextMenuState::new(
+                                    (),
+                                    coords.x as i32,
+                                    coords.y as i32,
+                                )));
+                            },
 
-                            IconSearch { size: Some(12) }
-                            "内存分析"
+                            span {
+                                color: COLOR_TEXT,
+                                font_size: "12px",
+                                font_weight: "700",
+                                line_height: "1",
+                                white_space: "nowrap",
+
+                                "DB {current_db()}"
+                            }
+
+                            span {
+                                color: COLOR_TEXT_SUBTLE,
+                                font_size: "10px",
+                                flex_shrink: "0",
+
+                                "▾"
+                            }
                         }
 
-                        if scan_progress.read().is_scanning {
-                                button {
-                                    padding: "6px 10px",
-                                    background: "#c53030",
-                                    color: COLOR_TEXT_CONTRAST,
-                                    border: "none",
-                                    border_radius: "6px",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    align_items: "center",
-                                    gap: "6px",
-                                    font_size: "12px",
-                                    onclick: {
-                                        let cancel_scan = cancel_scan.clone();
-                                        move |_| cancel_scan.read().store(true, Ordering::Relaxed)
-                                    },
+                        div {
+                            flex: "1",
+                            min_width: "0",
+                            display: "flex",
+                            align_items: "center",
+                            gap: "6px",
+                            padding: "0 8px 0 10px",
+                            height: "32px",
+                            background: COLOR_BG_LOWEST,
+                            border: "1px solid {COLOR_OUTLINE_VARIANT}",
+                            border_radius: "6px",
 
-                                    IconX { size: Some(12) }
-                                    "取消"
-                                }
+                            IconSearch { size: Some(14) }
+
+                            input {
+                                flex: "1",
+                                min_width: "0",
+                                background: "transparent",
+                                border: "none",
+                                color: COLOR_TEXT,
+                                font_size: "12px",
+                                placeholder: "搜索",
+                                value: "{search_pattern}",
+                                autocapitalize: "off",
+                                autocorrect: "off",
+                                oninput: move |e| search_pattern.set(e.value()),
+                                onkeydown: move |e| {
+                                    if e.data().key() == Key::Enter {
+                                        refresh_trigger.set(refresh_trigger() + 1);
+                                    }
+                                },
                             }
 
                             div {
-                                flex: "1",
+                                width: "1px",
+                                height: "14px",
+                                background: COLOR_BORDER,
+                                flex_shrink: "0",
                             }
 
-                            label {
+                            button {
+                                width: "24px",
+                                height: "24px",
+                                background: "transparent",
+                                color: COLOR_TEXT_SECONDARY,
+                                border: "none",
+                                border_radius: "4px",
+                                cursor: "pointer",
+                                display: "flex",
+                                align_items: "center",
+                                justify_content: "center",
+                                flex_shrink: "0",
+                                title: "刷新 Key",
+                                aria_label: "刷新 Key",
+                                onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
+
+                                IconRefresh { size: Some(14) }
+                            }
+
+                            button {
+                                width: "24px",
+                                height: "24px",
+                                background: "transparent",
+                                color: COLOR_TEXT_SECONDARY,
+                                border: "none",
+                                border_radius: "4px",
+                                cursor: "pointer",
+                                display: "flex",
+                                align_items: "center",
+                                justify_content: "center",
+                                flex_shrink: "0",
+                                title: "更多操作",
+                                aria_label: "更多操作",
+                                onclick: move |e| {
+                                    let coords = e.client_coordinates();
+                                    db_menu.set(None);
+                                    toolbar_menu.set(Some(ContextMenuState::new(
+                                        (),
+                                        coords.x as i32,
+                                        coords.y as i32,
+                                    )));
+                                },
+
+                                IconMoreHorizontal { size: Some(14) }
+                            }
+                        }
+
+                        button {
+                            width: "32px",
+                            height: "32px",
+                            background: COLOR_PRIMARY,
+                            color: COLOR_TEXT_CONTRAST,
+                            border: "none",
+                            border_radius: "6px",
+                            cursor: "pointer",
+                            display: "flex",
+                            align_items: "center",
+                            justify_content: "center",
+                            flex_shrink: "0",
+                            title: "新增 Key",
+                            aria_label: "新增 Key",
+                            onclick: move |_| show_add_key_dialog.set(true),
+
+                            IconPlus { size: Some(14) }
+                        }
+                    }
+
+                    if scan_progress.read().is_scanning {
+                        div {
+                            margin_top: "8px",
+                            color: COLOR_TEXT_SECONDARY,
+                            font_size: "11px",
+
+                            "已扫描 {scan_progress.read().scanned} 个 key"
+                        }
+                    }
+
+                    if current_selection_mode {
+                        div {
+                            style: "{selection_toolbar_style()}",
+
+                            span {
+                                style: "{selection_count_style()}",
+
+                                "已选 {selected_count} 项"
+                            }
+
+                            div {
                                 display: "flex",
                                 align_items: "center",
                                 gap: "4px",
-                                color: COLOR_TEXT_SECONDARY,
-                                font_size: "11px",
-                                cursor: "pointer",
 
-                                input {
-                                    r#type: "checkbox",
-                                    checked: current_selection_mode,
-                                    onchange: move |e| {
-                                        tree_state.write().selection_mode = e.checked();
-                                        if !e.checked() {
-                                            tree_state.write().selected_keys.clear();
+                                button {
+                                    style: "{compact_secondary_button_style(false)}",
+                                    onclick: move |_| {
+                                        let all_keys = collect_all_keys(&tree_nodes());
+                                        tree_state.write().selected_keys.extend(all_keys);
+                                    },
+
+                                    "全选"
+                                }
+
+                                button {
+                                    style: "{compact_secondary_button_style(false)}",
+                                    onclick: move |_| tree_state.write().selected_keys.clear(),
+
+                                    "清空"
+                                }
+
+                                button {
+                                    style: "{compact_primary_button_style(selected_count == 0)}",
+                                    disabled: selected_count == 0,
+                                    onclick: {
+                                        let keys: Vec<String> = tree_state.read().selected_keys.iter().cloned().collect();
+                                        move |_| show_batch_ttl_dialog.set(Some((keys.clone(), None)))
+                                    },
+
+                                    "TTL"
+                                }
+
+                                button {
+                                    style: "{compact_danger_button_style(selected_count == 0)}",
+                                    disabled: selected_count == 0,
+                                    onclick: {
+                                        let keys: Vec<String> = tree_state.read().selected_keys.iter().cloned().collect();
+                                        move |_| {
+                                            let targets = keys
+                                                .iter()
+                                                .map(|key| DeleteTarget {
+                                                    key: key.clone(),
+                                                    is_folder: false,
+                                                })
+                                                .collect();
+                                            show_delete_dialog.set(Some(targets));
                                         }
                                     },
-                                }
 
-                                "多选"
-                            }
-                        }
-
-                        if scan_progress.read().is_scanning {
-                            div {
-                                margin_top: "10px",
-                                color: COLOR_TEXT_SECONDARY,
-                                font_size: "11px",
-
-                                "已扫描 {scan_progress.read().scanned} 个 key"
-                            }
-                        }
-
-                        if current_selection_mode {
-                            div {
-                                margin_top: "10px",
-                                padding: "8px 10px",
-                                background: "rgba(48, 209, 88, 0.10)",
-                                border: "1px solid {COLOR_BORDER}",
-                                border_radius: "6px",
-                                display: "flex",
-                                align_items: "center",
-                                justify_content: "space_between",
-                                gap: "8px",
-
-                                span {
-                                    color: COLOR_ACCENT,
-                                    font_size: "11px",
-
-                                    "已选 {selected_count} 项"
-                                }
-
-                                div {
-                                    display: "flex",
-                                    align_items: "center",
-                                    gap: "4px",
-
-                                    button {
-                                        padding: "4px 8px",
-                                        background: "#38a169",
-                                        color: COLOR_TEXT_CONTRAST,
-                                        border: "none",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "10px",
-                                        onclick: move |_| {
-                                            let all_keys = collect_all_keys(&tree_nodes());
-                                            tree_state.write().selected_keys.extend(all_keys);
-                                        },
-
-                                        "全选"
-                                    }
-
-                                    button {
-                                        padding: "4px 8px",
-                                        background: COLOR_SURFACE_HIGHEST,
-                                        color: COLOR_TEXT,
-                                        border: "1px solid {COLOR_BORDER}",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "10px",
-                                        onclick: move |_| tree_state.write().selected_keys.clear(),
-
-                                        "清空"
-                                    }
-
-                                    button {
-                                        padding: "4px 8px",
-                                        background: COLOR_PRIMARY,
-                                        color: COLOR_TEXT_CONTRAST,
-                                        border: "none",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "10px",
-                                        disabled: selected_count == 0,
-                                        onclick: {
-                                            let keys: Vec<String> = tree_state.read().selected_keys.iter().cloned().collect();
-                                            move |_| show_batch_ttl_dialog.set(Some((keys.clone(), None)))
-                                        },
-
-                                        "TTL"
-                                    }
-
-                                    button {
-                                        padding: "4px 8px",
-                                        background: "rgba(255, 180, 171, 0.10)",
-                                        color: "#ffb4ab",
-                                        border: "1px solid rgba(255, 180, 171, 0.24)",
-                                        border_radius: "4px",
-                                        cursor: "pointer",
-                                        font_size: "10px",
-                                        disabled: selected_count == 0,
-                                        onclick: {
-                                            let keys: Vec<String> = tree_state.read().selected_keys.iter().cloned().collect();
-                                            move |_| {
-                                                let targets = keys
-                                                    .iter()
-                                                    .map(|key| DeleteTarget {
-                                                        key: key.clone(),
-                                                        is_folder: false,
-                                                    })
-                                                    .collect();
-                                                show_delete_dialog.set(Some(targets));
-                                            }
-                                        },
-
-                                        "删除"
-                                    }
+                                    "删除"
                                 }
                             }
                         }
                     }
+                }
 
-                    div {
-                        flex: "1",
-                        min_height: "0",
-                        overflow_y: "auto",
-                        padding: "4px 0",
+                div {
+                    flex: "1",
+                    min_height: "0",
+                    overflow_y: "auto",
+                    padding: "4px 0",
 
-                        if tree_nodes.read().is_empty() {
-                            div {
-                                padding: "40px 20px",
-                                text_align: "center",
-                                color: COLOR_TEXT_SECONDARY,
-                                font_size: "13px",
+                    if tree_nodes.read().is_empty() {
+                        div {
+                            padding: "40px 20px",
+                            text_align: "center",
+                            color: COLOR_TEXT_SECONDARY,
+                            font_size: "13px",
 
-                                if loading() {
-                                    "正在加载..."
-                                } else {
-                                    "没有找到 key"
-                                }
+                            if loading() {
+                                "正在加载..."
+                            } else {
+                                "没有找到 key"
                             }
-                        } else if use_virtual_scroll() && !tree_state.read().selection_mode {
-                            VirtualTreeList {
-                                nodes: tree_nodes.read().clone(),
+                        }
+                    } else if use_virtual_scroll() && !tree_state.read().selection_mode {
+                        VirtualTreeList {
+                            nodes: tree_nodes.read().clone(),
+                            selected_key: selected_key(),
+                            expanded_paths: expanded_paths,
+                            on_select: {
+                                let on_key_select = on_key_select.clone();
+                                move |key: String| {
+                                    on_key_select.call(key);
+                                }
+                            },
+                            on_toggle: {
+                                let mut expanded_paths = expanded_paths.clone();
+                                move |path: String| {
+                                    let mut expanded = expanded_paths.write();
+                                    if expanded.contains(&path) {
+                                        expanded.remove(&path);
+                                    } else {
+                                        expanded.insert(path);
+                                    }
+                                }
+                            },
+                        }
+                    } else {
+                        for node in tree_nodes.read().iter() {
+                            LazyTreeNode {
+                                key: "{node.node_id}",
+                                node: node.clone(),
+                                depth: 0,
                                 selected_key: selected_key(),
-                                expanded_paths: expanded_paths,
+                                tree_state: tree_state,
                                 on_select: {
                                     let on_key_select = on_key_select.clone();
                                     move |key: String| {
                                         on_key_select.call(key);
                                     }
                                 },
-                                on_toggle: {
-                                    let mut expanded_paths = expanded_paths.clone();
-                                    move |path: String| {
-                                        let mut expanded = expanded_paths.write();
-                                        if expanded.contains(&path) {
-                                            expanded.remove(&path);
-                                        } else {
-                                            expanded.insert(path);
-                                        }
+                                on_expand: {
+                                    let mut toggle_node = toggle_node.clone();
+                                    move |node_id: String| {
+                                        toggle_node(node_id);
                                     }
                                 },
-                            }
-                        } else {
-                            for node in tree_nodes.read().iter() {
-                                LazyTreeNode {
-                                    key: "{node.node_id}",
-                                    node: node.clone(),
-                                    depth: 0,
-                                    selected_key: selected_key(),
-                                    tree_state: tree_state,
-                                    on_select: {
-                                        let on_key_select = on_key_select.clone();
-                                        move |key: String| {
-                                            on_key_select.call(key);
-                                        }
-                                    },
-                                    on_expand: {
-                                        let mut toggle_node = toggle_node.clone();
-                                        move |node_id: String| {
-                                            toggle_node(node_id);
-                                        }
-                                    },
-                                    context_menu: context_menu,
-                                }
+                                context_menu: context_menu,
                             }
                         }
                     }
-
-                    div {
-                        padding: "8px 16px",
-                        border_top: "1px solid {COLOR_BORDER}",
-                        color: COLOR_TEXT_SUBTLE,
-                        font_size: "11px",
-
-                        "共 {keys_count()} 个 Key"
-                    }
-                }
-
-                ResizableDivider {
-                    size: key_list_width,
-                    min_size: 200.0,
-                    max_size: 500.0,
                 }
 
                 div {
-                    flex: "1",
-                    min_width: "0",
-                    height: "100%",
-                    display: "flex",
-                    flex_direction: "column",
-                    overflow: "hidden",
+                    padding: "8px 16px",
+                    border_top: "1px solid {COLOR_BORDER}",
+                    color: COLOR_TEXT_SUBTLE,
+                    font_size: "11px",
 
-                    ValueViewer {
-                        key: "{connection_id}",
-                        connection_pool: connection_pool.clone(),
-                        connection_version: connection_version,
-                        selected_key: selected_key,
-                        on_refresh: move |_| {
-                            refresh_trigger.set(refresh_trigger() + 1);
-                        },
-                    }
+                    "共 {keys_count()} 个 Key"
                 }
             }
 
-            if let Some(menu) = context_menu() {
-                {
-                    let menu_id = menu.id;
-                    let x = menu.x;
-                    let y = menu.y;
-                    let (node_path, is_leaf) = menu.data.clone();
-                    let mut context_menu_for_close = context_menu.clone();
-                    rsx! {
-                        ContextMenu {
-                            key: "{menu_id}",
-                            menu_id: menu_id,
-                            x: x,
-                            y: y,
-                            on_close: move |closing_menu_id| {
-                                if context_menu_for_close()
-                                    .as_ref()
-                                    .map(|menu| menu.id)
-                                    == Some(closing_menu_id)
-                                {
-                                    context_menu_for_close.set(None);
+            ResizableDivider {
+                size: key_list_width,
+                min_size: 200.0,
+                max_size: 500.0,
+            }
+
+            div {
+                flex: "1",
+                min_width: "0",
+                height: "100%",
+                display: "flex",
+                flex_direction: "column",
+                overflow: "hidden",
+
+                ValueViewer {
+                    key: "{connection_id}",
+                    connection_pool: connection_pool.clone(),
+                    connection_version: connection_version,
+                    selected_key: selected_key,
+                    on_refresh: move |_| {
+                        refresh_trigger.set(refresh_trigger() + 1);
+                    },
+                }
+            }
+        }
+
+        if let Some(menu) = context_menu() {
+            {
+                let menu_id = menu.id;
+                let x = menu.x;
+                let y = menu.y;
+                let (node_path, is_leaf) = menu.data.clone();
+                let mut context_menu_for_close = context_menu.clone();
+                rsx! {
+                    ContextMenu {
+                        key: "{menu_id}",
+                        menu_id: menu_id,
+                        x: x,
+                        y: y,
+                        on_close: move |closing_menu_id| {
+                            if context_menu_for_close()
+                                .as_ref()
+                                .map(|menu| menu.id)
+                                == Some(closing_menu_id)
+                            {
+                                context_menu_for_close.set(None);
+                            }
+                        },
+
+                        ContextMenuItem {
+                            icon: Some(rsx! { IconCopy { size: Some(14) } }),
+                            label: "复制路径".to_string(),
+                            danger: false,
+                            disabled: false,
+                            onclick: {
+                                let node_path = node_path.clone();
+                                move |_| {
+                                    context_menu.set(None);
+                                    if copy_text_to_clipboard(&node_path).is_ok() {
+                                        toast_manager.write().success("路径已复制");
+                                    }
                                 }
                             },
+                        }
 
-                            ContextMenuItem {
-                                icon: Some(rsx! { IconCopy { size: Some(14) } }),
-                                label: "复制路径".to_string(),
-                                danger: false,
-                                disabled: false,
-                                onclick: {
+                        ContextMenuItem {
+                            icon: Some(rsx! { IconDownload { size: Some(14) } }),
+                            label: "导出".to_string(),
+                            danger: false,
+                            disabled: false,
+                            onclick: {
+                                let node_path = node_path.clone();
+                                let is_leaf = is_leaf;
+                                move |_| {
+                                    context_menu.set(None);
+                                    show_export_dialog.set(Some(vec![ExportTarget {
+                                        key: node_path.clone(),
+                                        is_folder: !is_leaf,
+                                    }]));
+                                }
+                            },
+                        }
+
+                        ContextMenuItem {
+                            icon: Some(rsx! { IconClock { size: Some(14) } }),
+                            label: "设置TTL".to_string(),
+                            danger: false,
+                            disabled: !is_leaf,
+                            onclick: {
+                                let node_path = node_path.clone();
+                                let pool = connection_pool.clone();
+                                move |_| {
+                                    context_menu.set(None);
+                                    let pool = pool.clone();
                                     let node_path = node_path.clone();
-                                    move |_| {
-                                        context_menu.set(None);
-                                        if copy_text_to_clipboard(&node_path).is_ok() {
-                                            toast_manager.write().success("路径已复制");
+                                    spawn(async move {
+                                        let ttl = pool.get_key_info(&node_path).await.ok().and_then(|info| info.ttl);
+                                        show_batch_ttl_dialog.set(Some((vec![node_path], ttl)));
+                                    });
+                                }
+                            },
+                        }
+
+                        ContextMenuItem {
+                            icon: Some(rsx! { IconRefresh { size: Some(14) } }),
+                            label: "重命名".to_string(),
+                            danger: false,
+                            disabled: !is_leaf,
+                            onclick: {
+                                let _node_path = node_path.clone();
+                                move |_| {
+                                    context_menu.set(None);
+                                    toast_manager.write().success("重命名功能开发中");
+                                }
+                            },
+                        }
+
+                        ContextMenuItem {
+                            icon: Some(rsx! { IconTrash { size: Some(14) } }),
+                            label: "删除".to_string(),
+                            danger: true,
+                            disabled: false,
+                            onclick: {
+                                let node_path = node_path.clone();
+                                let is_leaf = is_leaf;
+                                move |_| {
+                                    context_menu.set(None);
+                                    show_delete_dialog.set(Some(vec![DeleteTarget {
+                                        key: node_path.clone(),
+                                        is_folder: !is_leaf,
+                                    }]));
+                                }
+                            },
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(menu) = db_menu() {
+            {
+                let menu_id = menu.id;
+                let x = menu.x;
+                let y = menu.y;
+                let mut db_menu_for_close = db_menu.clone();
+
+                rsx! {
+                    ContextMenu {
+                        key: "{menu_id}",
+                        menu_id: menu_id,
+                        x: x,
+                        y: y,
+                        on_close: move |closing_menu_id| {
+                            if db_menu_for_close()
+                                .as_ref()
+                                .map(|menu| menu.id)
+                                == Some(closing_menu_id)
+                            {
+                                db_menu_for_close.set(None);
+                            }
+                        },
+
+                            for i in 0..16u8 {
+                                {
+                                    let keys = db_keys_count.read().get(&i).copied().unwrap_or(0);
+                                    let label = format!("DB {} · {}", i, format_db_count_label(keys));
+                                    let pool = connection_pool.clone();
+                                    let mut current_db_signal = current_db.clone();
+                                    let mut refresh_trigger_signal = refresh_trigger.clone();
+                                    let mut selected_key_signal = selected_key.clone();
+                                    rsx! {
+                                        ContextMenuItem {
+                                            icon: Some(rsx! { IconDatabase { size: Some(14) } }),
+                                            label: label,
+                                            danger: false,
+                                            disabled: current_db() == i,
+                                            onclick: move |_| {
+                                                db_menu.set(None);
+                                                let pool = pool.clone();
+                                                spawn(async move {
+                                                    match pool.select_database(i).await {
+                                                        Ok(_) => {
+                                                            selected_key_signal.set(String::new());
+                                                            current_db_signal.set(i);
+                                                            refresh_trigger_signal.set(refresh_trigger_signal() + 1);
+                                                        }
+                                                        Err(error) => {
+                                                            tracing::error!("Failed to select database: {}", error);
+                                                        }
+                                                    }
+                                                });
+                                            },
                                         }
                                     }
-                                },
-                            }
+                                }
+                        }
+                    }
+                }
+            }
+        }
 
-                            ContextMenuItem {
-                                icon: Some(rsx! { IconDownload { size: Some(14) } }),
-                                label: "导出".to_string(),
-                                danger: false,
-                                disabled: false,
-                                onclick: {
-                                    let node_path = node_path.clone();
-                                    let is_leaf = is_leaf;
-                                    move |_| {
-                                        context_menu.set(None);
-                                        show_export_dialog.set(Some(vec![ExportTarget {
-                                            key: node_path.clone(),
-                                            is_folder: !is_leaf,
-                                        }]));
-                                    }
-                                },
-                            }
+        if let Some(menu) = toolbar_menu() {
+            {
+                let menu_id = menu.id;
+                let x = menu.x;
+                let y = menu.y;
+                let mut toolbar_menu_for_close = toolbar_menu.clone();
 
-                            ContextMenuItem {
-                                icon: Some(rsx! { IconClock { size: Some(14) } }),
-                                label: "设置TTL".to_string(),
-                                danger: false,
-                                disabled: !is_leaf,
-                                onclick: {
-                                    let node_path = node_path.clone();
-                                    let pool = connection_pool.clone();
-                                    move |_| {
-                                        context_menu.set(None);
-                                        let pool = pool.clone();
-                                        let node_path = node_path.clone();
-                                        spawn(async move {
-                                            let ttl = pool.get_key_info(&node_path).await.ok().and_then(|info| info.ttl);
-                                            show_batch_ttl_dialog.set(Some((vec![node_path], ttl)));
-                                        });
-                                    }
-                                },
+                rsx! {
+                    ContextMenu {
+                        key: "{menu_id}",
+                        menu_id: menu_id,
+                        x: x,
+                        y: y,
+                        on_close: move |closing_menu_id| {
+                            if toolbar_menu_for_close()
+                                .as_ref()
+                                .map(|menu| menu.id)
+                                == Some(closing_menu_id)
+                            {
+                                toolbar_menu_for_close.set(None);
                             }
+                        },
 
-                            ContextMenuItem {
-                                icon: Some(rsx! { IconRefresh { size: Some(14) } }),
-                                label: "重命名".to_string(),
-                                danger: false,
-                                disabled: !is_leaf,
-                                onclick: {
-                                    let _node_path = node_path.clone();
-                                    move |_| {
-                                        context_menu.set(None);
-                                        toast_manager.write().success("重命名功能开发中");
-                                    }
-                                },
-                            }
+                        ContextMenuItem {
+                            icon: Some(rsx! { IconSearch { size: Some(14) } }),
+                            label: "内存分析".to_string(),
+                            danger: false,
+                            disabled: false,
+                            onclick: move |_| {
+                                toolbar_menu.set(None);
+                                show_memory_analysis_dialog.set(true);
+                            },
+                        }
 
+                        ContextMenuItem {
+                            icon: Some(rsx! { IconTrash { size: Some(14) } }),
+                            label: "模式删除".to_string(),
+                            danger: true,
+                            disabled: false,
+                            onclick: move |_| {
+                                toolbar_menu.set(None);
+                                show_pattern_delete_dialog.set(true);
+                            },
+                        }
+
+                        ContextMenuItem {
+                            icon: Some(rsx! {
+                                if current_selection_mode {
+                                    IconX { size: Some(14) }
+                                } else {
+                                    IconCheck { size: Some(14) }
+                                }
+                            }),
+                            label: if current_selection_mode {
+                                "退出多选".to_string()
+                            } else {
+                                "进入多选".to_string()
+                            },
+                            danger: false,
+                            disabled: false,
+                            onclick: move |_| {
+                                toolbar_menu.set(None);
+                                tree_state.write().selection_mode = !current_selection_mode;
+                                if current_selection_mode {
+                                    tree_state.write().selected_keys.clear();
+                                }
+                            },
+                        }
+
+                        if scan_progress.read().is_scanning {
                             ContextMenuItem {
-                                icon: Some(rsx! { IconTrash { size: Some(14) } }),
-                                label: "删除".to_string(),
+                                icon: Some(rsx! { IconX { size: Some(14) } }),
+                                label: "取消扫描".to_string(),
                                 danger: true,
                                 disabled: false,
                                 onclick: {
-                                    let node_path = node_path.clone();
-                                    let is_leaf = is_leaf;
+                                    let cancel_scan = cancel_scan.clone();
                                     move |_| {
-                                        context_menu.set(None);
-                                        show_delete_dialog.set(Some(vec![DeleteTarget {
-                                            key: node_path.clone(),
-                                            is_folder: !is_leaf,
-                                        }]));
+                                        toolbar_menu.set(None);
+                                        cancel_scan.read().store(true, Ordering::Relaxed);
                                     }
                                 },
                             }
@@ -881,129 +960,95 @@ pub fn KeyBrowser(
                     }
                 }
             }
+        }
 
-            if let Some(targets) = show_delete_dialog() {
-                DeleteConfirmDialog {
-                    connection_pool: connection_pool.clone(),
-                    targets: targets.clone(),
-                    colors,
-                    on_confirm: move |_| {
-                        show_delete_dialog.set(None);
-                        tree_state.write().selected_keys.clear();
-                        selected_key.set(String::new());
-                        refresh_trigger.set(refresh_trigger() + 1);
-                    },
-                    on_cancel: move |_| show_delete_dialog.set(None),
-                }
-            }
-
-            if show_add_key_dialog() {
-                AddKeyDialog {
-                    connection_pool: connection_pool.clone(),
-                    colors,
-                    on_save: {
-                        let mut refresh_trigger = refresh_trigger.clone();
-                        let mut selected_key = selected_key.clone();
-                        move |key: String| {
-                            show_add_key_dialog.set(false);
-                            selected_key.set(key);
-                            refresh_trigger.set(refresh_trigger() + 1);
-                        }
-                    },
-                    on_cancel: move |_| show_add_key_dialog.set(false),
-                }
-            }
-
-            if let Some((keys, current_ttl)) = show_batch_ttl_dialog() {
-                BatchTtlDialog {
-                    connection_pool: connection_pool.clone(),
-                    keys: keys.clone(),
-                    current_ttl,
-                    colors,
-                    on_confirm: move |_| {
-                        show_batch_ttl_dialog.set(None);
-                        tree_state.write().selected_keys.clear();
-                        refresh_trigger.set(refresh_trigger() + 1);
-                    },
-                    on_cancel: move |_| show_batch_ttl_dialog.set(None),
-                }
-            }
-
-            if let Some(targets) = show_export_dialog() {
-                ExportDialog {
-                    connection_pool: connection_pool.clone(),
-                    targets: targets.clone(),
-                    colors,
-                    on_close: move |_| show_export_dialog.set(None),
-                }
-            }
-
-            if show_pattern_delete_dialog() {
-                PatternDeleteDialog {
-                    connection_pool: connection_pool.clone(),
-                    initial_pattern: search_pattern(),
-                    colors,
-                    on_confirm: {
-                        let mut refresh_trigger = refresh_trigger.clone();
-                        let mut toast_manager = toast_manager.clone();
-                        move |deleted_count: usize| {
-                            show_pattern_delete_dialog.set(false);
-                            refresh_trigger.set(refresh_trigger() + 1);
-                            toast_manager.write().success(&format!("已删除 {} 个 key", deleted_count));
-                        }
-                    },
-                    on_cancel: move |_| show_pattern_delete_dialog.set(false),
-                }
-            }
-
-            if show_memory_analysis_dialog() {
-                MemoryAnalysisDialog {
-                    connection_pool: connection_pool.clone(),
-                    colors,
-                    on_select_key: {
-                        let on_key_select = on_key_select.clone();
-                        move |key: String| {
-                            show_memory_analysis_dialog.set(false);
-                            on_key_select.call(key);
-                        }
-                    },
-                    on_close: move |_| show_memory_analysis_dialog.set(false),
-                }
+        if let Some(targets) = show_delete_dialog() {
+            DeleteConfirmDialog {
+                connection_pool: connection_pool.clone(),
+                targets: targets.clone(),
+                colors,
+                on_confirm: move |_| {
+                    show_delete_dialog.set(None);
+                    tree_state.write().selected_keys.clear();
+                    selected_key.set(String::new());
+                    refresh_trigger.set(refresh_trigger() + 1);
+                },
+                on_cancel: move |_| show_delete_dialog.set(None),
             }
         }
-}
 
-fn update_node_key_info(nodes: &mut [TreeNode], key_path: &str, key_info: KeyInfo) -> bool {
-    for node in nodes.iter_mut() {
-        if node.is_leaf && node.path == key_path {
-            node.key_info = Some(key_info);
-            return true;
+        if show_add_key_dialog() {
+            AddKeyDialog {
+                connection_pool: connection_pool.clone(),
+                colors,
+                on_save: {
+                    let mut refresh_trigger = refresh_trigger.clone();
+                    let mut selected_key = selected_key.clone();
+                    move |key: String| {
+                        show_add_key_dialog.set(false);
+                        selected_key.set(key);
+                        refresh_trigger.set(refresh_trigger() + 1);
+                    }
+                },
+                on_cancel: move |_| show_add_key_dialog.set(false),
+            }
         }
-        if update_node_key_info(&mut node.children, key_path, key_info.clone()) {
-            return true;
+
+        if let Some((keys, current_ttl)) = show_batch_ttl_dialog() {
+            BatchTtlDialog {
+                connection_pool: connection_pool.clone(),
+                keys: keys.clone(),
+                current_ttl,
+                colors,
+                on_confirm: move |_| {
+                    show_batch_ttl_dialog.set(None);
+                    tree_state.write().selected_keys.clear();
+                    refresh_trigger.set(refresh_trigger() + 1);
+                },
+                on_cancel: move |_| show_batch_ttl_dialog.set(None),
+            }
+        }
+
+        if let Some(targets) = show_export_dialog() {
+            ExportDialog {
+                connection_pool: connection_pool.clone(),
+                targets: targets.clone(),
+                colors,
+                on_close: move |_| show_export_dialog.set(None),
+            }
+        }
+
+        if show_pattern_delete_dialog() {
+            PatternDeleteDialog {
+                connection_pool: connection_pool.clone(),
+                initial_pattern: search_pattern(),
+                colors,
+                on_confirm: {
+                    let mut refresh_trigger = refresh_trigger.clone();
+                    let mut toast_manager = toast_manager.clone();
+                    move |deleted_count: usize| {
+                        show_pattern_delete_dialog.set(false);
+                        refresh_trigger.set(refresh_trigger() + 1);
+                        toast_manager.write().success(&format!("已删除 {} 个 key", deleted_count));
+                    }
+                },
+                on_cancel: move |_| show_pattern_delete_dialog.set(false),
+            }
+        }
+
+        if show_memory_analysis_dialog() {
+            MemoryAnalysisDialog {
+                connection_pool: connection_pool.clone(),
+                colors,
+                on_select_key: {
+                    let on_key_select = on_key_select.clone();
+                    move |key: String| {
+                        show_memory_analysis_dialog.set(false);
+                        on_key_select.call(key);
+                    }
+                },
+                on_close: move |_| show_memory_analysis_dialog.set(false),
+            }
         }
     }
-    false
-}
-
-fn update_node_key_type(nodes: &mut [TreeNode], key_path: &str, key_type: KeyType) -> bool {
-    for node in nodes.iter_mut() {
-        if node.is_leaf && node.path == key_path {
-            if let Some(ref mut info) = node.key_info {
-                info.key_type = key_type;
-            } else {
-                node.key_info = Some(KeyInfo {
-                    name: key_path.to_string(),
-                    key_type,
-                    ttl: None,
-                    size: None,
-                });
-            }
-            return true;
-        }
-        if update_node_key_type(&mut node.children, key_path, key_type.clone()) {
-            return true;
-        }
-    }
-    false
 }
