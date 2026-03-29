@@ -210,11 +210,8 @@ jobs:
       - name: Build
         run: cargo build --release
 
-      - name: Install NSIS
-        run: choco install nsis -y
-
-      - name: Install ImageMagick
-        uses: mfinelli/setup-imagemagick@v2
+      - name: Install NSIS and ImageMagick
+        run: choco install nsis imagemagick -y
 
       - name: Prepare installer resources
         shell: bash
