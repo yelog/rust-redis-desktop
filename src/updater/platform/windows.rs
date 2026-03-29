@@ -83,14 +83,13 @@ impl WindowsInstaller {
         let new_exe_str = new_exe.to_string_lossy();
 
         let script = format!(
-            r"@echo off
-timeout /t 2 /nobreak > nul
-copy /y \"{}\" \"{}\"
-del \"{}\"
-start \"\" \"{}\"
-del \"%~f0\"
-exit
-",
+            "@echo off\r\n\
+             timeout /t 2 /nobreak > nul\r\n\
+             copy /y \"{}\" \"{}\"\r\n\
+             del \"{}\"\r\n\
+             start \"\" \"{}\"\r\n\
+             del \"%~f0\"\r\n\
+             exit\r\n",
             new_exe_str, current_exe_str, new_exe_str, current_exe_str
         );
 

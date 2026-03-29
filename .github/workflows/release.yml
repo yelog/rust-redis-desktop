@@ -146,7 +146,7 @@ jobs:
           xcrun stapler staple "rust-redis-desktop-${{ matrix.arch }}.dmg"
 
       - name: Install pynacl for Sparkle signing
-        run: pip3 install pynacl
+        run: pip3 install --break-system-packages pynacl
 
       - name: Sign DMG with Sparkle
         env:
