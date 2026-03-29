@@ -41,10 +41,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
 
+      - name: Setup Sparkle Framework
+        run: |
+          chmod +x scripts/setup-sparkle.sh
+          ./scripts/setup-sparkle.sh
+
       - name: Create .app bundle
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
         run: |
           chmod +x scripts/build-app.sh
           VERSION="${GITHUB_REF_NAME#v}"
+          
+          # 使用包含 Sparkle 公钥的 Info.plist
+          if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
+            sed -e "s/\${VERSION}/$VERSION/" \
+                -e "s/\${BUILD_NUMBER}/${{ github.run_number }}" \
+                -e "s/\${SPARKLE_PUBLIC_KEY}/$SPARKLE_PUBLIC_KEY/" \
+                Info.plist.sparkle > Info.plist.generated
+            mv Info.plist.generated Info.plist
+          fi
+          
           ./scripts/build-app.sh "$VERSION" "${{ github.run_number }}" "${{ matrix.target }}"
 
       - name: Import Apple certificate
@@ -128,11 +145,41 @@ jobs:
         run: |
           xcrun stapler staple "rust-redis-desktop-${{ matrix.arch }}.dmg"
 
+      - name: Sign DMG with Sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          DMG_FILE="rust-redis-desktop-${{ matrix.arch }}.dmg"
+          
+          if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
+            chmod +x scripts/sign-dmg-sparkle.sh
+            
+            # 签名 DMG
+            SIGNATURE_OUTPUT=$(./scripts/sign-dmg-sparkle.sh "$DMG_FILE" 2>&1)
+            
+            # 提取签名和文件大小
+            ED_SIGNATURE=$(echo "$SIGNATURE_OUTPUT" | grep "sparkle:edSignature" | sed 's/sparkle:edSignature="//' | sed 's/"//')
+            FILE_LENGTH=$(stat -f%z "$DMG_FILE")
+            
+            # 保存签名信息到文件
+            echo "ARCH=${{ matrix.arch }}" >> sparkle-signatures.txt
+            echo "SIGNATURE=$ED_SIGNATURE" >> sparkle-signatures.txt
+            echo "LENGTH=$FILE_LENGTH" >> sparkle-signatures.txt
+            echo "DMG_NAME=$DMG_FILE" >> sparkle-signatures.txt
+            echo "---" >> sparkle-signatures.txt
+            
+            echo "Sparkle signature saved for ${{ matrix.arch }}"
+          else
+            echo "Skipping Sparkle signing (SPARKLE_PRIVATE_KEY not set)"
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}
-          path: rust-redis-desktop-${{ matrix.arch }}.dmg
+          path: |
+            rust-redis-desktop-${{ matrix.arch }}.dmg
+            sparkle-signatures.txt
           retention-days: 1
 
   build-windows:
@@ -363,7 +410,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -371,6 +423,53 @@ jobs:
 
       - name: Display structure of downloaded files
         run: find artifacts -type f
+
+      - name: Generate appcast.xml
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IS_PRERELEASE="${{ contains(github.ref_name, '-') }}"
+          
+          # 合合并签名信息
+          cat artifacts/macos-x86_64/sparkle-signatures.txt > sparkle-signatures-all.txt || true
+          cat artifacts/macos-aarch64/sparkle-signatures.txt >> sparkle-signatures-all.txt || true
+          
+          # 解析签名
+          X86_SIGNATURE=$(grep -A3 "ARCH=x86_64" sparkle-signatures-all.txt | grep "SIGNATURE=" | cut -d= -f2 || echo "")
+          X86_LENGTH=$(grep -A3 "ARCH=x86_64" sparkle-signatures-all.txt | grep "LENGTH=" | cut -d= -f2 || stat -c%s "artifacts/macos-x86_64/rust-redis-desktop-x86_64.dmg" 2>/dev/null || echo "0")
+          
+          ARM_SIGNATURE=$(grep -A3 "ARCH=aarch64" sparkle-signatures-all.txt | grep "SIGNATURE=" | cut -d= -f2 || echo "")
+          ARM_LENGTH=$(grep -A3 "ARCH=aarch64" sparkle-signatures-all.txt | grep "LENGTH=" | cut -d= -f2 || stat -c%s "artifacts/macos-aarch64/rust-redis-desktop-aarch64.dmg" 2>/dev/null || echo "0")
+          
+          # 生成 appcast.xml
+          chmod +x scripts/generate-appcast.sh
+          ./scripts/generate-appcast.sh "$VERSION" "$X86_SIGNATURE" "$X86_LENGTH" "$ARM_SIGNATURE" "$ARM_LENGTH" "$IS_PRERELEASE" "$SPARKLE_PUBLIC_KEY"
+          
+          # 创建 GitHub Pages 目录
+          mkdir -p pages-output
+          cp appcast.xml pages-output/
+          
+          echo "appcast.xml generated"
+
+      - name: Upload appcast to pages artifact
+        if: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: appcast-pages
+          path: pages-output/
+          retention-days: 1
+
+      - name: Deploy appcast to GitHub Pages
+        if: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: pages-output
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -381,6 +480,7 @@ jobs:
             artifacts/windows-x86_64/*.exe
             artifacts/linux-x86_64/*.AppImage
             artifacts/linux-x86_64/*.deb
+            appcast.xml
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
