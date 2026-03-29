@@ -49,20 +49,16 @@ jobs:
       - name: Create .app bundle
         env:
           SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           chmod +x scripts/build-app.sh
           VERSION="${GITHUB_REF_NAME#v}"
           
-          # 使用包含 Sparkle 公钥的 Info.plist
           if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
-            sed -e "s/\${VERSION}/$VERSION/" \
-                -e "s/\${BUILD_NUMBER}/${{ github.run_number }}" \
-                -e "s/\${SPARKLE_PUBLIC_KEY}/$SPARKLE_PUBLIC_KEY/" \
-                Info.plist.sparkle > Info.plist.generated
-            mv Info.plist.generated Info.plist
+            sed "s/\${VERSION}/$VERSION/g;s/\${BUILD_NUMBER}/$BUILD_NUMBER/g;s/\${SPARKLE_PUBLIC_KEY}/$SPARKLE_PUBLIC_KEY/g" Info.plist.sparkle > Info.plist
           fi
           
-          ./scripts/build-app.sh "$VERSION" "${{ github.run_number }}" "${{ matrix.target }}"
+          ./scripts/build-app.sh "$VERSION" "$BUILD_NUMBER" "${{ matrix.target }}"
 
       - name: Import Apple certificate
         env:
@@ -208,7 +204,7 @@ jobs:
         run: cargo build --release
 
       - name: Install NSIS
-        uses: repolevedavaj/install-nsis@v1
+        uses: repolevedavaj/install-nsis@v1.1.0
         with:
           nsis-version: 3.10
 
