@@ -45,6 +45,6 @@
     <key>SUFeedURL</key>
     <string>https://yelog.github.io/rust-redis-desktop/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>${SPARKLE_PUBLIC_KEY}</string>
+    <string>IVkJ8/Wf0xmCTTlc3sckYXuhkMcl2gQHZBQfm4BvvF8=</string>
 </dict>
 </plist>

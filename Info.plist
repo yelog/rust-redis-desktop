@@ -44,8 +44,7 @@
     <integer>86400</integer>
     <key>SUFeedURL</key>
     <string>https://yelog.github.io/rust-redis-desktop/appcast.xml</string>
-    <!-- EdDSA 公钥 - 需要在生成密钥后替换 -->
-    <!-- <key>SUPublicEDKey</key> -->
-    <!-- <string>YOUR_PUBLIC_KEY_HERE</string> -->
+    <key>SUPublicEDKey</key>
+    <string>IVkJ8/Wf0xmCTTlc3sckYXuhkMcl2gQHZBQfm4BvvF8=</string>
 </dict>
 </plist>
