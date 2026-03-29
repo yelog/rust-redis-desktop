@@ -219,6 +219,9 @@ jobs:
           version="${{ github.ref_name }}"
           version="${version#v}"
           
+          # Convert version for NSIS (X.X.X.X format)
+          nsis_version=$(echo "$version" | sed 's/-beta\././' | sed 's/-alpha\././')
+          
           mkdir -p installer/app
           cp target/release/rust-redis-desktop.exe installer/app/
           
@@ -227,7 +230,7 @@ jobs:
           
           cp LICENSE installer/LICENSE.txt || echo "MIT License" > installer/LICENSE.txt
           
-          sed "s/\${VERSION}/$version/g" scripts/installer.nsi > installer/installer.nsi
+          sed "s/\${VERSION}/$version/g" scripts/installer.nsi | sed "s/VIProductVersion.*/VIProductVersion \"$nsis_version\"/" > installer/installer.nsi
 
       - name: Build NSIS installer
         run: |
