@@ -232,7 +232,7 @@ jobs:
       - name: Build NSIS installer
         run: |
           cd installer
-          makensis installer.nsi
+          "C:\Program Files (x86)\NSIS\Bin\makensis.exe" installer.nsi
           mv rust-redis-desktop-setup-*.exe ../rust-redis-desktop-x86_64-setup.exe
         shell: bash
 
