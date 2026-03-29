@@ -2,6 +2,9 @@
 .DS_Store
 .opencode/
 
+# Sparkle Framework (downloaded by CI)
+Frameworks/
+
 # Test certificates and keys (auto-generated)
 test/redis-ssl-certs/
 test/ssh-keys/
