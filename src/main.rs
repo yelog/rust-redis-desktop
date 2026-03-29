@@ -42,8 +42,10 @@ fn create_menu() -> Menu {
 
     let app_menu = Submenu::new("Redis Desktop", true);
     let settings_accelerator = Accelerator::try_from("CmdOrCtrl+Comma").ok();
+    let update_accelerator = Accelerator::try_from("CmdOrCtrl+U").ok();
     app_menu
         .append_items(&[
+            &MenuItem::with_id("check_updates", "检查更新...", true, update_accelerator),
             &MenuItem::with_id("preferences", "Settings...", true, settings_accelerator),
             &PredefinedMenuItem::separator(),
             &PredefinedMenuItem::hide(None),
