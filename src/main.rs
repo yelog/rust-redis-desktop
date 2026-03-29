@@ -9,6 +9,7 @@ mod serialization;
 mod theme;
 mod tray;
 mod ui;
+mod updater;
 
 use config::ConfigStorage;
 use dioxus::desktop::tao::dpi::LogicalSize;

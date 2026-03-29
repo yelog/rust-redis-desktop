@@ -9,6 +9,7 @@ pub mod serialization;
 pub mod theme;
 pub mod tray;
 pub mod ui;
+pub mod updater;
 
 #[cfg(test)]
 mod tests;
