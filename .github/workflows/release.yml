@@ -452,8 +452,17 @@ jobs:
           
           echo "appcast.xml generated"
 
+      - name: Check Sparkle secrets
+        id: check-sparkle
+        run: |
+          if [ -n "${{ secrets.SPARKLE_PRIVATE_KEY }}" ]; then
+            echo "has_sparkle=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_sparkle=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Upload appcast to pages artifact
-        if: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+        if: steps.check-sparkle.outputs.has_sparkle == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: appcast-pages
@@ -461,7 +470,7 @@ jobs:
           retention-days: 1
 
       - name: Deploy appcast to GitHub Pages
-        if: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+        if: steps.check-sparkle.outputs.has_sparkle == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
