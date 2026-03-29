@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1-beta.2] - 2026-03-29
+
+### Added
+- configure EdDSA public key for auto updates
+- implement macOS installer with Autoupdate.app bridge
+- add appcast generation and release workflow integration
+- integrate Sparkle framework into app bundle
+- add EdDSA key generation and signing scripts
+- integrate complete update flow with UI
+- add update notification dialog UI
+- add manual update check menu item
+- integrate startup update check
+- implement unified update manager
+- add unified installer interface
+- implement platform installers (Windows complete)
+- implement update config management
+- implement download manager with progress
+- implement version checker with GitHub API
+- add module structure and error types
+
+### Changed
+- add Frameworks to gitignore (Sparkle downloaded by CI)
+- add NSIS installer for Windows release
+
 ## [0.1.1-beta.1] - 2026-03-28
 
 ### Added
