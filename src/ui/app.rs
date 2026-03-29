@@ -10,12 +10,17 @@ use crate::ui::{
     ClientsPanel, ConnectionExportDialog, ConnectionForm, ConnectionImportDialog,
     DeleteConnectionConfirmDialog, FlushConfirmDialog, ImportPanel, KeyBrowser, LeftRail,
     MonitorPanel, PubSubPanel, ResizableDivider, ScriptPanel, SettingsDialog, SlowLogPanel,
-    Terminal, ToastContainer, ToastManager,
+    Terminal, ToastContainer, ToastManager, UpdateDialog,
+};
+use crate::updater::{
+    set_checking, set_pending_update, should_trigger_manual_check, InstallResult,
+    UPDATE_STATUS, UpdateInfo, UpdateManager,
 };
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -640,6 +645,10 @@ pub fn App() -> Element {
     let desktop_for_drag = desktop.clone();
     let desktop_for_maximize = desktop.clone();
 
+    let mut update_download_progress = use_signal(|| (0u64, 0u64));
+    let mut update_downloaded_path = use_signal(|| None::<PathBuf>);
+    let toast_for_update = toast_manager.clone();
+
     let active_theme_preference = theme_preference();
     let active_system_theme_dark = system_theme_dark();
     let active_theme = resolve_theme(active_theme_preference, active_system_theme_dark);
@@ -732,9 +741,54 @@ await new Promise(() => {});
         use_muda_event_handler(move |event| {
             if event.id == "preferences" {
                 show_settings_for_menu.toggle();
+            } else if event.id == "check_updates" {
+                crate::updater::trigger_manual_check();
             }
         });
     }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        use dioxus::desktop::use_muda_event_handler;
+        use_muda_event_handler(move |event| {
+            if event.id == "check_updates" {
+                crate::updater::trigger_manual_check();
+            }
+        });
+    }
+
+    use_future(move || {
+        let mut toast_for_update = toast_for_update.clone();
+        async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                if should_trigger_manual_check() {
+                    set_checking(true);
+                    if let Ok(mut manager) = UpdateManager::new() {
+                        match manager.check_for_updates().await {
+                            Ok(Some(info)) => {
+                                tracing::info!("Manual check found new version: {}", info.version);
+                                set_pending_update(Some(info));
+                            }
+                            Ok(None) => {
+                                set_pending_update(None);
+                                toast_for_update.write().success("已是最新版本");
+                            }
+                            Err(e) => {
+                                set_pending_update(None);
+                                let msg = format!("检查更新失败: {}", e);
+                                toast_for_update.write().error(&msg);
+                            }
+                        }
+                    } else {
+                        set_pending_update(None);
+                        toast_for_update.write().error("无法初始化更新检查器");
+                    }
+                    set_checking(false);
+                }
+            }
+        }
+    });
 
     use_future(move || async move {
         let mut eval = document::eval(
@@ -1545,7 +1599,87 @@ await new Promise(() => {});
             }
         }
 
-                    ToastContainer { manager: toast_manager }
-                    ImagePreview {}
+        {
+            let update_status = UPDATE_STATUS();
+            if let Some(ref info) = update_status.pending_update {
+                rsx! {
+                    UpdateDialog {
+                        update_info: info.clone(),
+                        colors,
+                        on_update: {
+                            let update_download_progress = update_download_progress.clone();
+                            let update_downloaded_path = update_downloaded_path.clone();
+                            let toast_for_update = toast_for_update.clone();
+                            let info_for_closure = info.clone();
+                            move |_| {
+                                let info_clone = info_for_closure.clone();
+                                let mut update_download_progress = update_download_progress.clone();
+                                let mut update_downloaded_path = update_downloaded_path.clone();
+                                let mut toast_for_update = toast_for_update.clone();
+                                spawn(async move {
+                                    if let Ok(mut manager) = UpdateManager::new() {
+                                        let (tx, mut rx) = tokio::sync::mpsc::channel::<(u64, u64)>(100);
+                                        let mut progress = update_download_progress.clone();
+                                        spawn(async move {
+                                            while let Some((downloaded, total)) = rx.recv().await {
+                                                progress.set((downloaded, total));
+                                            }
+                                        });
+                                        match manager.download_update(&info_clone, Some(tx)).await {
+                                            Ok(path) => {
+                                                update_downloaded_path.set(Some(path.clone()));
+                                                match manager.install_update(&path) {
+                                                    Ok(result) => {
+                                                        set_pending_update(None);
+                                                        match result {
+                                                            InstallResult::RestartRequired => {
+                                                                toast_for_update.write().success("更新完成，请重启应用");
+                                                            }
+                                                            InstallResult::RestartInProgress => {
+                                                                toast_for_update.write().success("正在安装更新...");
+                                                            }
+                                                            InstallResult::OpenExternal(url) => {
+                                                                let _ = open::that(&url);
+                                                                toast_for_update.write().success("请在浏览器中下载更新");
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        let msg = format!("安装失败: {}", e);
+                                                        toast_for_update.write().error(&msg);
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                let msg = format!("下载失败: {}", e);
+                                                toast_for_update.write().error(&msg);
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        },
+                        on_skip: {
+                            move |version: String| {
+                                spawn(async move {
+                                    if let Ok(mut manager) = UpdateManager::new() {
+                                        let _ = manager.skip_version(&version);
+                                    }
+                                    set_pending_update(None);
+                                });
+                            }
+                        },
+                        on_close: move |_| {
+                            set_pending_update(None);
+                        },
+                    }
+                }
+            } else {
+                rsx! {}
+            }
+        }
+
+        ToastContainer { manager: toast_manager }
+        ImagePreview {}
                 }
 }

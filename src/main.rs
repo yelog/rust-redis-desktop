@@ -20,6 +20,7 @@ use dioxus::desktop::{
 use theme::preferred_window_theme;
 use tray::{create_shared_state, init_tray};
 use ui::App;
+use updater::{set_pending_update, trigger_manual_check, UpdateManager};
 
 #[cfg(target_os = "macos")]
 use dioxus::desktop::tao::platform::macos::WindowBuilderExtMacOS;
@@ -95,13 +96,14 @@ fn main() {
 
     tracing::info!("Starting Redis Desktop Manager");
 
-    if let Ok(mut manager) = updater::UpdateManager::new() {
+    if let Ok(mut manager) = UpdateManager::new() {
         if manager.should_auto_check() {
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().unwrap();
                 rt.block_on(async {
                     if let Ok(Some(info)) = manager.check_for_updates().await {
                         tracing::info!("Found new version: {}", info.version);
+                        set_pending_update(Some(info));
                     }
                 });
             });
