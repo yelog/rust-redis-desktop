@@ -160,28 +160,42 @@ jobs:
       - name: Build
         run: cargo build --release
 
-      - name: Create portable package
+      - name: Install NSIS
+        uses: repolevedavaj/install-nsis@v1
+        with:
+          nsis-version: 3.10
+
+      - name: Install ImageMagick
+        uses: mfinelli/setup-imagemagick@v2
+
+      - name: Prepare installer resources
+        shell: bash
         run: |
-          mkdir release-package
-          cp target/release/rust-redis-desktop.exe release-package/
+          version="${{ github.ref_name }}"
+          version="${version#v}"
+          
+          mkdir -p installer/app
+          cp target/release/rust-redis-desktop.exe installer/app/
+          
+          magick icons/icon.png -resize 256x256 -background transparent -gravity center -extent 256x256 icon.ico
+          cp icon.ico installer/
+          
+          cp LICENSE installer/LICENSE.txt || echo "MIT License" > installer/LICENSE.txt
+          
+          sed "s/\${VERSION}/$version/g" scripts/installer.nsi > installer/installer.nsi
 
-          $version = "${{ github.ref_name }}" -replace '^v', ''
-
-          @"
-          Rust Redis Desktop
-          Version: $version
-          A Redis desktop manager written in Rust.
-
-          https://github.com/yelog/rust-redis-desktop
-          "@ | Out-File -FilePath release-package/README.txt -Encoding utf8
-
-          Compress-Archive -Path release-package/* -DestinationPath rust-redis-desktop-x86_64-windows.zip
+      - name: Build NSIS installer
+        run: |
+          cd installer
+          makensis installer.nsi
+          mv rust-redis-desktop-setup-*.exe ../rust-redis-desktop-x86_64-setup.exe
+        shell: bash
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-x86_64
-          path: rust-redis-desktop-x86_64-windows.zip
+          path: rust-redis-desktop-x86_64-setup.exe
           retention-days: 1
 
   build-linux:
@@ -364,7 +378,7 @@ jobs:
           files: |
             artifacts/macos-x86_64/*.dmg
             artifacts/macos-aarch64/*.dmg
-            artifacts/windows-x86_64/*.zip
+            artifacts/windows-x86_64/*.exe
             artifacts/linux-x86_64/*.AppImage
             artifacts/linux-x86_64/*.deb
           generate_release_notes: true
