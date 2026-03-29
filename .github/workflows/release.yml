@@ -55,7 +55,11 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           
           if [ -n "$SPARKLE_PUBLIC_KEY" ]; then
-            sed "s/\${VERSION}/$VERSION/g;s/\${BUILD_NUMBER}/$BUILD_NUMBER/g;s/\${SPARKLE_PUBLIC_KEY}/$SPARKLE_PUBLIC_KEY/g" Info.plist.sparkle > Info.plist
+            # Use printf to handle special characters safely
+            sed -e "s|\${VERSION}|$VERSION|g" \
+                -e "s|\${BUILD_NUMBER}|$BUILD_NUMBER|g" \
+                -e "s|\${SPARKLE_PUBLIC_KEY}|$SPARKLE_PUBLIC_KEY|g" \
+                Info.plist.sparkle > Info.plist
           fi
           
           ./scripts/build-app.sh "$VERSION" "$BUILD_NUMBER" "${{ matrix.target }}"
