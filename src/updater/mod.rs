@@ -3,6 +3,7 @@ mod config;
 mod downloader;
 mod error;
 mod installer;
+mod manager;
 mod platform;
 mod types;
 
@@ -11,5 +12,6 @@ pub use config::UpdateConfig;
 pub use downloader::{ProgressCallback, UpdateDownloader};
 pub use error::{Result, UpdateError};
 pub use installer::UpdateInstaller;
+pub use manager::{UpdateManager, UpdateState};
 pub use platform::*;
 pub use types::{InstallResult, Platform, UpdateInfo};
