@@ -1981,12 +1981,15 @@ pub fn ValueViewer(
 
                         div {
                             flex: "1",
+                            min_height: "0",
                             overflow: "hidden",
                             padding: "18px",
+                            display: "flex",
+                            flex_direction: "column",
 
                             if is_loading {
                                 div {
-                                    height: "100%",
+                                    flex: "1",
                                     display: "flex",
                                     align_items: "center",
                                     justify_content: "center",
@@ -2008,7 +2011,9 @@ pub fn ValueViewer(
                                 {
                                     rsx! {
                                     div {
-                                        height: "100%",
+                                        flex: "1",
+                                        min_height: "0",
+                                        overflow: "hidden",
                                         display: "flex",
                                         flex_wrap: "wrap",
                                         gap: "18px",
@@ -2017,6 +2022,7 @@ pub fn ValueViewer(
                                         div {
                                             flex: "1 1 640px",
                                             min_width: "320px",
+                                            max_height: "100%",
                                             display: "flex",
                                             flex_direction: "column",
                                             gap: "14px",
@@ -2026,6 +2032,8 @@ pub fn ValueViewer(
                                                 flex: "1",
                                                 min_height: "0",
                                                 overflow: "hidden",
+                                                display: "flex",
+                                                flex_direction: "column",
                                                 padding: "16px",
                                                 border: "1px solid {COLOR_BORDER}",
                                                 border_radius: "12px",
@@ -2040,6 +2048,10 @@ pub fn ValueViewer(
 
                                                 rsx! {
                                                     div {
+                                                        flex: "1",
+                                                        min_height: "0",
+                                                        display: "flex",
+                                                        flex_direction: "column",
     if is_binary() {
                                                             div {
                                                                 display: "flex",

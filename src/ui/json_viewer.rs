@@ -201,7 +201,8 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
         div {
             display: "flex",
             flex_direction: "column",
-            height: "100%",
+            flex: "1",
+            min_height: "0",
 
             div {
                 display: "flex",
