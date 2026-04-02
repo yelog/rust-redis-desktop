@@ -1,3 +1,4 @@
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tracing::error;
@@ -38,17 +39,19 @@ pub fn create_shared_state() -> SharedTrayState {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn load_icon() -> Icon {
+fn load_icon() -> std::result::Result<Icon, Box<dyn std::error::Error>> {
     let icon_bytes = include_bytes!("../icons/icon.png");
-    let img = image::load_from_memory(icon_bytes).expect("Failed to load tray icon");
+    let img = image::load_from_memory(icon_bytes)?;
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
-    Icon::from_rgba(rgba.into_raw(), width, height).expect("Failed to create tray icon")
+    Ok(Icon::from_rgba(rgba.into_raw(), width, height)?)
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn init_tray(state: SharedTrayState) {
-    let icon = load_icon();
+pub fn init_tray(state: SharedTrayState) -> Result<()> {
+    let icon = load_icon()
+        .map_err(|e| crate::error::AppError::Other(format!("Failed to load tray icon: {}", e)))?;
+
     let menu = Menu::new();
 
     let _ = menu.append(&MenuItem::with_id("show", "显示窗口", true, None));
@@ -79,8 +82,16 @@ pub fn init_tray(state: SharedTrayState) {
                         }
                         id if id.starts_with("server:") => {
                             if let Some(server_id) = id.strip_prefix("server:") {
-                                let mut s = state.lock().unwrap();
-                                s.active_server_id = Some(server_id.to_string());
+                                match state.lock() {
+                                    Ok(mut s) => {
+                                        s.active_server_id = Some(server_id.to_string());
+                                    }
+                                    Err(poisoned) => {
+                                        let mut s = poisoned.into_inner();
+                                        s.active_server_id = Some(server_id.to_string());
+                                        tracing::warn!("Tray state mutex was poisoned, recovered");
+                                    }
+                                }
                             }
                         }
                         _ => {}
@@ -92,9 +103,11 @@ pub fn init_tray(state: SharedTrayState) {
             error!("Failed to create tray icon: {}", e);
         }
     }
+
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
-pub fn init_tray(_state: SharedTrayState) {
-    // System tray is not supported on Linux in this implementation
+pub fn init_tray(_state: SharedTrayState) -> Result<()> {
+    Ok(())
 }
