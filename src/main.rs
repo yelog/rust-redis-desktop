@@ -1,6 +1,8 @@
 mod config;
 mod connection;
 mod crypto;
+mod error;
+mod error_reporting;
 mod formatter;
 mod i18n;
 mod protobuf_schema;

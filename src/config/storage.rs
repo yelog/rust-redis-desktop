@@ -96,20 +96,15 @@ pub struct ConfigStorage {
 }
 
 impl ConfigStorage {
-    pub fn new() -> super::super::error::Result<Self> {
+    pub fn new() -> Result<Self> {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| {
-                super::super::error::ConfigError::DirectoryAccess(
-                    "Cannot determine config directory".into(),
-                )
+                ConfigError::DirectoryAccess("Cannot determine config directory".into())
             })?
             .join("rust-redis-desktop");
 
         fs::create_dir_all(&config_dir).map_err(|e| {
-            super::super::error::ConfigError::DirectoryAccess(format!(
-                "Failed to create config directory: {}",
-                e
-            ))
+            ConfigError::DirectoryAccess(format!("Failed to create config directory: {}", e))
         })?;
 
         let config_path = config_dir.join("config.json");
