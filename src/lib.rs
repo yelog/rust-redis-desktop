@@ -1,6 +1,7 @@
 pub mod config;
 pub mod connection;
 pub mod crypto;
+pub mod error;
 pub mod formatter;
 pub mod i18n;
 pub mod protobuf_schema;
