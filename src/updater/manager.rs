@@ -79,9 +79,3 @@ impl UpdateManager {
         Ok(())
     }
 }
-
-impl Default for UpdateManager {
-    fn default() -> Self {
-        Self::new().expect("Failed to create update manager")
-    }
-}
