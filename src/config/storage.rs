@@ -1,4 +1,5 @@
 use crate::connection::ConnectionConfig;
+use crate::error::{ConfigError, Result};
 use crate::theme::ThemePreference;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -62,6 +63,12 @@ pub struct AppSettings {
     pub auto_refresh_interval: u32,
     #[serde(default, alias = "theme_mode")]
     pub theme_preference: ThemePreference,
+    #[serde(default = "default_auto_check_updates")]
+    pub auto_check_updates: bool,
+}
+
+fn default_auto_check_updates() -> bool {
+    true
 }
 
 impl Default for AppSettings {
@@ -69,6 +76,7 @@ impl Default for AppSettings {
         Self {
             auto_refresh_interval: 0,
             theme_preference: ThemePreference::default(),
+            auto_check_updates: true,
         }
     }
 }
@@ -88,12 +96,21 @@ pub struct ConfigStorage {
 }
 
 impl ConfigStorage {
-    pub fn new() -> io::Result<Self> {
+    pub fn new() -> super::super::error::Result<Self> {
         let config_dir = dirs::config_dir()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Config directory not found"))?
+            .ok_or_else(|| {
+                super::super::error::ConfigError::DirectoryAccess(
+                    "Cannot determine config directory".into(),
+                )
+            })?
             .join("rust-redis-desktop");
 
-        fs::create_dir_all(&config_dir)?;
+        fs::create_dir_all(&config_dir).map_err(|e| {
+            super::super::error::ConfigError::DirectoryAccess(format!(
+                "Failed to create config directory: {}",
+                e
+            ))
+        })?;
 
         let config_path = config_dir.join("config.json");
 
@@ -220,11 +237,5 @@ impl ConfigStorage {
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
 
         fs::write(&self.config_path, content)
-    }
-}
-
-impl Default for ConfigStorage {
-    fn default() -> Self {
-        Self::new().expect("Failed to create config storage")
     }
 }
