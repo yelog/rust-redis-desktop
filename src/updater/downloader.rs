@@ -97,9 +97,3 @@ impl UpdateDownloader {
         &self.temp_dir
     }
 }
-
-impl Default for UpdateDownloader {
-    fn default() -> Self {
-        Self::new().expect("Failed to create downloader")
-    }
-}
