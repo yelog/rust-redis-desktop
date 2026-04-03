@@ -2,28 +2,28 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum UpdateError {
-    #[error("网络请求失败: {0}")]
+    #[error("Network request failed: {0}")]
     NetworkError(String),
 
-    #[error("解析失败: {0}")]
+    #[error("Parse failed: {0}")]
     ParseError(String),
 
-    #[error("下载失败: {0}")]
+    #[error("Download failed: {0}")]
     DownloadError(String),
 
-    #[error("安装失败: {0}")]
+    #[error("Install failed: {0}")]
     InstallError(String),
 
-    #[error("平台不支持自动更新")]
+    #[error("Platform does not support auto-update")]
     PlatformNotSupported,
 
-    #[error("无可用更新")]
+    #[error("No update available")]
     NoUpdateAvailable,
 
-    #[error("用户取消更新")]
+    #[error("Update cancelled by user")]
     UserCancelled,
 
-    #[error("IO错误: {0}")]
+    #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
 
