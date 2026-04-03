@@ -100,7 +100,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                         let data = MonitorData {
                             timestamp: std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
+                                .unwrap_or_default()
                                 .as_secs(),
                             used_memory: info.used_memory.unwrap_or(0),
                             ops_per_sec: info.instantaneous_ops_per_sec.unwrap_or(0),
@@ -164,7 +164,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                 let data = MonitorData {
                                     timestamp: std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap()
+                                        .unwrap_or_default()
                                         .as_secs(),
                                     used_memory: info.used_memory.unwrap_or(0),
                                     ops_per_sec: info.instantaneous_ops_per_sec.unwrap_or(0),

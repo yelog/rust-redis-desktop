@@ -70,7 +70,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                             payload: format!("订阅失败: {}", e),
                             timestamp: SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
-                                .unwrap()
+                                .unwrap_or_default()
                                 .as_secs(),
                         });
                         return;

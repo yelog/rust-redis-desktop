@@ -6034,6 +6034,7 @@ dependencies = [
  "humansize",
  "image",
  "jaded",
+ "once_cell",
  "open",
  "prost",
  "prost-types",
