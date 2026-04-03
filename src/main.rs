@@ -129,7 +129,6 @@ fn run_app() -> Result<()> {
         .and_then(|s| s.load_settings().ok())
         .unwrap_or_default();
 
-    // Window creation
     let window_builder = configure_window_builder(
         WindowBuilder::new()
             .with_title("Redis Desktop")
@@ -138,7 +137,6 @@ fn run_app() -> Result<()> {
             .with_visible(true),
     );
 
-    // Tray initialization (non-fatal)
     #[cfg(not(target_os = "linux"))]
     {
         let tray_state = create_shared_state();
@@ -147,7 +145,6 @@ fn run_app() -> Result<()> {
         }
     }
 
-    // Launch UI
     dioxus::LaunchBuilder::new()
         .with_cfg(Config::new().with_menu(menu).with_window(window_builder))
         .launch(App);

@@ -194,11 +194,14 @@ pub fn parse_java_to_json(data: &[u8]) -> Result<String, String> {
 /// Simplify class name for display
 pub fn simplify_class_name(full_name: &str) -> String {
     if full_name.starts_with("java.lang.") {
-        return full_name.strip_prefix("java.lang.").unwrap().to_string();
+        return full_name
+            .strip_prefix("java.lang.")
+            .unwrap_or(full_name)
+            .to_string();
     }
     let parts: Vec<&str> = full_name.split('.').collect();
     if parts.len() > 1 {
-        parts.last().unwrap().to_string()
+        parts.last().unwrap_or(&full_name).to_string()
     } else {
         full_name.to_string()
     }
