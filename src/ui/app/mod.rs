@@ -8,7 +8,12 @@ use self::effects::{
     use_keyboard_shortcuts, use_load_saved_connections, use_manual_update_check,
     use_system_theme_listener, use_theme_bridge,
 };
-use self::render::{empty_connection_panel, spinner_panel};
+use self::actions::{import_connections_action, save_settings_action};
+use self::render::{
+    empty_connection_panel, spinner_panel, ExportConnectionsDialogSection,
+    FlushDialogSection, ImportConnectionsDialogSection, ImportOverlaySection,
+    SettingsDialogSection,
+};
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::theme::{
@@ -587,17 +592,7 @@ pub fn App() -> Element {
 
     use_system_theme_listener(system_theme_dark);
 
-    let save_settings = {
-        let config_storage = config_storage.clone();
-        let mut theme_preference = theme_preference.clone();
-        move |settings: AppSettings| {
-            app_settings.set(settings.clone());
-            theme_preference.set(settings.theme_preference);
-            if let Some(storage) = config_storage.read().as_ref() {
-                let _ = storage.save_settings(&settings);
-            }
-        }
-    };
+    let save_settings = save_settings_action(config_storage, app_settings, theme_preference);
 
     let selected_conn_state = selected_connection()
         .and_then(|id| connection_states.read().get(&id).copied())
@@ -1127,19 +1122,19 @@ pub fn App() -> Element {
                     }
 
                     if show_settings() {
-                            SettingsDialog {
-                                settings: app_settings.read().clone(),
-                                colors,
-                                resolved_theme_id,
-                                on_change: {
-                                    let mut save_settings = save_settings.clone();
-                                    move |settings: AppSettings| {
-                                        save_settings(settings);
-                                    }
-                                },
-                                on_close: move |_| show_settings.set(false),
-                            }
+                        SettingsDialogSection {
+                            settings: app_settings.read().clone(),
+                            colors,
+                            resolved_theme_id,
+                            on_change: {
+                                let save_settings = save_settings.clone();
+                                move |settings: AppSettings| {
+                                    save_settings.call(settings);
+                                }
+                            },
+                            on_close: move |_| show_settings.set(false),
                         }
+                    }
 
         if let Some((delete_id, delete_name)) = show_delete_connection_dialog() {
                         DeleteConnectionConfirmDialog {
@@ -1181,8 +1176,8 @@ pub fn App() -> Element {
 
         if let Some(flush_id) = show_flush_dialog() {
                         if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
-                            FlushConfirmDialog {
-                                connection_pool: pool,
+                            FlushDialogSection {
+                                pool,
                                 current_db: current_db(),
                                 colors,
                                 on_confirm: move |_| {
@@ -1196,29 +1191,16 @@ pub fn App() -> Element {
 
         if let Some(import_id) = show_import_dialog() {
                         if let Some(pool) = connection_pools.read().get(&import_id).cloned() {
-                            div {
-                                position: "fixed",
-                                top: "0",
-                                left: "0",
-                                right: "0",
-                                bottom: "0",
-                                background: "rgba(0, 0, 0, 0.5)",
-                                display: "flex",
-                                align_items: "center",
-                                justify_content: "center",
-                                z_index: "1000",
-
-                                ImportPanel {
-                                    connection_pool: pool,
-                                    on_close: move |_| show_import_dialog.set(None),
-                                }
+                            ImportOverlaySection {
+                                pool,
+                                on_close: move |_| show_import_dialog.set(None),
                             }
                         }
                     }
 
         if show_export_connections_dialog() {
                         if let Some(storage) = config_storage.read().as_ref() {
-                            ConnectionExportDialog {
+                            ExportConnectionsDialogSection {
                                 config_storage: Arc::new(storage.clone()),
                                 colors,
                                 on_close: move |_| show_export_connections_dialog.set(false),
@@ -1231,25 +1213,16 @@ pub fn App() -> Element {
                 {
                     let config_storage_arc = Arc::new(storage.clone());
                     rsx! {
-                        ConnectionImportDialog {
+                        ImportConnectionsDialogSection {
                             config_storage: config_storage_arc.clone(),
                             colors,
-                            on_import: {
-                                let mut connections = connections.clone();
-                                let mut readonly_connections = readonly_connections.clone();
-                                let mut toast_manager = toast_manager.clone();
-                                let config_storage_inner = config_storage_arc.clone();
-                                move |_count: usize| {
-                                    show_import_connections_dialog.set(false);
-                                    if let Ok(saved) = config_storage_inner.load_connections() {
-                                        let conns: Vec<(Uuid, String)> = saved.iter().map(|c| (c.id, c.name.clone())).collect();
-                                        let readonly: HashMap<Uuid, bool> = saved.iter().map(|c| (c.id, c.readonly)).collect();
-                                        connections.set(conns);
-                                        readonly_connections.set(readonly);
-                                    }
-                                    toast_manager.write().success("Connections imported");
-                                }
-                            },
+                            on_import: import_connections_action(
+                                show_import_connections_dialog,
+                                connections,
+                                readonly_connections,
+                                toast_manager,
+                                config_storage_arc.clone(),
+                            ),
                             on_close: move |_| show_import_connections_dialog.set(false),
                         }
                     }

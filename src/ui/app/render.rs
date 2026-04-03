@@ -1,7 +1,14 @@
+use crate::config::{AppSettings, ConfigStorage};
+use crate::connection::ConnectionPool;
 use crate::theme::{
-    COLOR_ACCENT, COLOR_ERROR, COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_SECONDARY,
+    ThemeColors, ThemeId, COLOR_ACCENT, COLOR_ERROR, COLOR_SURFACE_LOW, COLOR_TEXT,
+    COLOR_TEXT_SECONDARY,
+};
+use crate::ui::{
+    ConnectionExportDialog, ConnectionImportDialog, FlushConfirmDialog, ImportPanel, SettingsDialog,
 };
 use dioxus::prelude::*;
+use std::sync::Arc;
 
 pub(super) fn spinner_panel(message: &'static str) -> Element {
     rsx! {
@@ -94,6 +101,99 @@ pub(super) fn connection_error_panel(on_retry: EventHandler<MouseEvent>) -> Elem
                 onclick: move |evt| on_retry.call(evt),
                 "重新连接"
             }
+        }
+    }
+}
+
+#[component]
+pub(super) fn SettingsDialogSection(
+    settings: AppSettings,
+    colors: ThemeColors,
+    resolved_theme_id: ThemeId,
+    on_change: EventHandler<AppSettings>,
+    on_close: EventHandler<()>,
+) -> Element {
+    rsx! {
+        SettingsDialog {
+            settings,
+            colors,
+            resolved_theme_id,
+            on_change,
+            on_close,
+        }
+    }
+}
+
+#[component]
+pub(super) fn FlushDialogSection(
+    pool: ConnectionPool,
+    current_db: u8,
+    colors: ThemeColors,
+    on_confirm: EventHandler<()>,
+    on_cancel: EventHandler<()>,
+) -> Element {
+    rsx! {
+        FlushConfirmDialog {
+            connection_pool: pool,
+            current_db,
+            colors,
+            on_confirm,
+            on_cancel,
+        }
+    }
+}
+
+#[component]
+pub(super) fn ImportOverlaySection(pool: ConnectionPool, on_close: EventHandler<()>) -> Element {
+    rsx! {
+        div {
+            position: "fixed",
+            top: "0",
+            left: "0",
+            right: "0",
+            bottom: "0",
+            background: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            align_items: "center",
+            justify_content: "center",
+            z_index: "1000",
+
+            ImportPanel {
+                connection_pool: pool,
+                on_close,
+            }
+        }
+    }
+}
+
+#[component]
+pub(super) fn ExportConnectionsDialogSection(
+    config_storage: Arc<ConfigStorage>,
+    colors: ThemeColors,
+    on_close: EventHandler<()>,
+) -> Element {
+    rsx! {
+        ConnectionExportDialog {
+            config_storage,
+            colors,
+            on_close,
+        }
+    }
+}
+
+#[component]
+pub(super) fn ImportConnectionsDialogSection(
+    config_storage: Arc<ConfigStorage>,
+    colors: ThemeColors,
+    on_import: EventHandler<usize>,
+    on_close: EventHandler<()>,
+) -> Element {
+    rsx! {
+        ConnectionImportDialog {
+            config_storage,
+            colors,
+            on_import,
+            on_close,
         }
     }
 }
