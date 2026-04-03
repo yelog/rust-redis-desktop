@@ -4,6 +4,11 @@ mod render;
 mod state;
 mod theme;
 
+use self::effects::{
+    use_keyboard_shortcuts, use_load_saved_connections, use_manual_update_check,
+    use_system_theme_listener, use_theme_bridge,
+};
+use self::render::{empty_connection_panel, spinner_panel};
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::theme::{
@@ -540,83 +545,20 @@ pub fn App() -> Element {
     let resolved_theme_id = active_theme.id;
     let resolved_theme_key = resolved_theme_id.as_str();
 
-    use_effect(move || {
-        if let Some(storage) = config_storage.read().as_ref() {
-            if let Ok(saved) = storage.load_connections() {
-                let conns: Vec<(Uuid, String)> =
-                    saved.iter().map(|c| (c.id, c.name.clone())).collect();
-                let readonly: HashMap<Uuid, bool> =
-                    saved.iter().map(|c| (c.id, c.readonly)).collect();
-                connections.set(conns);
-                readonly_connections.set(readonly);
-            }
-        }
-    });
+    use_load_saved_connections(config_storage, connections, readonly_connections);
 
-    use_effect(move || {
-        let script = build_theme_bridge_script(theme_preference());
-        let _ = document::eval(&script);
-    });
+    use_theme_bridge(theme_preference, build_theme_bridge_script);
 
     use_effect(move || {
         desktop_for_theme.set_theme(preferred_window_theme(theme_preference()));
     });
 
-    use_future(move || {
-        let mut show_settings = show_settings.clone();
-        let mut form_mode = form_mode.clone();
-        let mut show_flush_dialog = show_flush_dialog.clone();
-        async move {
-            let mut eval = document::eval(
-                r#"
-document.addEventListener('keydown', (e) => {
-    if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        dioxus.send('toggle_settings');
-    }
-    if (e.key === 'n' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        dioxus.send('new_connection');
-    }
-    if (e.key === 'f' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        dioxus.send('focus_search');
-    }
-    if (e.key === 'r' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        dioxus.send('refresh_keys');
-    }
-    if (e.key === 'Escape') {
-        const dialog = document.querySelector('[data-dialog="true"]');
-        if (dialog) {
-            return;
-        }
-        dioxus.send('escape_pressed');
-    }
-});
-await new Promise(() => {});
-"#,
-            );
-
-            while let Ok(msg) = eval.recv::<String>().await {
-                if msg == "toggle_settings" {
-                    show_settings.toggle();
-                } else if msg == "new_connection" {
-                    form_mode.set(Some(FormMode::New));
-                } else if msg == "escape_pressed" {
-                    if show_settings() {
-                        show_settings.set(false);
-                    } else if form_mode().is_some() {
-                        form_mode.set(None);
-                    } else if show_flush_dialog().is_some() {
-                        show_flush_dialog.set(None);
-                    } else if show_delete_connection_dialog().is_some() {
-                        show_delete_connection_dialog.set(None);
-                    }
-                }
-            }
-        }
-    });
+    use_keyboard_shortcuts(
+        show_settings,
+        form_mode,
+        show_flush_dialog,
+        show_delete_connection_dialog,
+    );
 
     #[cfg(target_os = "macos")]
     {
@@ -641,61 +583,9 @@ await new Promise(() => {});
         });
     }
 
-    use_future(move || {
-        let mut toast_for_update = toast_for_update.clone();
-        async move {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                if should_trigger_manual_check() {
-                    set_checking(true);
-                    if let Ok(mut manager) = UpdateManager::new() {
-                        match manager.check_for_updates().await {
-                            Ok(Some(info)) => {
-                                tracing::info!("Manual check found new version: {}", info.version);
-                                set_pending_update(Some(info));
-                            }
-                            Ok(None) => {
-                                set_pending_update(None);
-                                toast_for_update.write().success("已是最新版本");
-                            }
-                            Err(e) => {
-                                set_pending_update(None);
-                                let msg = format!("检查更新失败: {}", e);
-                                toast_for_update.write().error(&msg);
-                            }
-                        }
-                    } else {
-                        set_pending_update(None);
-                        toast_for_update.write().error("无法初始化更新检查器");
-                    }
-                    set_checking(false);
-                }
-            }
-        }
-    });
+    use_manual_update_check(toast_for_update);
 
-    use_future(move || async move {
-        let mut eval = document::eval(
-            r#"
-const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-const notify = () => dioxus.send(mediaQuery.matches);
-
-notify();
-
-if (typeof mediaQuery.addEventListener === "function") {
-  mediaQuery.addEventListener("change", notify);
-} else if (typeof mediaQuery.addListener === "function") {
-  mediaQuery.addListener(notify);
-}
-
-await new Promise(() => {});
-"#,
-        );
-
-        while let Ok(is_dark) = eval.recv::<bool>().await {
-            system_theme_dark.set(is_dark);
-        }
-    });
+    use_system_theme_listener(system_theme_dark);
 
     let save_settings = {
         let config_storage = config_storage.clone();
@@ -1049,38 +939,7 @@ await new Promise(() => {});
                                         }
                                     }
                                 } else if selected_conn_state == ConnectionState::Connecting {
-                                    div {
-                                        flex: "1",
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        align_items: "center",
-                                        justify_content: "center",
-                                        gap: "16px",
-                                        background: "{COLOR_SURFACE_LOW}",
-
-                                        style { {r#"
-                                @keyframes spin {
-                                    from { transform: rotate(0deg); }
-                                    to { transform: rotate(360deg); }
-                                }
-                            "#} }
-
-                                        div {
-                                            width: "40px",
-                                            height: "40px",
-                                            border: "3px solid {COLOR_ACCENT}",
-                                            border_top_color: "transparent",
-                                            border_radius: "50%",
-                                            animation: "spin 0.8s linear infinite",
-                                        }
-
-                                        div {
-                                            color: "{COLOR_TEXT_SECONDARY}",
-                                            font_size: "14px",
-
-                                            "正在加载连接..."
-                                        }
-                                    }
+                                    { spinner_panel("正在加载连接...") }
                                 } else if selected_conn_state == ConnectionState::Connected {
                                     if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
                                     div {
@@ -1198,98 +1057,13 @@ await new Promise(() => {});
                                         }
                                     }
                                 } else {
-                                    div {
-                                        flex: "1",
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        align_items: "center",
-                                        justify_content: "center",
-                                        gap: "16px",
-                                        background: "{COLOR_SURFACE_LOW}",
-
-                                        style { {r#"
-                                @keyframes spin {
-                                    from { transform: rotate(0deg); }
-                                    to { transform: rotate(360deg); }
-                                }
-                            "#} }
-
-                                        div {
-                                            width: "40px",
-                                            height: "40px",
-                                            border: "3px solid {COLOR_ACCENT}",
-                                            border_top_color: "transparent",
-                                            border_radius: "50%",
-                                            animation: "spin 0.8s linear infinite",
-                                        }
-
-                                        div {
-                                            color: "{COLOR_TEXT_SECONDARY}",
-                                            font_size: "14px",
-
-                                            "正在初始化连接..."
-                                        }
-                                    }
+                                    { spinner_panel("正在初始化连接...") }
                                 }
                                 } else {
-                                    div {
-                                        flex: "1",
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        align_items: "center",
-                                        justify_content: "center",
-                                        gap: "16px",
-                                        background: "{COLOR_SURFACE_LOW}",
-
-                                        style { {r#"
-                                @keyframes spin {
-                                    from { transform: rotate(0deg); }
-                                    to { transform: rotate(360deg); }
-                                }
-                            "#} }
-
-                                        div {
-                                            width: "40px",
-                                            height: "40px",
-                                            border: "3px solid {COLOR_ACCENT}",
-                                            border_top_color: "transparent",
-                                            border_radius: "50%",
-                                            animation: "spin 0.8s linear infinite",
-                                        }
-
-                                        div {
-                                            color: "{COLOR_TEXT_SECONDARY}",
-                                            font_size: "14px",
-
-                                            "正在连接..."
-                                        }
-                                    }
+                                    { spinner_panel("正在连接...") }
                                 }
                             } else {
-                                div {
-                                    flex: "1",
-                                    display: "flex",
-                                    flex_direction: "column",
-                                    align_items: "center",
-                                    justify_content: "center",
-                                    gap: "10px",
-                                    color: "{COLOR_TEXT_SECONDARY}",
-                                    background: "{COLOR_SURFACE_LOW}",
-
-                                    div {
-                                        font_size: "28px",
-                                        font_weight: "700",
-                                        color: "{COLOR_TEXT}",
-
-                                        "Redis 工作台"
-                                    }
-
-                                    div {
-                                        font_size: "14px",
-
-                                        "从左侧选择一个连接，或先创建新的 Redis 连接。"
-                                    }
-                                }
+                                { empty_connection_panel() }
                             }
                         }
                     }
