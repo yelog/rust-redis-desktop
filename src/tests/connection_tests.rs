@@ -1,3 +1,4 @@
+use crate::config::ConfigStorage;
 use crate::connection::{
     ClusterConfig, ConnectionConfig, ConnectionMode, SSHConfig, SSLConfig, SentinelConfig,
 };
@@ -282,5 +283,101 @@ mod tests {
         assert!(config.cluster.is_some());
         assert!(config.readonly);
         assert_eq!(config.order, 5);
+    }
+
+    #[test]
+    fn test_encrypt_connection_credentials_clears_plaintext() {
+        let config = ConnectionConfig {
+            password: Some("secret123".to_string()),
+            ..ConnectionConfig::new("test-auth", "localhost", 6379)
+        };
+
+        let encrypted = config.encrypt_credentials().unwrap();
+
+        assert_eq!(encrypted.password, None);
+        assert!(encrypted.encrypted_password.is_some());
+        assert!(!encrypted.encrypted_password.as_ref().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_decrypt_connection_credentials_restores_plaintext() {
+        let config = ConnectionConfig {
+            password: Some("secret123".to_string()),
+            ..ConnectionConfig::new("test-auth", "localhost", 6379)
+        };
+
+        let encrypted = config.encrypt_credentials().unwrap();
+        let decrypted = encrypted.decrypt_credentials().unwrap();
+
+        assert_eq!(decrypted.password, Some("secret123".to_string()));
+    }
+
+    #[test]
+    fn test_encrypt_ssh_credentials_clears_plaintext() {
+        let ssh_config = SSHConfig {
+            host: "ssh.example.com".to_string(),
+            port: 22,
+            username: "testuser".to_string(),
+            password: Some("sshpass".to_string()),
+            private_key_path: None,
+            passphrase: Some("keypass".to_string()),
+            encrypted_password: None,
+            encrypted_passphrase: None,
+        };
+
+        let config = ConnectionConfig::new("test-ssh", "127.0.0.1", 6379).with_ssh(ssh_config);
+        let encrypted = config.encrypt_credentials().unwrap();
+        let ssh = encrypted.ssh.unwrap();
+
+        assert_eq!(ssh.password, None);
+        assert_eq!(ssh.passphrase, None);
+        assert!(ssh.encrypted_password.is_some());
+        assert!(ssh.encrypted_passphrase.is_some());
+    }
+
+    #[test]
+    fn test_decrypt_ssh_credentials_restores_plaintext() {
+        let ssh_config = SSHConfig {
+            host: "ssh.example.com".to_string(),
+            port: 22,
+            username: "testuser".to_string(),
+            password: Some("sshpass".to_string()),
+            private_key_path: None,
+            passphrase: Some("keypass".to_string()),
+            encrypted_password: None,
+            encrypted_passphrase: None,
+        };
+
+        let config = ConnectionConfig::new("test-ssh", "127.0.0.1", 6379).with_ssh(ssh_config);
+        let encrypted = config.encrypt_credentials().unwrap();
+        let decrypted = encrypted.decrypt_credentials().unwrap();
+        let ssh = decrypted.ssh.unwrap();
+
+        assert_eq!(ssh.password, Some("sshpass".to_string()));
+        assert_eq!(ssh.passphrase, Some("keypass".to_string()));
+    }
+
+    #[test]
+    fn test_config_storage_round_trip_encrypts_on_disk() {
+        let temp_dir = std::env::temp_dir().join("rust-redis-desktop-test");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        let storage = ConfigStorage::new_temp().unwrap();
+        let config = ConnectionConfig {
+            password: Some("secret123".to_string()),
+            ..ConnectionConfig::new("test-storage", "localhost", 6379)
+        };
+
+        storage.save_connection(config).unwrap();
+
+        let raw = std::fs::read_to_string(temp_dir.join("config.json")).unwrap();
+        assert!(!raw.contains("secret123"));
+        assert!(raw.contains("encrypted_password"));
+
+        let loaded = storage.load_connections().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].password.as_deref(), Some("secret123"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

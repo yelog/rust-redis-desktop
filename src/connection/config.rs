@@ -1,4 +1,6 @@
+use crate::crypto::{decrypt_password, encrypt_password};
 use serde::{Deserialize, Serialize};
+use std::io;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -37,6 +39,48 @@ impl EncryptedField {
     pub fn is_empty(&self) -> bool {
         self.ciphertext.is_empty()
     }
+}
+
+fn encrypt_secret(
+    plaintext: &mut Option<String>,
+    encrypted: &mut Option<EncryptedField>,
+) -> io::Result<()> {
+    match plaintext.take() {
+        Some(secret) if !secret.is_empty() => {
+            let encrypted_data = encrypt_password(&secret)?;
+            *encrypted = Some(EncryptedField::new(
+                encrypted_data.ciphertext,
+                encrypted_data.iv,
+            ));
+        }
+        _ => {
+            *encrypted = None;
+        }
+    }
+
+    Ok(())
+}
+
+fn decrypt_secret(
+    plaintext: &mut Option<String>,
+    encrypted: &Option<EncryptedField>,
+) -> io::Result<()> {
+    if plaintext.is_some() {
+        return Ok(());
+    }
+
+    if let Some(encrypted) = encrypted {
+        if encrypted.is_empty() {
+            return Ok(());
+        }
+
+        let secret = decrypt_password(&encrypted.ciphertext, &encrypted.iv)?;
+        if !secret.is_empty() {
+            *plaintext = Some(secret);
+        }
+    }
+
+    Ok(())
 }
 
 impl Default for SSHConfig {
@@ -233,5 +277,27 @@ impl ConnectionConfig {
         self.mode = ConnectionMode::Sentinel;
         self.sentinel = Some(sentinel);
         self
+    }
+
+    pub fn encrypt_credentials(mut self) -> io::Result<Self> {
+        encrypt_secret(&mut self.password, &mut self.encrypted_password)?;
+
+        if let Some(ssh) = self.ssh.as_mut() {
+            encrypt_secret(&mut ssh.password, &mut ssh.encrypted_password)?;
+            encrypt_secret(&mut ssh.passphrase, &mut ssh.encrypted_passphrase)?;
+        }
+
+        Ok(self)
+    }
+
+    pub fn decrypt_credentials(mut self) -> io::Result<Self> {
+        decrypt_secret(&mut self.password, &self.encrypted_password)?;
+
+        if let Some(ssh) = self.ssh.as_mut() {
+            decrypt_secret(&mut ssh.password, &ssh.encrypted_password)?;
+            decrypt_secret(&mut ssh.passphrase, &ssh.encrypted_passphrase)?;
+        }
+
+        Ok(self)
     }
 }

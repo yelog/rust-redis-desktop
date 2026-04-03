@@ -123,6 +123,7 @@ impl ConfigStorage {
 
     pub fn save_connection(&self, config: ConnectionConfig) -> io::Result<()> {
         let mut file = self.load_or_create_config_file()?;
+        let config = config.encrypt_credentials()?;
 
         if let Some(pos) = file.connections.iter().position(|c| c.id == config.id) {
             file.connections[pos] = config;
@@ -135,7 +136,10 @@ impl ConfigStorage {
 
     pub fn load_connections(&self) -> io::Result<Vec<ConnectionConfig>> {
         let file = self.load_or_create_config_file()?;
-        Ok(file.connections)
+        file.connections
+            .into_iter()
+            .map(ConnectionConfig::decrypt_credentials)
+            .collect()
     }
 
     pub fn delete_connection(&self, id: Uuid) -> io::Result<()> {
@@ -204,7 +208,10 @@ impl ConfigStorage {
     ) -> io::Result<()> {
         let mut file = self.load_or_create_config_file()?;
 
-        let mut connections = connections;
+        let mut connections = connections
+            .into_iter()
+            .map(ConnectionConfig::encrypt_credentials)
+            .collect::<io::Result<Vec<_>>>()?;
         for (i, conn) in connections.iter_mut().enumerate() {
             conn.order = i as u32;
         }

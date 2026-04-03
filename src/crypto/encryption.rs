@@ -71,50 +71,6 @@ pub fn decrypt_password(ciphertext: &str, iv: &str) -> io::Result<String> {
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SecurePassword {
-    pub encrypted: String,
-    pub iv: String,
-    #[serde(default)]
-    pub is_encrypted: bool,
-}
-
-impl Default for SecurePassword {
-    fn default() -> Self {
-        Self {
-            encrypted: String::new(),
-            iv: String::new(),
-            is_encrypted: false,
-        }
-    }
-}
-
-impl SecurePassword {
-    pub fn from_plaintext(plaintext: &str) -> io::Result<Self> {
-        if plaintext.is_empty() {
-            return Ok(Self::default());
-        }
-
-        let encrypted = encrypt_password(plaintext)?;
-        Ok(Self {
-            encrypted: encrypted.ciphertext,
-            iv: encrypted.iv,
-            is_encrypted: true,
-        })
-    }
-
-    pub fn decrypt(&self) -> io::Result<String> {
-        if !self.is_encrypted {
-            return Ok(self.encrypted.clone());
-        }
-        decrypt_password(&self.encrypted, &self.iv)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.encrypted.is_empty()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,38 +78,38 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt_password() {
         let plaintext = "my_secret_password_123";
-        let secure = SecurePassword::from_plaintext(plaintext).unwrap();
+        let encrypted = encrypt_password(plaintext).unwrap();
 
-        assert!(secure.is_encrypted);
-        assert_ne!(secure.encrypted, plaintext);
+        assert_ne!(encrypted.ciphertext, plaintext);
+        assert!(!encrypted.iv.is_empty());
 
-        let decrypted = secure.decrypt().unwrap();
+        let decrypted = decrypt_password(&encrypted.ciphertext, &encrypted.iv).unwrap();
         assert_eq!(decrypted, plaintext);
     }
 
     #[test]
     fn test_empty_password() {
-        let secure = SecurePassword::from_plaintext("").unwrap();
-        assert!(!secure.is_encrypted);
-        assert!(secure.is_empty());
+        let encrypted = encrypt_password("").unwrap();
+        assert!(encrypted.ciphertext.is_empty());
+        assert!(encrypted.iv.is_empty());
 
-        let decrypted = secure.decrypt().unwrap();
+        let decrypted = decrypt_password(&encrypted.ciphertext, &encrypted.iv).unwrap();
         assert!(decrypted.is_empty());
     }
 
     #[test]
     fn test_password_with_special_chars() {
         let plaintext = "p@ssw0rd!#$%^&*()_+-={}[]|:;<>?,./~`";
-        let secure = SecurePassword::from_plaintext(plaintext).unwrap();
-        let decrypted = secure.decrypt().unwrap();
+        let encrypted = encrypt_password(plaintext).unwrap();
+        let decrypted = decrypt_password(&encrypted.ciphertext, &encrypted.iv).unwrap();
         assert_eq!(decrypted, plaintext);
     }
 
     #[test]
     fn test_password_with_unicode() {
         let plaintext = "密码测试123🔐";
-        let secure = SecurePassword::from_plaintext(plaintext).unwrap();
-        let decrypted = secure.decrypt().unwrap();
+        let encrypted = encrypt_password(plaintext).unwrap();
+        let decrypted = decrypt_password(&encrypted.ciphertext, &encrypted.iv).unwrap();
         assert_eq!(decrypted, plaintext);
     }
 }
