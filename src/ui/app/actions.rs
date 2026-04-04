@@ -237,11 +237,15 @@ pub(super) fn select_connection_action(
 
                 let version = connection_versions.read().get(&id).copied().unwrap_or(0);
                 connection_versions.write().insert(id, version + 1);
-                connection_states.write().insert(id, ConnectionState::Connected);
+                connection_states
+                    .write()
+                    .insert(id, ConnectionState::Connected);
                 return;
             }
 
-            connection_states.write().insert(id, ConnectionState::Connecting);
+            connection_states
+                .write()
+                .insert(id, ConnectionState::Connecting);
 
             if let Some(pool) = connection_manager.read().get_connection(id).await {
                 let db = pool.current_db();
@@ -250,7 +254,9 @@ pub(super) fn select_connection_action(
                 }
                 current_db.set(db);
                 connection_pools.write().insert(id, pool);
-                connection_states.write().insert(id, ConnectionState::Connected);
+                connection_states
+                    .write()
+                    .insert(id, ConnectionState::Connected);
                 return;
             }
 
@@ -262,7 +268,9 @@ pub(super) fn select_connection_action(
                                 current_db.set(pool.current_db());
                                 let _ = connection_manager.read().add_connection(config).await;
                                 connection_pools.write().insert(id, pool);
-                                connection_states.write().insert(id, ConnectionState::Connected);
+                                connection_states
+                                    .write()
+                                    .insert(id, ConnectionState::Connected);
                             }
                             Err(_) => {
                                 connection_states.write().insert(id, ConnectionState::Error);
@@ -288,7 +296,9 @@ pub(super) fn reconnect_connection_action(
     Callback::new(move |id: Uuid| {
         spawn(async move {
             reconnecting_ids.write().insert(id);
-            connection_states.write().insert(id, ConnectionState::Connecting);
+            connection_states
+                .write()
+                .insert(id, ConnectionState::Connecting);
 
             if let Some(storage) = config_storage.read().as_ref() {
                 if let Ok(saved) = storage.load_connections() {
@@ -299,9 +309,12 @@ pub(super) fn reconnect_connection_action(
                                 connection_pools.write().insert(id, pool);
                                 let _ = connection_manager.read().add_connection(config).await;
 
-                                let version = connection_versions.read().get(&id).copied().unwrap_or(0);
+                                let version =
+                                    connection_versions.read().get(&id).copied().unwrap_or(0);
                                 connection_versions.write().insert(id, version + 1);
-                                connection_states.write().insert(id, ConnectionState::Connected);
+                                connection_states
+                                    .write()
+                                    .insert(id, ConnectionState::Connected);
                                 if selected_connection() == Some(id) {
                                     current_db.set(db);
                                 }
