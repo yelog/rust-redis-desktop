@@ -8,7 +8,10 @@ use self::effects::{
     use_keyboard_shortcuts, use_load_saved_connections, use_manual_update_check,
     use_system_theme_listener, use_theme_bridge,
 };
-use self::actions::{import_connections_action, save_settings_action};
+use self::actions::{
+    delete_connection_prompt_action, edit_connection_action, import_connections_action,
+    open_bool_signal, open_optional_uuid_signal, reorder_connections_action, save_settings_action,
+};
 use self::render::{
     empty_connection_panel, spinner_panel, ExportConnectionsDialogSection,
     FlushDialogSection, ImportConnectionsDialogSection, ImportOverlaySection,
@@ -792,48 +795,20 @@ pub fn App() -> Element {
                                         }
                                     });
                                 },
-                                on_edit_connection: move |id: Uuid| {
-                                    if let Some(storage) = config_storage.read().as_ref() {
-                                        if let Ok(saved) = storage.load_connections() {
-                                            if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                                form_mode.set(Some(FormMode::Edit(config)));
-                                            }
-                                        }
-                                    }
-                                },
-    on_delete_connection: move |id: Uuid| {
-                                    if let Some((_, name)) = connections
-                                        .read()
-                                        .iter()
-                                        .find(|(conn_id, _)| *conn_id == id)
-                                    {
-                                        show_delete_connection_dialog
-                                            .set(Some((id, name.clone())));
-                                    }
-                                },
-                                on_flush_connection: move |id: Uuid| {
-                                    show_flush_dialog.set(Some(id));
-                                },
-                                on_import_connection: move |id: Uuid| {
-                                    show_import_dialog.set(Some(id));
-                                },
-                                on_export_connections: move |_| show_export_connections_dialog.set(true),
-                                on_import_connections: move |_| show_import_connections_dialog.set(true),
-                                on_open_settings: move |_| show_settings.set(true),
-                                on_reorder_connection: move |(from, to): (usize, usize)| {
-                                    let mut conns = connections.write();
-                                    if from < conns.len() && to < conns.len() {
-                                        let conn = conns.remove(from);
-                                        conns.insert(to, conn);
-                                        drop(conns);
-
-                                        spawn(async move {
-                                            if let Some(storage) = config_storage.read().as_ref() {
-                                                let _ = storage.reorder_connections(from, to);
-                                            }
-                                        });
-                                    }
-                                },
+                                on_edit_connection: edit_connection_action(config_storage, form_mode),
+                                on_delete_connection: delete_connection_prompt_action(
+                                    connections,
+                                    show_delete_connection_dialog,
+                                ),
+                                on_flush_connection: open_optional_uuid_signal(show_flush_dialog),
+                                on_import_connection: open_optional_uuid_signal(show_import_dialog),
+                                on_export_connections: open_bool_signal(show_export_connections_dialog),
+                                on_import_connections: open_bool_signal(show_import_connections_dialog),
+                                on_open_settings: open_bool_signal(show_settings),
+                                on_reorder_connection: reorder_connections_action(
+                                    connections,
+                                    config_storage,
+                                ),
                             }
 
                             ResizableDivider {
