@@ -34,6 +34,17 @@ fn collect_all_node_ids(nodes: &[TreeNode]) -> HashSet<String> {
     ids
 }
 
+fn collect_all_folder_paths(nodes: &[TreeNode]) -> HashSet<String> {
+    let mut paths = HashSet::new();
+    for node in nodes {
+        if !node.is_leaf {
+            paths.insert(node.path.clone());
+            paths.extend(collect_all_folder_paths(&node.children));
+        }
+    }
+    paths
+}
+
 fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     let mut keys = Vec::new();
     for node in nodes {
@@ -231,8 +242,10 @@ pub fn KeyBrowser(
         let mut cancel_scan = cancel_scan.clone();
         let tree_state = tree_state.clone();
         let key_type_cache = key_type_cache.clone();
+        let expanded_paths = expanded_paths.clone();
         move || {
             let pool = pool.clone();
+            let is_searching = !search_pattern.read().trim().is_empty();
             let match_pattern = key_match_pattern(&search_pattern.read());
             let mut loading = loading.clone();
             let mut tree_nodes = tree_nodes.clone();
@@ -243,6 +256,7 @@ pub fn KeyBrowser(
             let cancel_flag = Arc::new(AtomicBool::new(false));
             cancel_scan.set(cancel_flag.clone());
             let mut key_type_cache = key_type_cache.clone();
+            let mut expanded_paths = expanded_paths.clone();
 
             spawn(async move {
                 loading.set(true);
@@ -290,9 +304,22 @@ pub fn KeyBrowser(
                 let builder = TreeBuilder::new(":");
                 let new_nodes = builder.build(all_keys);
                 let new_node_ids = collect_all_node_ids(&new_nodes);
-                tree_nodes.set(new_nodes);
 
-                {
+                if is_searching {
+                    // Auto-expand all folder nodes when searching
+                    let all_folder_paths = collect_all_folder_paths(&new_nodes);
+                    let all_folder_node_ids: HashSet<String> = all_folder_paths
+                        .iter()
+                        .map(|p| format!("folder:{p}"))
+                        .collect();
+                    expanded_paths.set(all_folder_paths);
+                    tree_nodes.set(new_nodes);
+                    let mut state = tree_state.write();
+                    state.expanded_nodes = all_folder_node_ids;
+                    state.selected_keys.clear();
+                    state.selection_mode = false;
+                } else {
+                    tree_nodes.set(new_nodes);
                     let mut state = tree_state.write();
                     let valid_expanded: HashSet<String> = preserved_expanded
                         .into_iter()

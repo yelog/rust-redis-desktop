@@ -41,8 +41,8 @@ mod stream_group_dialog;
 mod terminal;
 mod toast;
 mod top_nav;
-mod value_viewer;
 pub mod update_dialog;
+mod value_viewer;
 mod virtual_key_list;
 mod virtual_tree_list;
 
@@ -84,7 +84,7 @@ pub use stream_group_dialog::*;
 pub use terminal::*;
 pub use toast::*;
 pub use top_nav::*;
-pub use value_viewer::*;
 pub use update_dialog::*;
+pub use value_viewer::*;
 pub use virtual_key_list::*;
 pub use virtual_tree_list::*;

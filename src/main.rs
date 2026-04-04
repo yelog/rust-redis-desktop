@@ -121,8 +121,8 @@ fn run_app() -> Result<()> {
         }
     }
 
-    let menu = create_menu()
-        .map_err(|e| AppError::Startup(StartupError::MenuCreation { source: e }))?;
+    let menu =
+        create_menu().map_err(|e| AppError::Startup(StartupError::MenuCreation { source: e }))?;
 
     let settings = ConfigStorage::new()
         .ok()

@@ -2,7 +2,9 @@ use super::state::FormMode;
 use crate::config::ConfigStorage;
 use crate::theme::ThemePreference;
 use crate::ui::ToastManager;
-use crate::updater::{set_checking, set_pending_update, should_trigger_manual_check, UpdateManager};
+use crate::updater::{
+    set_checking, set_pending_update, should_trigger_manual_check, UpdateManager,
+};
 use dioxus::document;
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -27,7 +29,10 @@ pub(super) fn use_load_saved_connections(
     });
 }
 
-pub(super) fn use_theme_bridge(theme_preference: Signal<ThemePreference>, bridge_script: fn(ThemePreference) -> String) {
+pub(super) fn use_theme_bridge(
+    theme_preference: Signal<ThemePreference>,
+    bridge_script: fn(ThemePreference) -> String,
+) {
     use_effect(move || {
         let script = bridge_script(theme_preference());
         let _ = document::eval(&script);
@@ -40,10 +45,9 @@ pub(super) fn use_keyboard_shortcuts(
     mut show_flush_dialog: Signal<Option<Uuid>>,
     mut show_delete_connection_dialog: Signal<Option<(Uuid, String)>>,
 ) {
-    use_future(move || {
-        async move {
-            let mut eval = document::eval(
-                r#"
+    use_future(move || async move {
+        let mut eval = document::eval(
+            r#"
 document.addEventListener('keydown', (e) => {
     if (e.key === ',' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -71,23 +75,22 @@ document.addEventListener('keydown', (e) => {
 });
 await new Promise(() => {});
 "#,
-            );
+        );
 
-            while let Ok(msg) = eval.recv::<String>().await {
-                if msg == "toggle_settings" {
-                    show_settings.toggle();
-                } else if msg == "new_connection" {
-                    form_mode.set(Some(FormMode::New));
-                } else if msg == "escape_pressed" {
-                    if show_settings() {
-                        show_settings.set(false);
-                    } else if form_mode().is_some() {
-                        form_mode.set(None);
-                    } else if show_flush_dialog().is_some() {
-                        show_flush_dialog.set(None);
-                    } else if show_delete_connection_dialog().is_some() {
-                        show_delete_connection_dialog.set(None);
-                    }
+        while let Ok(msg) = eval.recv::<String>().await {
+            if msg == "toggle_settings" {
+                show_settings.toggle();
+            } else if msg == "new_connection" {
+                form_mode.set(Some(FormMode::New));
+            } else if msg == "escape_pressed" {
+                if show_settings() {
+                    show_settings.set(false);
+                } else if form_mode().is_some() {
+                    form_mode.set(None);
+                } else if show_flush_dialog().is_some() {
+                    show_flush_dialog.set(None);
+                } else if show_delete_connection_dialog().is_some() {
+                    show_delete_connection_dialog.set(None);
                 }
             }
         }
@@ -95,34 +98,32 @@ await new Promise(() => {});
 }
 
 pub(super) fn use_manual_update_check(mut toast_for_update: Signal<ToastManager>) {
-    use_future(move || {
-        async move {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                if should_trigger_manual_check() {
-                    set_checking(true);
-                    if let Ok(mut manager) = UpdateManager::new() {
-                        match manager.check_for_updates().await {
-                            Ok(Some(info)) => {
-                                tracing::info!("Manual check found new version: {}", info.version);
-                                set_pending_update(Some(info));
-                            }
-                            Ok(None) => {
-                                set_pending_update(None);
-                                toast_for_update.write().success("已是最新版本");
-                            }
-                            Err(e) => {
-                                set_pending_update(None);
-                                let msg = format!("检查更新失败: {}", e);
-                                toast_for_update.write().error(&msg);
-                            }
+    use_future(move || async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if should_trigger_manual_check() {
+                set_checking(true);
+                if let Ok(mut manager) = UpdateManager::new() {
+                    match manager.check_for_updates().await {
+                        Ok(Some(info)) => {
+                            tracing::info!("Manual check found new version: {}", info.version);
+                            set_pending_update(Some(info));
                         }
-                    } else {
-                        set_pending_update(None);
-                        toast_for_update.write().error("无法初始化更新检查器");
+                        Ok(None) => {
+                            set_pending_update(None);
+                            toast_for_update.write().success("已是最新版本");
+                        }
+                        Err(e) => {
+                            set_pending_update(None);
+                            let msg = format!("检查更新失败: {}", e);
+                            toast_for_update.write().error(&msg);
+                        }
                     }
-                    set_checking(false);
+                } else {
+                    set_pending_update(None);
+                    toast_for_update.write().error("无法初始化更新检查器");
                 }
+                set_checking(false);
             }
         }
     });

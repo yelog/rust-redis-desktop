@@ -40,10 +40,7 @@ impl UpdateChecker {
             .build()
             .map_err(|e| UpdateError::NetworkError(e.to_string()))?;
 
-        let url = format!(
-            "https://api.github.com/repos/{}/releases",
-            self.repo
-        );
+        let url = format!("https://api.github.com/repos/{}/releases", self.repo);
 
         let response = client
             .get(&url)
@@ -98,11 +95,7 @@ impl UpdateChecker {
     }
 
     pub fn clean_version(&self, version: &str) -> String {
-        version
-            .split('-')
-            .next()
-            .unwrap_or(version)
-            .to_string()
+        version.split('-').next().unwrap_or(version).to_string()
     }
 
     fn find_asset<'a>(&self, assets: &'a [GitHubAsset]) -> Result<&'a GitHubAsset> {

@@ -1,6 +1,6 @@
 use crate::updater::{
     get_current_version, InstallResult, Result, UpdateChecker, UpdateConfig, UpdateDownloader,
-    UpdateInstaller, UpdateInfo,
+    UpdateInfo, UpdateInstaller,
 };
 use std::path::PathBuf;
 use tokio::sync::mpsc;
