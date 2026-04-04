@@ -192,3 +192,129 @@ pub(super) fn confirm_delete_connection_action(
         });
     })
 }
+
+pub(super) fn select_connection_action(
+    mut selected_connection: Signal<Option<Uuid>>,
+    mut selected_key: Signal<String>,
+    mut current_tab: Signal<super::state::Tab>,
+    mut current_db: Signal<u8>,
+    mut connection_states: Signal<HashMap<Uuid, ConnectionState>>,
+    mut connection_versions: Signal<HashMap<Uuid, u32>>,
+    mut connection_pools: Signal<HashMap<Uuid, ConnectionPool>>,
+    connection_manager: Signal<ConnectionManager>,
+    config_storage: Signal<Option<ConfigStorage>>,
+) -> Callback<Uuid> {
+    Callback::new(move |id: Uuid| {
+        let previous_conn = selected_connection();
+
+        selected_key.set(String::new());
+        current_tab.set(super::state::Tab::Data);
+
+        if previous_conn != Some(id) {
+            connection_states
+                .write()
+                .insert(id, ConnectionState::Connecting);
+        }
+
+        selected_connection.set(Some(id));
+
+        if let Some(pool) = connection_pools.read().get(&id).cloned() {
+            current_db.set(pool.current_db());
+        } else if let Some(storage) = config_storage.read().as_ref() {
+            if let Ok(saved) = storage.load_connections() {
+                if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                    current_db.set(config.db);
+                }
+            }
+        }
+
+        spawn(async move {
+            if let Some(pool) = connection_pools.read().get(&id).cloned() {
+                let db = pool.current_db();
+                if let Err(error) = pool.select_database(db).await {
+                    tracing::error!("Failed to sync database for connection {id}: {error}");
+                }
+
+                let version = connection_versions.read().get(&id).copied().unwrap_or(0);
+                connection_versions.write().insert(id, version + 1);
+                connection_states.write().insert(id, ConnectionState::Connected);
+                return;
+            }
+
+            connection_states.write().insert(id, ConnectionState::Connecting);
+
+            if let Some(pool) = connection_manager.read().get_connection(id).await {
+                let db = pool.current_db();
+                if let Err(error) = pool.select_database(db).await {
+                    tracing::error!("Failed to sync database for connection {id}: {error}");
+                }
+                current_db.set(db);
+                connection_pools.write().insert(id, pool);
+                connection_states.write().insert(id, ConnectionState::Connected);
+                return;
+            }
+
+            if let Some(storage) = config_storage.read().as_ref() {
+                if let Ok(saved) = storage.load_connections() {
+                    if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                        match ConnectionPool::new(config.clone()).await {
+                            Ok(pool) => {
+                                current_db.set(pool.current_db());
+                                let _ = connection_manager.read().add_connection(config).await;
+                                connection_pools.write().insert(id, pool);
+                                connection_states.write().insert(id, ConnectionState::Connected);
+                            }
+                            Err(_) => {
+                                connection_states.write().insert(id, ConnectionState::Error);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    })
+}
+
+pub(super) fn reconnect_connection_action(
+    mut reconnecting_ids: Signal<std::collections::HashSet<Uuid>>,
+    mut connection_states: Signal<HashMap<Uuid, ConnectionState>>,
+    config_storage: Signal<Option<ConfigStorage>>,
+    mut connection_pools: Signal<HashMap<Uuid, ConnectionPool>>,
+    connection_manager: Signal<ConnectionManager>,
+    mut connection_versions: Signal<HashMap<Uuid, u32>>,
+    selected_connection: Signal<Option<Uuid>>,
+    mut current_db: Signal<u8>,
+) -> Callback<Uuid> {
+    Callback::new(move |id: Uuid| {
+        spawn(async move {
+            reconnecting_ids.write().insert(id);
+            connection_states.write().insert(id, ConnectionState::Connecting);
+
+            if let Some(storage) = config_storage.read().as_ref() {
+                if let Ok(saved) = storage.load_connections() {
+                    if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                        match ConnectionPool::new(config.clone()).await {
+                            Ok(pool) => {
+                                let db = pool.current_db();
+                                connection_pools.write().insert(id, pool);
+                                let _ = connection_manager.read().add_connection(config).await;
+
+                                let version = connection_versions.read().get(&id).copied().unwrap_or(0);
+                                connection_versions.write().insert(id, version + 1);
+                                connection_states.write().insert(id, ConnectionState::Connected);
+                                if selected_connection() == Some(id) {
+                                    current_db.set(db);
+                                }
+                            }
+                            Err(_) => {
+                                connection_states.write().insert(id, ConnectionState::Error);
+                            }
+                        }
+                    }
+                }
+            }
+
+            reconnecting_ids.write().remove(&id);
+        });
+    })
+}

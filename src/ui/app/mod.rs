@@ -7,7 +7,8 @@ mod theme;
 use self::actions::{
     confirm_delete_connection_action, delete_connection_prompt_action, edit_connection_action,
     import_connections_action, open_bool_signal, open_optional_uuid_signal,
-    reorder_connections_action, save_connection_action, save_settings_action,
+    reconnect_connection_action, reorder_connections_action, save_connection_action,
+    save_settings_action, select_connection_action,
 };
 use self::effects::{
     use_keyboard_shortcuts, use_load_saved_connections, use_manual_update_check,
@@ -642,115 +643,34 @@ pub fn App() -> Element {
                         overflow: "hidden",
 
                         LeftRail {
-                            width: left_rail_width,
-                            connections: connections(),
-                            connection_states: connection_states(),
-                            readonly_connections: readonly_connections(),
-                            selected_connection: selected_connection(),
-                            colors: colors.clone(),
-                            on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
-                            on_select_connection: move |id: Uuid| {
-                                let previous_conn = selected_connection();
-
-                                selected_key.set(String::new());
-                                current_tab.set(Tab::Data);
-
-                                if previous_conn != Some(id) {
-                                    connection_states
-                                        .write()
-                                        .insert(id, ConnectionState::Connecting);
-                                }
-
-                                selected_connection.set(Some(id));
-
-                                if let Some(pool) = connection_pools.read().get(&id).cloned() {
-                                    current_db.set(pool.current_db());
-                                } else if let Some(storage) = config_storage.read().as_ref() {
-                                    if let Ok(saved) = storage.load_connections() {
-                                        if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                            current_db.set(config.db);
-                                        }
-                                    }
-                                }
-
-                                spawn(async move {
-                                    if let Some(pool) = connection_pools.read().get(&id).cloned() {
-                                        let db = pool.current_db();
-                                        if let Err(error) = pool.select_database(db).await {
-                                            tracing::error!("Failed to sync database for connection {id}: {error}");
-                                        }
-
-                                        let version =
-                                            connection_versions.read().get(&id).copied().unwrap_or(0);
-                                        connection_versions.write().insert(id, version + 1);
-                                        connection_states.write().insert(id, ConnectionState::Connected);
-                                        return;
-                                    }
-
-                                    connection_states.write().insert(id, ConnectionState::Connecting);
-
-                                    if let Some(pool) = connection_manager.read().get_connection(id).await {
-                                        let db = pool.current_db();
-                                        if let Err(error) = pool.select_database(db).await {
-                                            tracing::error!("Failed to sync database for connection {id}: {error}");
-                                        }
-                                        current_db.set(db);
-                                        connection_pools.write().insert(id, pool);
-                                        connection_states.write().insert(id, ConnectionState::Connected);
-                                        return;
-                                    }
-
-                                    if let Some(storage) = config_storage.read().as_ref() {
-                                        if let Ok(saved) = storage.load_connections() {
-                                            if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                                match ConnectionPool::new(config.clone()).await {
-                                                    Ok(pool) => {
-                                                        current_db.set(pool.current_db());
-                                                        let _ = connection_manager.read().add_connection(config).await;
-                                                        connection_pools.write().insert(id, pool);
-                                                        connection_states.write().insert(id, ConnectionState::Connected);
-                                                    }
-                                                    Err(_) => {
-                                                        connection_states.write().insert(id, ConnectionState::Error);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                });
-                            },
-                            on_reconnect_connection: move |id: Uuid| {
-                                spawn(async move {
-                                    reconnecting_ids.write().insert(id);
-                                    connection_states.write().insert(id, ConnectionState::Connecting);
-
-                                    if let Some(storage) = config_storage.read().as_ref() {
-                                        if let Ok(saved) = storage.load_connections() {
-                                            if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                                match ConnectionPool::new(config.clone()).await {
-                                                    Ok(pool) => {
-                                                        let db = pool.current_db();
-                                                        connection_pools.write().insert(id, pool);
-                                                        let _ = connection_manager.read().add_connection(config).await;
-
-                                                        let version = connection_versions.read().get(&id).copied().unwrap_or(0);
-                                                        connection_versions.write().insert(id, version + 1);
-                                                        connection_states.write().insert(id, ConnectionState::Connected);
-                                                        if selected_connection() == Some(id) {
-                                                            current_db.set(db);
-                                                        }
-                                                    }
-                                                    Err(_) => {
-                                                        connection_states.write().insert(id, ConnectionState::Error);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    reconnecting_ids.write().remove(&id);
-                                });
-                            },
+                                width: left_rail_width,
+                                connections: connections(),
+                                connection_states: connection_states(),
+                                readonly_connections: readonly_connections(),
+                                selected_connection: selected_connection(),
+                                colors: colors.clone(),
+                                on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
+                                on_select_connection: select_connection_action(
+                                    selected_connection,
+                                    selected_key,
+                                    current_tab,
+                                    current_db,
+                                    connection_states,
+                                    connection_versions,
+                                    connection_pools,
+                                    connection_manager,
+                                    config_storage,
+                                ),
+                                on_reconnect_connection: reconnect_connection_action(
+                                    reconnecting_ids,
+                                    connection_states,
+                                    config_storage,
+                                    connection_pools,
+                                    connection_manager,
+                                    connection_versions,
+                                    selected_connection,
+                                    current_db,
+                                ),
                             on_close_connection: move |id: Uuid| {
                                 spawn(async move {
                                     connection_pools.write().remove(&id);
