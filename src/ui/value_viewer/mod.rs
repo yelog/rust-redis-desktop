@@ -1,3 +1,26 @@
+mod bitmap_viewer;
+mod data_loader;
+mod formatters;
+mod image_preview;
+mod protobuf_viewer;
+mod styles;
+
+pub use self::image_preview::{ImagePreview, PreviewImageData, PREVIEW_IMAGE};
+use self::bitmap_viewer::BitmapViewer;
+use self::formatters::{
+    base64_decode, copy_value_to_clipboard, detect_image_format, format_bytes,
+    format_memory_usage, format_ttl_label, is_binary_data, sorted_hash_entries,
+    value_metric_label,
+};
+use self::protobuf_viewer::ProtobufViewer;
+use self::styles::{
+    compact_icon_action_button_style, data_section_controls_style, data_section_count_style,
+    data_section_toolbar_style, data_table_header_cell_style, data_table_header_row_style,
+    destructive_action_button_style, image_preview_button_style, image_preview_info_chip_style,
+    overlay_modal_actions_style, overlay_modal_backdrop_style, overlay_modal_body_style,
+    overlay_modal_keyframes, overlay_modal_surface_style, overlay_modal_title_style,
+    primary_action_button_style, secondary_action_button_style, status_banner_style,
+};
 use crate::connection::ConnectionPool;
 use crate::protobuf_schema::PROTO_REGISTRY;
 use crate::redis::{KeyInfo, KeyType};
@@ -19,7 +42,6 @@ use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
 use crate::ui::pagination::LargeKeyWarning;
 use crate::ui::{copy_text_to_clipboard, ServerInfoPanel, ToastManager};
-use dioxus::html::geometry::WheelDelta;
 use dioxus::prelude::*;
 use serde_json;
 use serde_json::Value as JsonValue;
@@ -33,205 +55,6 @@ const STATUS_ERROR_BG: &str = COLOR_ERROR_BG;
 const ROW_CREATE_BG: &str = COLOR_ROW_CREATE_BG;
 const ROW_EDIT_BG: &str = COLOR_ROW_EDIT_BG;
 
-#[derive(Clone, Default)]
-pub struct PreviewImageData {
-    pub data_uri: String,
-    pub format: String,
-    pub size: String,
-}
-
-pub static PREVIEW_IMAGE: GlobalSignal<Option<PreviewImageData>> = Signal::global(|| None);
-
-#[component]
-pub fn ImagePreview() -> Element {
-    let preview = PREVIEW_IMAGE();
-
-    let Some(ref data) = preview else {
-        return rsx! {};
-    };
-
-    let data_uri = data.data_uri.clone();
-    let format = data.format.clone();
-    let size = data.size.clone();
-
-    let data_uri_for_save = data_uri.clone();
-    let data_uri_for_img = data_uri.clone();
-    let format_for_save = format.clone();
-    let mut zoom_level = use_signal(|| 1.0f32);
-
-    rsx! {
-        div {
-            position: "fixed",
-            top: "0",
-            left: "0",
-            right: "0",
-            bottom: "0",
-            background: COLOR_OVERLAY_BACKDROP,
-            display: "flex",
-            flex_direction: "column",
-            align_items: "center",
-            justify_content: "center",
-            z_index: "9999",
-            animation: "fadeIn 0.2s ease-out",
-
-            onclick: move |_| {
-                *PREVIEW_IMAGE.write() = None;
-                zoom_level.set(1.0);
-            },
-
-            onkeydown: move |e: Event<KeyboardData>| {
-                if e.data().key() == Key::Escape {
-                    e.prevent_default();
-                    e.stop_propagation();
-                    *PREVIEW_IMAGE.write() = None;
-                    zoom_level.set(1.0);
-                }
-            },
-
-            style { {r#"
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes scaleIn {
-                    from { transform: scale(0.9); opacity: 0; }
-                    to { transform: scale(1); opacity: 1; }
-                }
-            "#} }
-
-            div {
-                position: "absolute",
-                top: "16px",
-                right: "16px",
-                display: "flex",
-                gap: "8px",
-                z_index: "10",
-
-                button {
-                    style: "{image_preview_button_style()}",
-
-                    onclick: move |e| {
-                        e.stop_propagation();
-                        let image_data = base64_decode(&data_uri_for_save);
-                        let extension = format_for_save.to_lowercase();
-                        let file_name = format!("image.{}", extension);
-
-                        spawn(async move {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .set_file_name(&file_name)
-                                .add_filter("Image", &[&extension])
-                                .save_file()
-                            {
-                                let _ = std::fs::write(&path, &image_data);
-                            }
-                        });
-                    },
-
-                    "保存图片"
-                }
-
-                button {
-                    style: "{image_preview_button_style()}",
-
-                    onclick: move |e| {
-                        e.stop_propagation();
-                        zoom_level.set(1.0);
-                    },
-
-                    "重置"
-                }
-
-                button {
-                    style: "{image_preview_button_style()}",
-
-                    onclick: move |e| {
-                        e.stop_propagation();
-                        *PREVIEW_IMAGE.write() = None;
-                        zoom_level.set(1.0);
-                    },
-
-                    "关闭 (Esc)"
-                }
-            }
-
-            div {
-                width: "100vw",
-                height: "100vh",
-                display: "flex",
-                align_items: "center",
-                justify_content: "center",
-                animation: "scaleIn 0.2s ease-out",
-                overflow: "hidden",
-
-                onclick: |e| e.stop_propagation(),
-
-                onwheel: move |e: Event<WheelData>| {
-                    e.stop_propagation();
-                    let delta = match e.delta() {
-                        WheelDelta::Pixels(p) => {
-                            if p.y > 0.0 { -0.1 } else { 0.1 }
-                        }
-                        WheelDelta::Lines(l) => {
-                            if l.y > 0.0 { -0.1 } else { 0.1 }
-                        }
-                        WheelDelta::Pages(p) => {
-                            if p.y > 0.0 { -0.1 } else { 0.1 }
-                        }
-                    };
-                    let current = zoom_level();
-                    let new_zoom = (current + delta).clamp(0.1, 5.0);
-                    zoom_level.set(new_zoom);
-                },
-
-                img {
-                    src: "{data_uri_for_img}",
-                    max_width: "90vw",
-                    max_height: "85vh",
-                    object_fit: "contain",
-                    transform: "scale({zoom_level})",
-                    transform_origin: "center",
-                    transition: "transform 0.1s ease-out",
-                    draggable: false,
-                }
-            }
-
-            div {
-                position: "absolute",
-                bottom: "24px",
-                left: "50%",
-                transform: "translateX(-50%)",
-                display: "flex",
-                gap: "16px",
-                align_items: "center",
-
-                div {
-                    style: "{image_preview_info_chip_style()}",
-
-                    "{format} - {size}"
-                }
-
-                div {
-                    style: "{image_preview_info_chip_style()}",
-
-                    "缩放: {(zoom_level() * 100.0) as i32}%"
-                }
-            }
-        }
-    }
-}
-
-fn base64_decode(data_uri: &str) -> Vec<u8> {
-    use base64::{engine::general_purpose, Engine as _};
-    if let Some(base64_data) = data_uri.strip_prefix("data:") {
-        if let Some(start) = base64_data.find(";base64,") {
-            let base64_str = &base64_data[start + 8..];
-            return general_purpose::STANDARD
-                .decode(base64_str)
-                .unwrap_or_default();
-        }
-    }
-    Vec::new()
-}
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum BinaryFormat {
@@ -255,411 +78,6 @@ struct HashDeleteTarget {
     field: String,
 }
 
-fn is_binary_data(data: &[u8]) -> bool {
-    if data.is_empty() {
-        return false;
-    }
-
-    let format = detect_serialization_format(data);
-    if format != SerializationFormat::Unknown {
-        return true;
-    }
-
-    let non_printable_count = data
-        .iter()
-        .filter(|&&b| b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D)
-        .count();
-
-    non_printable_count > data.len() / 10
-}
-
-fn format_bytes(data: &[u8], format: BinaryFormat) -> String {
-    match format {
-        BinaryFormat::Hex => data
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .join(" "),
-        BinaryFormat::Base64 => {
-            use base64::{engine::general_purpose, Engine as _};
-            general_purpose::STANDARD.encode(data)
-        }
-        BinaryFormat::JavaSerialized => {
-            if is_java_serialization(data) {
-                format!(
-                    "Java 序列化对象 ({} 字节)\n\n请切换到 Java 视图查看解析结果",
-                    data.len()
-                )
-            } else {
-                "非 Java 序列化数据".to_string()
-            }
-        }
-        BinaryFormat::Php => {
-            let detected = detect_serialization_format(data);
-            if detected == SerializationFormat::Php {
-                format!(
-                    "PHP 序列化数据 ({} 字节)\n\n请切换到 PHP 视图查看解析结果",
-                    data.len()
-                )
-            } else {
-                "非 PHP 序列化数据".to_string()
-            }
-        }
-        BinaryFormat::MsgPack => {
-            let detected = detect_serialization_format(data);
-            if detected == SerializationFormat::MsgPack {
-                format!(
-                    "MessagePack 数据 ({} 字节)\n\n请切换到 MsgPack 视图查看解析结果",
-                    data.len()
-                )
-            } else {
-                "非 MessagePack 数据".to_string()
-            }
-        }
-        BinaryFormat::Pickle => {
-            let detected = detect_serialization_format(data);
-            if detected == SerializationFormat::Pickle {
-                format!(
-                    "Python Pickle 数据 ({} 字节)\n\n请切换到 Pickle 视图查看解析结果",
-                    data.len()
-                )
-            } else {
-                "非 Pickle 数据".to_string()
-            }
-        }
-        BinaryFormat::Kryo => {
-            let detected = detect_serialization_format(data);
-            if matches!(
-                detected,
-                SerializationFormat::Kryo | SerializationFormat::Fst
-            ) {
-                let format_name = if detected == SerializationFormat::Fst {
-                    "FST"
-                } else {
-                    "Kryo"
-                };
-                format!(
-                    "{} 数据 ({} 字节)\n\n请切换到 Kryo 视图查看解析结果",
-                    format_name,
-                    data.len()
-                )
-            } else {
-                "非 Kryo/FST 数据".to_string()
-            }
-        }
-        BinaryFormat::Bitmap => {
-            format!(
-                "Bitmap 数据 ({} 字节)\n\n请点击 Bitmap 按钮查看可视化",
-                data.len()
-            )
-        }
-        BinaryFormat::Image => {
-            if let Some(format) = detect_image_format(data) {
-                format!("{} 图片 ({} 字节)", format, data.len())
-            } else {
-                "非图片数据".to_string()
-            }
-        }
-        BinaryFormat::Protobuf => {
-            if is_protobuf_data(data) {
-                format!(
-                    "Protobuf 数据 ({} 字节)\n\n请切换到 Protobuf 视图查看解析结果",
-                    data.len()
-                )
-            } else {
-                "非 Protobuf 数据".to_string()
-            }
-        }
-        BinaryFormat::Bson => {
-            let detected = detect_serialization_format(data);
-            if detected == SerializationFormat::Bson {
-                format!(
-                    "BSON 数据 ({} 字节)\n\n请切换到 BSON 视图查看解析结果",
-                    data.len()
-                )
-            } else {
-                "非 BSON 数据".to_string()
-            }
-        }
-        BinaryFormat::Cbor => {
-            let detected = detect_serialization_format(data);
-            if detected == SerializationFormat::Cbor {
-                format!(
-                    "CBOR 数据 ({} 字节)\n\n请切换到 CBOR 视图查看解析结果",
-                    data.len()
-                )
-            } else {
-                "非 CBOR 数据".to_string()
-            }
-        }
-    }
-}
-
-fn detect_image_format(data: &[u8]) -> Option<&'static str> {
-    if data.len() < 3 {
-        return None;
-    }
-    // PNG: 89 50 4E 47
-    if data.len() >= 4 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
-        return Some("PNG");
-    }
-    // JPEG: FF D8 FF
-    if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
-        return Some("JPEG");
-    }
-    // GIF: 47 49 46
-    if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
-        return Some("GIF");
-    }
-    // WEBP: 52 49 46 46 ... 57 45 42 50
-    if data.len() >= 12
-        && data[0] == 0x52
-        && data[1] == 0x49
-        && data[2] == 0x46
-        && data[3] == 0x46
-        && data[8] == 0x57
-        && data[9] == 0x45
-        && data[10] == 0x42
-        && data[11] == 0x50
-    {
-        return Some("WEBP");
-    }
-    // ICO
-    if data.len() > 12
-        && data[0] == 0x00
-        && data[1] == 0x00
-        && data[2] == 0x00
-        && (data[4..8] == [b'i', b'c', b'o', b'n']
-            || data[4..8] == [b'p', b'n', b'g', b' ']
-            || data[4..8] == [b'j', b'p', b'g', b' '])
-    {
-        return Some("ICO");
-    }
-    None
-}
-
-fn copy_value_to_clipboard(value: &str) -> Result<(), String> {
-    copy_text_to_clipboard(value)
-}
-
-fn sorted_hash_entries(fields: &HashMap<String, String>) -> Vec<(String, String)> {
-    let mut entries: Vec<_> = fields
-        .iter()
-        .map(|(field, value)| (field.clone(), value.clone()))
-        .collect();
-    entries.sort_by(|left, right| left.0.cmp(&right.0));
-    entries
-}
-
-fn format_memory_usage(bytes: Option<u64>) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = KB * 1024;
-    const GB: u64 = MB * 1024;
-
-    match bytes {
-        Some(bytes) if bytes >= GB => format!("{:.2} GB", bytes as f64 / GB as f64),
-        Some(bytes) if bytes >= MB => format!("{:.2} MB", bytes as f64 / MB as f64),
-        Some(bytes) if bytes >= KB => format!("{:.2} KB", bytes as f64 / KB as f64),
-        Some(bytes) => format!("{bytes} B"),
-        None => "--".to_string(),
-    }
-}
-
-fn format_ttl_label(ttl: Option<i64>) -> String {
-    match ttl {
-        Some(ttl) => format!("{ttl}s"),
-        None => "永久".to_string(),
-    }
-}
-
-fn secondary_action_button_style() -> String {
-    format!(
-        "height: 32px; padding: 0 10px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500;",
-        COLOR_BUTTON_SECONDARY, COLOR_TEXT, COLOR_BUTTON_SECONDARY_BORDER
-    )
-}
-
-fn primary_action_button_style(disabled: bool) -> String {
-    let cursor = if disabled { "default" } else { "pointer" };
-    let opacity = if disabled { "0.55" } else { "1" };
-
-    format!(
-        "height: 32px; padding: 0 12px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; cursor: {}; opacity: {}; display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500;",
-        COLOR_PRIMARY, COLOR_TEXT_CONTRAST, COLOR_PRIMARY, cursor, opacity
-    )
-}
-
-fn destructive_action_button_style(disabled: bool) -> String {
-    let cursor = if disabled { "default" } else { "pointer" };
-    let opacity = if disabled { "0.55" } else { "1" };
-
-    format!(
-        "height: 32px; padding: 0 12px; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; cursor: {}; opacity: {}; display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 500;",
-        COLOR_ERROR_BG, COLOR_ERROR, COLOR_BORDER, cursor, opacity
-    )
-}
-
-fn data_section_toolbar_style() -> &'static str {
-    "display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;"
-}
-
-fn data_section_controls_style() -> &'static str {
-    "display: flex; gap: 8px; align-items: center; flex-wrap: wrap;"
-}
-
-fn data_section_count_style() -> String {
-    format!(
-        "color: {}; font-size: 12px; font-weight: 500;",
-        COLOR_TEXT_SECONDARY
-    )
-}
-
-fn status_banner_style(is_error: bool) -> String {
-    let background = if is_error {
-        STATUS_ERROR_BG
-    } else {
-        STATUS_SUCCESS_BG
-    };
-    let color = if is_error { COLOR_ERROR } else { COLOR_SUCCESS };
-
-    format!(
-        "margin-bottom: 12px; padding: 8px 12px; background: {}; border: 1px solid {}; border-radius: 8px; color: {}; font-size: 13px; line-height: 1.45;",
-        background, COLOR_BORDER, color
-    )
-}
-
-fn data_table_header_row_style() -> String {
-    format!(
-        "background: {}; border-bottom: 1px solid {}; position: sticky; top: 0; z-index: 1;",
-        COLOR_BG_TERTIARY, COLOR_BORDER
-    )
-}
-
-fn data_table_header_cell_style(width: Option<&str>, align: &str) -> String {
-    let mut style = format!(
-        "padding: 12px; color: {}; font-size: 12px; font-weight: 600; text-align: {};",
-        COLOR_TEXT_SECONDARY, align
-    );
-
-    if let Some(width) = width {
-        style.push_str(&format!(" width: {};", width));
-    }
-
-    style
-}
-
-fn compact_icon_action_button_style(danger: bool, disabled: bool) -> String {
-    let (background, color, border) = if danger {
-        (COLOR_ERROR_BG, COLOR_ERROR, COLOR_BORDER)
-    } else {
-        (
-            COLOR_BUTTON_SECONDARY,
-            COLOR_TEXT_SECONDARY,
-            COLOR_BUTTON_SECONDARY_BORDER,
-        )
-    };
-    let cursor = if disabled { "default" } else { "pointer" };
-    let opacity = if disabled { "0.55" } else { "1" };
-
-    format!(
-        "width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: {}; color: {}; border: 1px solid {}; border-radius: 6px; cursor: {}; opacity: {};",
-        background, color, border, cursor, opacity
-    )
-}
-
-fn image_preview_button_style() -> String {
-    format!(
-        "height: 40px; padding: 0 14px; background: {}; color: {}; border: 1px solid {}; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500;",
-        COLOR_BUTTON_SECONDARY, COLOR_TEXT, COLOR_BUTTON_SECONDARY_BORDER
-    )
-}
-
-fn image_preview_info_chip_style() -> String {
-    format!(
-        "padding: 8px 14px; background: {}; color: {}; border: 1px solid {}; border-radius: 999px; font-size: 13px; font-weight: 500;",
-        COLOR_BG_SECONDARY, COLOR_TEXT, COLOR_BORDER
-    )
-}
-
-fn overlay_modal_keyframes() -> &'static str {
-    r#"
-    @keyframes backdropFadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-    @keyframes backdropFadeOut {
-        from { opacity: 1; }
-        to { opacity: 0; }
-    }
-    @keyframes modalFadeIn {
-        from { opacity: 0; transform: scale(0.95); }
-        to { opacity: 1; transform: scale(1); }
-    }
-    @keyframes modalFadeOut {
-        from { opacity: 1; transform: scale(1); }
-        to { opacity: 0; transform: scale(0.95); }
-    }
-    "#
-}
-
-fn overlay_modal_backdrop_style(exiting: bool) -> String {
-    let animation = if exiting {
-        "backdropFadeOut 0.2s ease-out forwards"
-    } else {
-        "backdropFadeIn 0.2s ease-out"
-    };
-
-    format!(
-        "position: fixed; inset: 0; background: {}; display: flex; align-items: center; justify-content: center; z-index: 1000; animation: {};",
-        COLOR_OVERLAY_BACKDROP, animation
-    )
-}
-
-fn overlay_modal_surface_style(max_width: &str, exiting: bool) -> String {
-    let animation = if exiting {
-        "modalFadeOut 0.2s ease-out forwards"
-    } else {
-        "modalFadeIn 0.2s ease-out"
-    };
-
-    format!(
-        "width: 90%; max-width: {}; padding: 24px; background: {}; border: 1px solid {}; border-radius: 12px; animation: {};",
-        max_width, COLOR_BG_SECONDARY, COLOR_BORDER, animation
-    )
-}
-
-fn overlay_modal_title_style() -> &'static str {
-    "margin: 0 0 16px 0; color: var(--theme-text); font-size: 16px; font-weight: 600;"
-}
-
-fn overlay_modal_body_style() -> &'static str {
-    "margin: 0 0 24px 0; color: var(--theme-text-secondary); font-size: 14px; line-height: 1.55; word-break: break-all;"
-}
-
-fn overlay_modal_actions_style() -> &'static str {
-    "display: flex; justify-content: flex-end; gap: 12px;"
-}
-
-fn value_metric_label(
-    key_type: &KeyType,
-    string_value: &str,
-    hash_value: &HashMap<String, String>,
-    list_value: &[String],
-    set_value: &[String],
-    zset_value: &[(String, f64)],
-    stream_value: &[(String, Vec<(String, String)>)],
-) -> String {
-    match key_type {
-        KeyType::String => format!("长度: {}", string_value.chars().count()),
-        KeyType::Hash => format!("字段: {}", hash_value.len()),
-        KeyType::List => format!("元素: {}", list_value.len()),
-        KeyType::Set => format!("成员: {}", set_value.len()),
-        KeyType::ZSet => format!("成员: {}", zset_value.len()),
-        KeyType::Stream => format!("条目: {}", stream_value.len()),
-        KeyType::JSON => format!("JSON: {} 字符", string_value.chars().count()),
-        KeyType::None => "--".to_string(),
-    }
-}
 
 #[allow(clippy::too_many_arguments)]
 async fn load_key_data(
@@ -1459,7 +877,7 @@ pub fn ValueViewer(
         spawn(async move {
             tracing::info!("Loading key: {}", key);
 
-            if let Err(error) = load_key_data(
+            if let Err(error) = data_loader::load_key_data(
                 pool,
                 key,
                 key_info,
@@ -1837,7 +1255,7 @@ pub fn ValueViewer(
                                                                                     Ok(_) => {
                                                                                         toast_manager.write().success("已设为永久");
                                                                                         ttl_editing.set(false);
-                                                                                        if let Err(error) = load_key_data(
+                    if let Err(error) = data_loader::load_key_data(
                                                                                             pool.clone(),
                                                                                             key.clone(),
                                                                                             key_info,
@@ -1879,7 +1297,7 @@ pub fn ValueViewer(
                                                                                     Ok(_) => {
                                                                                         toast_manager.write().success("TTL 已更新");
                                                                                         ttl_editing.set(false);
-                                                                                        if let Err(error) = load_key_data(
+                    if let Err(error) = data_loader::load_key_data(
                                                                                             pool.clone(),
                                                                                             key.clone(),
                                                                                             key_info,
@@ -2811,7 +2229,7 @@ pub fn ValueViewer(
                                                                             let pool = pool.clone();
                                                                             let key = key.clone();
                                                                             spawn(async move {
-                                                                                if let Err(e) = load_key_data(
+                                            if let Err(e) = data_loader::load_key_data(
                                                                                     pool,
                                                                                     key,
                                                                                     key_info,
@@ -2865,7 +2283,7 @@ pub fn ValueViewer(
                                                                             let key = key.clone();
                                                                             let pattern = hash_search();
                                                                             spawn(async move {
-                                                                                search_hash_server(
+                                                data_loader::search_hash_server(
                                                                                     pool,
                                                                                     key,
                                                                                     pattern,
@@ -2970,7 +2388,7 @@ pub fn ValueViewer(
                                                                 let key = key.clone();
                                                                 let cursor = hash_cursor();
                                                                 spawn(async move {
-                                                                    load_more_hash(
+                                                data_loader::load_more_hash(
                                                                         pool,
                                                                         key,
                                                                         hash_value,
@@ -3117,7 +2535,7 @@ pub fn ValueViewer(
                                                                                                     new_hash_value.set(String::new());
                                                                                                     hash_status_message.set("新增成功".to_string());
                                                                                                     hash_status_error.set(false);
-    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                          pool.clone(),
                                                                                                          key.clone(),
                                                                                                          key_info,
@@ -3298,7 +2716,7 @@ pub fn ValueViewer(
                                                                                                         editing_hash_value.set(String::new());
                                                                                                         hash_status_message.set("保存成功".to_string());
                                                                                                         hash_status_error.set(false);
-    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                              pool.clone(),
                                                                                                              key.clone(),
                                                                                                              key_info,
@@ -3590,7 +3008,7 @@ pub fn ValueViewer(
                         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                         dhf.set(None);
                         dhfe.set(false);
-                if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                          pool.clone(),
                                                                                                          key.clone(),
                                                                                                          key_info,
@@ -3727,7 +3145,7 @@ pub fn ValueViewer(
                                                                                     new_list_value.set(String::new());
                                                                                     list_status_message.set("添加成功".to_string());
                                                                                     list_status_error.set(false);
-                                                                                    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                         pool.clone(),
                                                                                         key.clone(),
                                                                                         key_info,
@@ -3796,7 +3214,7 @@ pub fn ValueViewer(
                                                                                     new_list_value.set(String::new());
                                                                                     list_status_message.set("添加成功".to_string());
                                                                                     list_status_error.set(false);
-                                                                                    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                         pool.clone(),
                                                                                         key.clone(),
                                                                                         key_info,
@@ -3912,7 +3330,7 @@ pub fn ValueViewer(
                                                                 let key = key.clone();
                                                                 let total = list_total();
                                                                 spawn(async move {
-                                                                    load_more_list(
+                                                data_loader::load_more_list(
                                                                         pool,
                                                                         key,
                                                                         list_value,
@@ -4019,7 +3437,7 @@ pub fn ValueViewer(
                                                                                                             editing_list_index.set(None);
                                                                                                             list_status_message.set("修改成功".to_string());
                                                                                                             list_status_error.set(false);
-    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                                  pool.clone(),
                                                                                                                  key.clone(),
                                                                                                                  key_info,
@@ -4162,7 +3580,7 @@ pub fn ValueViewer(
                                                                                                         Ok(_) => {
                                                                                                             list_status_message.set("删除成功".to_string());
                                                                                                             list_status_error.set(false);
-    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                                  pool.clone(),
                                                                                                                  key.clone(),
                                                                                                                  key_info,
@@ -4255,7 +3673,7 @@ pub fn ValueViewer(
                                                                             let pool = pool.clone();
                                                                             let key = key.clone();
                                                                             spawn(async move {
-                                                                                if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                     pool,
                                                                                     key,
                                                                                     key_info,
@@ -4314,7 +3732,7 @@ pub fn ValueViewer(
                                                                             let key = key.clone();
                                                                             let pattern = set_search();
                                                                             spawn(async move {
-                                                                                search_set_server(
+                                                data_loader::search_set_server(
                                                                                     pool,
                                                                                     key,
                                                                                     pattern,
@@ -4371,7 +3789,7 @@ pub fn ValueViewer(
                                                                                     new_set_member.set(String::new());
                                                                                     set_status_message.set("添加成功".to_string());
                                                                                     set_status_error.set(false);
-                                                                                    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                         pool.clone(),
                                                                                         key.clone(),
                                                                                         key_info,
@@ -4497,7 +3915,7 @@ pub fn ValueViewer(
                                                                     let key = key.clone();
                                                                     let cursor = set_cursor();
                                                                     spawn(async move {
-                                                                        load_more_set(
+                                                data_loader::load_more_set(
                                                                             pool,
                                                                             key,
                                                                             set_value,
@@ -4633,7 +4051,7 @@ pub fn ValueViewer(
                                                                                                                 editing_set_member_value.set(String::new());
                                                                                                                 set_status_message.set("修改成功".to_string());
                                                                                                                 set_status_error.set(false);
-                                                                                                                if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                                     pool.clone(),
                                                                                                                     key.clone(),
                                                                                                                     key_info,
@@ -4777,7 +4195,7 @@ pub fn ValueViewer(
                                                                                                             Ok(_) => {
                                                                                                                 set_status_message.set("删除成功".to_string());
                                                                                                                 set_status_error.set(false);
-                                                                                                                if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                                     pool.clone(),
                                                                                                                     key.clone(),
                                                                                                                     key_info,
@@ -4893,7 +4311,7 @@ pub fn ValueViewer(
                                                                         let pool = pool.clone();
                                                                         let key = key.clone();
                                                                         spawn(async move {
-                                                                            if let Err(e) = load_key_data(
+                                            if let Err(e) = data_loader::load_key_data(
                                                                                 pool,
                                                                                 key,
                                                                                 key_info,
@@ -4947,7 +4365,7 @@ pub fn ValueViewer(
                                                                         let key = key.clone();
                                                                         let pattern = zset_search();
                                                                         spawn(async move {
-                                                                            search_zset_server(
+                                                data_loader::search_zset_server(
                                                                                 pool,
                                                                                 key,
                                                                                 pattern,
@@ -5025,7 +4443,7 @@ pub fn ValueViewer(
                                                                                 new_zset_score.set(String::new());
                                                                                 zset_status_message.set("添加成功".to_string());
                                                                                 zset_status_error.set(false);
-                                                                                if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                     pool.clone(),
                                                                                     key.clone(),
                                                                                     key_info,
@@ -5141,7 +4559,7 @@ pub fn ValueViewer(
                                                                 let key = key.clone();
                                                                 let cursor = zset_cursor();
                                                                 spawn(async move {
-                                                                    load_more_zset(
+                                                data_loader::load_more_zset(
                                                                         pool,
                                                                         key,
                                                                         zset_value,
@@ -5260,7 +4678,7 @@ pub fn ValueViewer(
                                                                                                         editing_zset_member.set(None);
                                                                                                         zset_status_message.set("修改成功".to_string());
                                                                                                         zset_status_error.set(false);
-    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                              pool.clone(),
                                                                                                              key.clone(),
                                                                                                              key_info,
@@ -5414,7 +4832,7 @@ pub fn ValueViewer(
                                                                                                     Ok(_) => {
                                                                                                         zset_status_message.set("删除成功".to_string());
                                                                                                         zset_status_error.set(false);
-    if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                              pool.clone(),
                                                                                                              key.clone(),
                                                                                                              key_info,
@@ -5796,7 +5214,7 @@ pub fn ValueViewer(
                                                                                             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                                                                                             deleting_stream_entry.set(None);
                                                                                             deleting_stream_entry_exiting.set(false);
-                                                                                            if let Err(error) = load_key_data(
+                                            if let Err(error) = data_loader::load_key_data(
                                                                                                 pool.clone(),
                                                                                                 key.clone(),
                                                                                                 key_info,
@@ -6009,440 +5427,4 @@ pub fn ValueViewer(
                         }
                     }
                 }
-}
-
-#[component]
-pub fn BitmapViewer(
-    info: crate::redis::BitmapInfo,
-    pool: ConnectionPool,
-    redis_key: String,
-    on_update: EventHandler<()>,
-) -> Element {
-    let mut editing_offset = use_signal(String::new);
-    let mut editing_value = use_signal(|| "1".to_string());
-
-    rsx! {
-        div {
-            display: "flex",
-            flex_direction: "column",
-            gap: "16px",
-
-            div {
-                display: "flex",
-                gap: "16px",
-                flex_wrap: "wrap",
-
-                div {
-                    padding: "8px 12px",
-                    background: COLOR_BG_TERTIARY,
-                    border_radius: "6px",
-
-                    span {
-                        color: COLOR_TEXT_SECONDARY,
-                        font_size: "12px",
-
-                        "总字节数: "
-                    }
-                    span {
-                        color: COLOR_TEXT,
-                        font_size: "12px",
-                        font_weight: "600",
-
-                        "{info.total_bytes}"
-                    }
-                }
-
-                div {
-                    padding: "8px 12px",
-                    background: COLOR_BG_TERTIARY,
-                    border_radius: "6px",
-
-                    span {
-                        color: COLOR_TEXT_SECONDARY,
-                        font_size: "12px",
-
-                        "总位数: "
-                    }
-                    span {
-                        color: COLOR_TEXT,
-                        font_size: "12px",
-                        font_weight: "600",
-
-                        "{info.total_bits}"
-                    }
-                }
-
-                div {
-                    padding: "8px 12px",
-                    background: COLOR_SUCCESS_BG,
-                    border_radius: "6px",
-
-                    span {
-                        color: COLOR_TEXT_SECONDARY,
-                        font_size: "12px",
-
-                        "已设置位: "
-                    }
-                    span {
-                        color: COLOR_SUCCESS,
-                        font_size: "12px",
-                        font_weight: "600",
-
-                        "{info.set_bits_count}"
-                    }
-                }
-            }
-
-            div {
-                span {
-                    color: COLOR_TEXT_SECONDARY,
-                    font_size: "12px",
-                    font_weight: "600",
-                    margin_bottom: "8px",
-                    display: "block",
-
-                    "已设置的位 (offset):"
-                }
-
-                div {
-                    display: "flex",
-                    flex_wrap: "wrap",
-                    gap: "6px",
-                    max_height: "120px",
-                    overflow_y: "auto",
-                    padding: "8px",
-                    background: COLOR_BG_TERTIARY,
-                    border_radius: "6px",
-
-                    for offset in info.set_bits.iter().take(200) {
-                        span {
-                            padding: "2px 8px",
-                            background: COLOR_INFO_BG,
-                            color: COLOR_INFO,
-                            border_radius: "4px",
-                            font_size: "11px",
-                            font_family: "Consolas, monospace",
-
-                            "{offset}"
-                        }
-                    }
-                    if info.set_bits.len() > 200 {
-                        span {
-                            padding: "2px 8px",
-                            color: COLOR_TEXT_SECONDARY,
-                            font_size: "11px",
-
-                            "... 还有 {info.set_bits.len() - 200} 个"
-                        }
-                    }
-                }
-            }
-
-            div {
-                span {
-                    color: COLOR_TEXT_SECONDARY,
-                    font_size: "12px",
-                    font_weight: "600",
-                    margin_bottom: "8px",
-                    display: "block",
-
-                    "二进制视图:"
-                }
-
-                div {
-                    display: "flex",
-                    flex_wrap: "wrap",
-                    gap: "4px",
-                    font_family: "Consolas, monospace",
-                    font_size: "11px",
-                    max_height: "200px",
-                    overflow_y: "auto",
-                    padding: "8px",
-                    background: COLOR_BG_TERTIARY,
-                    border_radius: "6px",
-
-                    for (byte_idx, byte) in info.raw_bytes.iter().enumerate().take(64) {
-                        div {
-                            display: "flex",
-                            flex_direction: "column",
-                            align_items: "center",
-                            gap: "2px",
-
-                            div {
-                                display: "flex",
-                                gap: "1px",
-
-                                for bit_idx in 0..8 {
-                                    { let bit_val = (*byte >> (7 - bit_idx)) & 1; rsx! {
-                                        div {
-                                            width: "12px",
-                                            height: "12px",
-                                            background: if bit_val == 1 { COLOR_SUCCESS } else { COLOR_BG },
-                                            border_radius: "2px",
-                                        }
-                                    }}
-                                }
-                            }
-
-                            span {
-                                color: COLOR_TEXT_SUBTLE,
-                                font_size: "9px",
-
-                                "{byte_idx}"
-                            }
-                        }
-                    }
-                    if info.raw_bytes.len() > 64 {
-                        span {
-                            color: COLOR_TEXT_SECONDARY,
-                            font_size: "11px",
-
-                            "... 共 {info.raw_bytes.len()} 字节"
-                        }
-                    }
-                }
-            }
-
-            div {
-                span {
-                    color: COLOR_TEXT_SECONDARY,
-                    font_size: "12px",
-                    font_weight: "600",
-                    margin_bottom: "8px",
-                    display: "block",
-
-                    "设置/修改位:"
-                }
-
-                div {
-                    display: "flex",
-                    gap: "8px",
-                    align_items: "center",
-
-                    input {
-                        width: "100px",
-                        padding: "6px 10px",
-                        background: COLOR_BG_TERTIARY,
-                        border: "1px solid {COLOR_BORDER}",
-                        border_radius: "4px",
-                        color: COLOR_TEXT,
-                        font_size: "12px",
-                        placeholder: "Offset",
-                        value: "{editing_offset}",
-                        oninput: move |e| editing_offset.set(e.value()),
-                    }
-
-                    select {
-                        padding: "6px 10px",
-                        background: COLOR_BG_TERTIARY,
-                        border: "1px solid {COLOR_BORDER}",
-                        border_radius: "4px",
-                        color: COLOR_TEXT,
-                        font_size: "12px",
-                        value: "{editing_value}",
-                        onchange: move |e| editing_value.set(e.value()),
-
-                        option {
-                            value: "0",
-
-                            "设为 0"
-                        }
-                        option {
-                            value: "1",
-
-                            "设为 1"
-                        }
-                    }
-
-                    button {
-                        padding: "6px 12px",
-                        background: COLOR_PRIMARY,
-                        color: COLOR_TEXT_CONTRAST,
-                        border: "none",
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "12px",
-                        onclick: {
-                            let pool = pool.clone();
-                            let redis_key = redis_key.clone();
-                            move |_| {
-                                let offset_str = editing_offset();
-                                let value_str = editing_value();
-                                if let Ok(offset) = offset_str.parse::<u64>() {
-                                    let value = value_str == "1";
-                                    let pool = pool.clone();
-                                    let redis_key = redis_key.clone();
-                                    spawn(async move {
-                                        if pool.set_bit(&redis_key, offset, value).await.is_ok() {
-                                            on_update.call(());
-                                        }
-                                    });
-                                }
-                            }
-                        },
-
-                        "应用"
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn ProtobufViewer(data: Vec<u8>) -> Element {
-    let mut selected_message = use_signal(|| String::new());
-    let mut import_error = use_signal(|| None::<String>);
-
-    let registry = PROTO_REGISTRY();
-    let messages = registry.list_messages();
-    let has_schema = !messages.is_empty();
-
-    let json_result: Option<JsonValue> = if !selected_message().is_empty() {
-        registry.decode_with_schema(&data, &selected_message()).ok()
-    } else {
-        parse_to_json(&data, SerializationFormat::Protobuf)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-    };
-
-    rsx! {
-        div {
-            display: "flex",
-            flex_direction: "column",
-            gap: "12px",
-
-            div {
-                display: "flex",
-                gap: "8px",
-                align_items: "center",
-                flex_wrap: "wrap",
-
-                button {
-                    padding: "6px 12px",
-                    background: COLOR_PRIMARY,
-                    color: COLOR_TEXT_CONTRAST,
-                    border: "none",
-                    border_radius: "4px",
-                    cursor: "pointer",
-                    font_size: "12px",
-
-                    onclick: move |_| {
-                        spawn(async move {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("Proto", &["proto"])
-                                .pick_file()
-                            {
-                                let mut reg = PROTO_REGISTRY.write();
-                                match reg.import_file(&path) {
-                                    Ok(names) => {
-                                        if !names.is_empty() {
-                                            selected_message.set(names[0].clone());
-                                        }
-                                        import_error.set(None);
-                                    }
-                                    Err(e) => {
-                                        import_error.set(Some(e));
-                                    }
-                                }
-                            }
-                        });
-                    },
-
-                    "导入 .proto 文件"
-                }
-
-                if has_schema {
-                    select {
-                        padding: "6px 12px",
-                        background: COLOR_BG_TERTIARY,
-                        color: COLOR_TEXT,
-                        border: format!("1px solid {}", COLOR_BORDER),
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "12px",
-
-                        onchange: move |e| {
-                            selected_message.set(e.value());
-                        },
-
-                        option {
-                            value: "",
-                            "Raw 解析"
-                        }
-
-                        for msg in messages.iter() {
-                            option {
-                                value: msg.full_name.clone(),
-                                selected: selected_message() == msg.full_name,
-
-                                "{msg.name}"
-                            }
-                        }
-                    }
-
-                    button {
-                        padding: "4px 8px",
-                        background: COLOR_BG_TERTIARY,
-                        color: COLOR_TEXT_SECONDARY,
-                        border: format!("1px solid {}", COLOR_BORDER),
-                        border_radius: "4px",
-                        cursor: "pointer",
-                        font_size: "11px",
-
-                        onclick: move |_| {
-                            PROTO_REGISTRY.write().clear();
-                            selected_message.set(String::new());
-                        },
-
-                        "清除 Schema"
-                    }
-                }
-            }
-
-            if let Some(ref err) = import_error() {
-                div {
-                    padding: "8px 12px",
-                    background: COLOR_ERROR_BG,
-                    border_radius: "4px",
-                    color: COLOR_ERROR,
-                    font_size: "12px",
-
-                    "导入错误: {err}"
-                }
-            }
-
-            if has_schema {
-                div {
-                    padding: "8px 12px",
-                    background: COLOR_BG_TERTIARY,
-                    border_radius: "4px",
-                    color: COLOR_TEXT_SECONDARY,
-                    font_size: "11px",
-
-                    "已加载 {messages.len()} 个消息类型"
-                }
-            }
-
-            match json_result {
-                Some(json) => rsx! {
-                    JsonViewer {
-                        value: serde_json::to_string_pretty(&json).unwrap_or_default(),
-                        editable: false,
-                        on_change: move |_| {},
-                    }
-                },
-                None => rsx! {
-                    div {
-                        padding: "16px",
-                        background: COLOR_ERROR_BG,
-                        border_radius: "8px",
-                        color: COLOR_ERROR,
-
-                        "Protobuf 解析失败"
-                    }
-                },
-            }
-        }
-    }
 }
