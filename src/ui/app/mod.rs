@@ -4,19 +4,21 @@ mod render;
 mod state;
 mod theme;
 
+use self::actions::{
+    confirm_delete_connection_action, delete_connection_prompt_action, edit_connection_action,
+    import_connections_action, open_bool_signal, open_optional_uuid_signal,
+    reorder_connections_action, save_connection_action, save_settings_action,
+};
 use self::effects::{
     use_keyboard_shortcuts, use_load_saved_connections, use_manual_update_check,
     use_system_theme_listener, use_theme_bridge,
-};
-use self::actions::{
-    delete_connection_prompt_action, edit_connection_action, import_connections_action,
-    open_bool_signal, open_optional_uuid_signal, reorder_connections_action, save_settings_action,
 };
 use self::render::{
     empty_connection_panel, spinner_panel, ConnectedTabShellSection,
     ExportConnectionsDialogSection, FlushDialogSection, ImportConnectionsDialogSection,
     ImportOverlaySection, MacTitlebarSection, SettingsDialogSection,
 };
+use self::theme::{build_theme_palette, load_initial_settings, system_theme_is_dark};
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
 use crate::theme::{
@@ -32,13 +34,12 @@ use crate::ui::{
     Terminal, ToastContainer, ToastManager, UpdateDialog,
 };
 use crate::updater::{
-    set_checking, set_pending_update, should_trigger_manual_check, InstallResult,
-    UPDATE_STATUS, UpdateInfo, UpdateManager,
+    set_checking, set_pending_update, should_trigger_manual_check, InstallResult, UpdateInfo,
+    UpdateManager, UPDATE_STATUS,
 };
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use serde_json::{Map, Value};
-use self::theme::{build_theme_palette, load_initial_settings, system_theme_is_dark};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -609,7 +610,7 @@ pub fn App() -> Element {
     });
 
     rsx! {
-                    style { {r#"
+                style { {r#"
                 * {
                     transition: background-color 300ms ease-in-out,
                                 border-color 300ms ease-in-out,
@@ -618,540 +619,482 @@ pub fn App() -> Element {
                 }
             "#} }
 
+                div {
+                    display: "flex",
+                    flex_direction: "column",
+                    height: "100vh",
+                    background: COLOR_BG,
+                    color: COLOR_TEXT,
+                    overflow: "hidden",
+
+                    if cfg!(target_os = "macos") {
+                        MacTitlebarSection {
+                            context_label: titlebar_context_label.clone(),
+                            on_drag: move |_| desktop_for_drag.drag(),
+                            on_toggle_maximize: move |_| desktop_for_maximize.toggle_maximized(),
+                        }
+                    }
+
                     div {
+                        flex: "1",
+                        min_height: "0",
                         display: "flex",
-                        flex_direction: "column",
-                        height: "100vh",
-                        background: COLOR_BG,
-                        color: COLOR_TEXT,
                         overflow: "hidden",
 
-                        if cfg!(target_os = "macos") {
-                            MacTitlebarSection {
-                                context_label: titlebar_context_label.clone(),
-                                on_drag: move |_| desktop_for_drag.drag(),
-                                on_toggle_maximize: move |_| desktop_for_maximize.toggle_maximized(),
-                            }
-                        }
+                        LeftRail {
+                            width: left_rail_width,
+                            connections: connections(),
+                            connection_states: connection_states(),
+                            readonly_connections: readonly_connections(),
+                            selected_connection: selected_connection(),
+                            colors: colors.clone(),
+                            on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
+                            on_select_connection: move |id: Uuid| {
+                                let previous_conn = selected_connection();
 
-                        div {
-                            flex: "1",
-                            min_height: "0",
-                            display: "flex",
-                            overflow: "hidden",
+                                selected_key.set(String::new());
+                                current_tab.set(Tab::Data);
 
-                            LeftRail {
-                                width: left_rail_width,
-                                connections: connections(),
-                                connection_states: connection_states(),
-                                readonly_connections: readonly_connections(),
-                                selected_connection: selected_connection(),
-                                colors: colors.clone(),
-                                on_add_connection: move |_| form_mode.set(Some(FormMode::New)),
-                                on_select_connection: move |id: Uuid| {
-                                    let previous_conn = selected_connection();
+                                if previous_conn != Some(id) {
+                                    connection_states
+                                        .write()
+                                        .insert(id, ConnectionState::Connecting);
+                                }
 
-                                    selected_key.set(String::new());
-                                    current_tab.set(Tab::Data);
+                                selected_connection.set(Some(id));
 
-                                    if previous_conn != Some(id) {
-                                        connection_states
-                                            .write()
-                                            .insert(id, ConnectionState::Connecting);
+                                if let Some(pool) = connection_pools.read().get(&id).cloned() {
+                                    current_db.set(pool.current_db());
+                                } else if let Some(storage) = config_storage.read().as_ref() {
+                                    if let Ok(saved) = storage.load_connections() {
+                                        if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                            current_db.set(config.db);
+                                        }
+                                    }
+                                }
+
+                                spawn(async move {
+                                    if let Some(pool) = connection_pools.read().get(&id).cloned() {
+                                        let db = pool.current_db();
+                                        if let Err(error) = pool.select_database(db).await {
+                                            tracing::error!("Failed to sync database for connection {id}: {error}");
+                                        }
+
+                                        let version =
+                                            connection_versions.read().get(&id).copied().unwrap_or(0);
+                                        connection_versions.write().insert(id, version + 1);
+                                        connection_states.write().insert(id, ConnectionState::Connected);
+                                        return;
                                     }
 
-                                    selected_connection.set(Some(id));
+                                    connection_states.write().insert(id, ConnectionState::Connecting);
 
-                                    if let Some(pool) = connection_pools.read().get(&id).cloned() {
-                                        current_db.set(pool.current_db());
-                                    } else if let Some(storage) = config_storage.read().as_ref() {
+                                    if let Some(pool) = connection_manager.read().get_connection(id).await {
+                                        let db = pool.current_db();
+                                        if let Err(error) = pool.select_database(db).await {
+                                            tracing::error!("Failed to sync database for connection {id}: {error}");
+                                        }
+                                        current_db.set(db);
+                                        connection_pools.write().insert(id, pool);
+                                        connection_states.write().insert(id, ConnectionState::Connected);
+                                        return;
+                                    }
+
+                                    if let Some(storage) = config_storage.read().as_ref() {
                                         if let Ok(saved) = storage.load_connections() {
                                             if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                                current_db.set(config.db);
+                                                match ConnectionPool::new(config.clone()).await {
+                                                    Ok(pool) => {
+                                                        current_db.set(pool.current_db());
+                                                        let _ = connection_manager.read().add_connection(config).await;
+                                                        connection_pools.write().insert(id, pool);
+                                                        connection_states.write().insert(id, ConnectionState::Connected);
+                                                    }
+                                                    Err(_) => {
+                                                        connection_states.write().insert(id, ConnectionState::Error);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            },
+                            on_reconnect_connection: move |id: Uuid| {
+                                spawn(async move {
+                                    reconnecting_ids.write().insert(id);
+                                    connection_states.write().insert(id, ConnectionState::Connecting);
+
+                                    if let Some(storage) = config_storage.read().as_ref() {
+                                        if let Ok(saved) = storage.load_connections() {
+                                            if let Some(config) = saved.into_iter().find(|c| c.id == id) {
+                                                match ConnectionPool::new(config.clone()).await {
+                                                    Ok(pool) => {
+                                                        let db = pool.current_db();
+                                                        connection_pools.write().insert(id, pool);
+                                                        let _ = connection_manager.read().add_connection(config).await;
+
+                                                        let version = connection_versions.read().get(&id).copied().unwrap_or(0);
+                                                        connection_versions.write().insert(id, version + 1);
+                                                        connection_states.write().insert(id, ConnectionState::Connected);
+                                                        if selected_connection() == Some(id) {
+                                                            current_db.set(db);
+                                                        }
+                                                    }
+                                                    Err(_) => {
+                                                        connection_states.write().insert(id, ConnectionState::Error);
+                                                    }
+                                                }
                                             }
                                         }
                                     }
 
-                                    spawn(async move {
-                                        if let Some(pool) = connection_pools.read().get(&id).cloned() {
-                                            let db = pool.current_db();
-                                            if let Err(error) = pool.select_database(db).await {
-                                                tracing::error!("Failed to sync database for connection {id}: {error}");
-                                            }
+                                    reconnecting_ids.write().remove(&id);
+                                });
+                            },
+                            on_close_connection: move |id: Uuid| {
+                                spawn(async move {
+                                    connection_pools.write().remove(&id);
+                                    connection_manager.read().remove_connection(id).await;
+                                    connection_states.write().insert(id, ConnectionState::Disconnected);
 
-                                            let version =
-                                                connection_versions.read().get(&id).copied().unwrap_or(0);
-                                            connection_versions.write().insert(id, version + 1);
-                                            connection_states.write().insert(id, ConnectionState::Connected);
-                                            return;
-                                        }
+                                    if selected_connection() == Some(id) {
+                                        selected_connection.set(None);
+                                        selected_key.set(String::new());
+                                        current_db.set(0);
+                                    }
+                                });
+                            },
+                            on_edit_connection: edit_connection_action(config_storage, form_mode),
+                            on_delete_connection: delete_connection_prompt_action(
+                                connections,
+                                show_delete_connection_dialog,
+                            ),
+                            on_flush_connection: open_optional_uuid_signal(show_flush_dialog),
+                            on_import_connection: open_optional_uuid_signal(show_import_dialog),
+                            on_export_connections: open_bool_signal(show_export_connections_dialog),
+                            on_import_connections: open_bool_signal(show_import_connections_dialog),
+                            on_open_settings: open_bool_signal(show_settings),
+                            on_reorder_connection: reorder_connections_action(
+                                connections,
+                                config_storage,
+                            ),
+                        }
 
-                                        connection_states.write().insert(id, ConnectionState::Connecting);
+                        ResizableDivider {
+                            size: left_rail_width,
+                            min_size: 180.0,
+                            max_size: 400.0,
+                        }
 
-                                        if let Some(pool) = connection_manager.read().get_connection(id).await {
-                                            let db = pool.current_db();
-                                            if let Err(error) = pool.select_database(db).await {
-                                                tracing::error!("Failed to sync database for connection {id}: {error}");
-                                            }
-                                            current_db.set(db);
-                                            connection_pools.write().insert(id, pool);
-                                            connection_states.write().insert(id, ConnectionState::Connected);
-                                            return;
-                                        }
+        if let Some(conn_id) = selected_connection() {
+                            if reconnecting_ids.read().contains(&conn_id) {
+                                div {
+                                    flex: "1",
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    gap: "16px",
+                                    background: "{COLOR_SURFACE_LOW}",
 
-                                        if let Some(storage) = config_storage.read().as_ref() {
-                                            if let Ok(saved) = storage.load_connections() {
-                                                if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                                    match ConnectionPool::new(config.clone()).await {
-                                                        Ok(pool) => {
-                                                            current_db.set(pool.current_db());
-                                                            let _ = connection_manager.read().add_connection(config).await;
-                                                            connection_pools.write().insert(id, pool);
-                                                            connection_states.write().insert(id, ConnectionState::Connected);
-                                                        }
-                                                        Err(_) => {
-                                                            connection_states.write().insert(id, ConnectionState::Error);
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    });
-                                },
-                                on_reconnect_connection: move |id: Uuid| {
-                                    spawn(async move {
-                                        reconnecting_ids.write().insert(id);
-                                        connection_states.write().insert(id, ConnectionState::Connecting);
-
-                                        if let Some(storage) = config_storage.read().as_ref() {
-                                            if let Ok(saved) = storage.load_connections() {
-                                                if let Some(config) = saved.into_iter().find(|c| c.id == id) {
-                                                    match ConnectionPool::new(config.clone()).await {
-                                                        Ok(pool) => {
-                                                            let db = pool.current_db();
-                                                            connection_pools.write().insert(id, pool);
-                                                            let _ = connection_manager.read().add_connection(config).await;
-
-                                                            let version = connection_versions.read().get(&id).copied().unwrap_or(0);
-                                                            connection_versions.write().insert(id, version + 1);
-                                                            connection_states.write().insert(id, ConnectionState::Connected);
-                                                            if selected_connection() == Some(id) {
-                                                                current_db.set(db);
-                                                            }
-                                                        }
-                                                        Err(_) => {
-                                                            connection_states.write().insert(id, ConnectionState::Error);
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        reconnecting_ids.write().remove(&id);
-                                    });
-                                },
-                                on_close_connection: move |id: Uuid| {
-                                    spawn(async move {
-                                        connection_pools.write().remove(&id);
-                                        connection_manager.read().remove_connection(id).await;
-                                        connection_states.write().insert(id, ConnectionState::Disconnected);
-
-                                        if selected_connection() == Some(id) {
-                                            selected_connection.set(None);
-                                            selected_key.set(String::new());
-                                            current_db.set(0);
-                                        }
-                                    });
-                                },
-                                on_edit_connection: edit_connection_action(config_storage, form_mode),
-                                on_delete_connection: delete_connection_prompt_action(
-                                    connections,
-                                    show_delete_connection_dialog,
-                                ),
-                                on_flush_connection: open_optional_uuid_signal(show_flush_dialog),
-                                on_import_connection: open_optional_uuid_signal(show_import_dialog),
-                                on_export_connections: open_bool_signal(show_export_connections_dialog),
-                                on_import_connections: open_bool_signal(show_import_connections_dialog),
-                                on_open_settings: open_bool_signal(show_settings),
-                                on_reorder_connection: reorder_connections_action(
-                                    connections,
-                                    config_storage,
-                                ),
-                            }
-
-                            ResizableDivider {
-                                size: left_rail_width,
-                                min_size: 180.0,
-                                max_size: 400.0,
-                            }
-
-            if let Some(conn_id) = selected_connection() {
-                                if reconnecting_ids.read().contains(&conn_id) {
-                                    div {
-                                        flex: "1",
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        align_items: "center",
-                                        justify_content: "center",
-                                        gap: "16px",
-                                        background: "{COLOR_SURFACE_LOW}",
-
-                                        style { {r#"
+                                    style { {r#"
                                 @keyframes spin {
                                     from { transform: rotate(0deg); }
                                     to { transform: rotate(360deg); }
                                 }
                             "#} }
 
-                                        div {
-                                            width: "40px",
-                                            height: "40px",
-                                            border: "3px solid {COLOR_ACCENT}",
-                                            border_top_color: "transparent",
-                                            border_radius: "50%",
-                                            animation: "spin 0.8s linear infinite",
-                                        }
-
-                                        div {
-                                            color: "{COLOR_TEXT_SECONDARY}",
-                                            font_size: "14px",
-
-                                            "正在重新连接..."
-                                        }
-                                    }
-                                } else if selected_conn_state == ConnectionState::Error {
                                     div {
-                                        flex: "1",
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        align_items: "center",
-                                        justify_content: "center",
-                                        gap: "16px",
-                                        background: "{COLOR_SURFACE_LOW}",
+                                        width: "40px",
+                                        height: "40px",
+                                        border: "3px solid {COLOR_ACCENT}",
+                                        border_top_color: "transparent",
+                                        border_radius: "50%",
+                                        animation: "spin 0.8s linear infinite",
+                                    }
 
-                                        div {
-                                            color: "{COLOR_ERROR}",
-                                            font_size: "14px",
+                                    div {
+                                        color: "{COLOR_TEXT_SECONDARY}",
+                                        font_size: "14px",
 
-                                            "连接失败，请检查连接配置后重试"
-                                        }
+                                        "正在重新连接..."
+                                    }
+                                }
+                            } else if selected_conn_state == ConnectionState::Error {
+                                div {
+                                    flex: "1",
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    align_items: "center",
+                                    justify_content: "center",
+                                    gap: "16px",
+                                    background: "{COLOR_SURFACE_LOW}",
 
-                                        button {
-                                            padding: "10px 20px",
-                                            background: "{COLOR_PRIMARY}",
-                                            color: "{COLOR_TEXT_CONTRAST}",
-                                            border: "none",
-                                            border_radius: "6px",
-                                            cursor: "pointer",
-                                            font_size: "13px",
+                                    div {
+                                        color: "{COLOR_ERROR}",
+                                        font_size: "14px",
 
-                                            onclick: move |_| {
-                                                spawn(async move {
-                                                    reconnecting_ids.write().insert(conn_id);
-                                                    connection_states.write().insert(conn_id, ConnectionState::Connecting);
+                                        "连接失败，请检查连接配置后重试"
+                                    }
 
-                                                    if let Some(storage) = config_storage.read().as_ref() {
-                                                        if let Ok(saved) = storage.load_connections() {
-                                                            if let Some(config) = saved.into_iter().find(|c| c.id == conn_id) {
-                                                                match ConnectionPool::new(config.clone()).await {
-                                                                    Ok(pool) => {
-                                                                        connection_pools.write().insert(conn_id, pool);
-                                                                        let _ = connection_manager.read().add_connection(config).await;
-                                                                        let version = connection_versions.read().get(&conn_id).copied().unwrap_or(0);
-                                                                        connection_versions.write().insert(conn_id, version + 1);
-                                                                        connection_states.write().insert(conn_id, ConnectionState::Connected);
-                                                                    }
-                                                                    Err(_) => {
-                                                                        connection_states.write().insert(conn_id, ConnectionState::Error);
-                                                                    }
+                                    button {
+                                        padding: "10px 20px",
+                                        background: "{COLOR_PRIMARY}",
+                                        color: "{COLOR_TEXT_CONTRAST}",
+                                        border: "none",
+                                        border_radius: "6px",
+                                        cursor: "pointer",
+                                        font_size: "13px",
+
+                                        onclick: move |_| {
+                                            spawn(async move {
+                                                reconnecting_ids.write().insert(conn_id);
+                                                connection_states.write().insert(conn_id, ConnectionState::Connecting);
+
+                                                if let Some(storage) = config_storage.read().as_ref() {
+                                                    if let Ok(saved) = storage.load_connections() {
+                                                        if let Some(config) = saved.into_iter().find(|c| c.id == conn_id) {
+                                                            match ConnectionPool::new(config.clone()).await {
+                                                                Ok(pool) => {
+                                                                    connection_pools.write().insert(conn_id, pool);
+                                                                    let _ = connection_manager.read().add_connection(config).await;
+                                                                    let version = connection_versions.read().get(&conn_id).copied().unwrap_or(0);
+                                                                    connection_versions.write().insert(conn_id, version + 1);
+                                                                    connection_states.write().insert(conn_id, ConnectionState::Connected);
+                                                                }
+                                                                Err(_) => {
+                                                                    connection_states.write().insert(conn_id, ConnectionState::Error);
                                                                 }
                                                             }
                                                         }
                                                     }
+                                                }
 
-                                                    reconnecting_ids.write().remove(&conn_id);
-                                                });
-                                            },
+                                                reconnecting_ids.write().remove(&conn_id);
+                                            });
+                                        },
 
-                                            "重新连接"
-                                        }
+                                        "重新连接"
                                     }
-                                } else if selected_conn_state == ConnectionState::Connecting {
-                                    { spinner_panel("正在加载连接...") }
-                                } else if selected_conn_state == ConnectionState::Connected {
-                                    if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
-                                        ConnectedTabShellSection {
-                                            conn_id,
-                                            pool,
-                                            current_tab,
-                                            connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
-                                            selected_key,
-                                            current_db,
-                                            refresh_trigger,
-                                            colors,
-                                            resolved_theme_key: resolved_theme_key.to_string(),
-                                            auto_refresh_interval: app_settings.read().auto_refresh_interval,
-                                        }
-                                } else {
-                                    { spinner_panel("正在初始化连接...") }
                                 }
-                                } else {
-                                    { spinner_panel("正在连接...") }
-                                }
+                            } else if selected_conn_state == ConnectionState::Connecting {
+                                { spinner_panel("正在加载连接...") }
+                            } else if selected_conn_state == ConnectionState::Connected {
+                                if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
+                                    ConnectedTabShellSection {
+                                        conn_id,
+                                        pool,
+                                        current_tab,
+                                        connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
+                                        selected_key,
+                                        current_db,
+                                        refresh_trigger,
+                                        colors,
+                                        resolved_theme_key: resolved_theme_key.to_string(),
+                                        auto_refresh_interval: app_settings.read().auto_refresh_interval,
+                                    }
                             } else {
-                                { empty_connection_panel() }
+                                { spinner_panel("正在初始化连接...") }
                             }
+                            } else {
+                                { spinner_panel("正在连接...") }
+                            }
+                        } else {
+                            { empty_connection_panel() }
                         }
                     }
+                }
 
-                    if let Some(mode) = form_mode() {
-                        ConnectionForm {
-                            editing_config: match mode {
-                                FormMode::Edit(config) => Some(config),
-                                FormMode::New => None,
-                            },
+                if let Some(mode) = form_mode() {
+                    ConnectionForm {
+                        editing_config: match mode {
+                            FormMode::Edit(config) => Some(config),
+                            FormMode::New => None,
+                        },
+                        colors,
+                        on_save: save_connection_action(
+                            config_storage,
+                            connections,
+                            readonly_connections,
+                            connection_manager,
+                            form_mode,
+                        ),
+                        on_cancel: move |_| form_mode.set(None),
+                    }
+                }
+
+                if show_settings() {
+                    SettingsDialogSection {
+                        settings: app_settings.read().clone(),
+                        colors,
+                        resolved_theme_id,
+                        on_change: {
+                            let save_settings = save_settings.clone();
+                            move |settings: AppSettings| {
+                                save_settings.call(settings);
+                            }
+                        },
+                        on_close: move |_| show_settings.set(false),
+                    }
+                }
+
+    if let Some((delete_id, delete_name)) = show_delete_connection_dialog() {
+                    DeleteConnectionConfirmDialog {
+                        connection_id: delete_id,
+                        connection_name: delete_name,
+                        colors,
+                        on_confirm: confirm_delete_connection_action(
+                            config_storage,
+                            show_delete_connection_dialog,
+                            connection_pools,
+                            connection_manager,
+                            connection_states,
+                            connections,
+                            selected_connection,
+                            selected_key,
+                            current_db,
+                        ),
+                        on_cancel: move |_| show_delete_connection_dialog.set(None),
+                    }
+                }
+
+    if let Some(flush_id) = show_flush_dialog() {
+                    if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
+                        FlushDialogSection {
+                            pool,
+                            current_db: current_db(),
                             colors,
-                            on_save: move |config: ConnectionConfig| {
-                                let id = config.id;
-                                let name = config.name.clone();
-
-                                spawn(async move {
-                                    tracing::info!("=== Save Connection Start ===");
-                                    tracing::info!("Connection: {} ({})", name, id);
-
-                                    let storage = config_storage.read();
-                                    if storage.is_none() {
-                                        tracing::error!("ConfigStorage is None!");
-                                        form_mode.set(None);
-                                        return;
-                                    }
-
-                                    let storage = storage.as_ref().unwrap();
-
-                                    tracing::info!("Saving to storage...");
-                                    match storage.save_connection(config.clone()) {
-                                        Ok(_) => tracing::info!("✓ Config saved successfully"),
-                                        Err(e) => {
-                                            tracing::error!("✗ Save failed: {}", e);
-                                            form_mode.set(None);
-                                            return;
-                                        }
-                                    }
-
-                                    tracing::info!("Reloading connections...");
-                                    match storage.load_connections() {
-                                        Ok(saved) => {
-                                            let list: Vec<(Uuid, String)> = saved.iter().map(|c| (c.id, c.name.clone())).collect();
-                                            let readonly: HashMap<Uuid, bool> = saved.iter().map(|c| (c.id, c.readonly)).collect();
-                                            tracing::info!("✓ Loaded {} connections: {:?}", list.len(), list);
-                                            connections.set(list);
-                                            readonly_connections.set(readonly);
-                                        }
-                                        Err(e) => {
-                                            tracing::error!("✗ Load failed: {}", e);
-                                        }
-                                    }
-
-                                    let _ = connection_manager.read().add_connection(config).await;
-
-                                    tracing::info!("=== Save Connection End ===");
-                                    form_mode.set(None);
-                                });
+                            on_confirm: move |_| {
+                                show_flush_dialog.set(None);
+                                refresh_trigger.set(refresh_trigger() + 1);
                             },
-                            on_cancel: move |_| form_mode.set(None),
+                            on_cancel: move |_| show_flush_dialog.set(None),
                         }
                     }
+                }
 
-                    if show_settings() {
-                        SettingsDialogSection {
-                            settings: app_settings.read().clone(),
-                            colors,
-                            resolved_theme_id,
-                            on_change: {
-                                let save_settings = save_settings.clone();
-                                move |settings: AppSettings| {
-                                    save_settings.call(settings);
-                                }
-                            },
-                            on_close: move |_| show_settings.set(false),
+    if let Some(import_id) = show_import_dialog() {
+                    if let Some(pool) = connection_pools.read().get(&import_id).cloned() {
+                        ImportOverlaySection {
+                            pool,
+                            on_close: move |_| show_import_dialog.set(None),
                         }
                     }
+                }
 
-        if let Some((delete_id, delete_name)) = show_delete_connection_dialog() {
-                        DeleteConnectionConfirmDialog {
-                            connection_id: delete_id,
-                            connection_name: delete_name,
+    if show_export_connections_dialog() {
+                    if let Some(storage) = config_storage.read().as_ref() {
+                        ExportConnectionsDialogSection {
+                            config_storage: Arc::new(storage.clone()),
                             colors,
-                            on_confirm: {
-                                let config_storage = config_storage.clone();
-                                move |id: Uuid| {
-                                    show_delete_connection_dialog.set(None);
+                            on_close: move |_| show_export_connections_dialog.set(false),
+                        }
+                    }
+                }
+
+    if show_import_connections_dialog() {
+        if let Some(storage) = config_storage.read().as_ref() {
+            {
+                let config_storage_arc = Arc::new(storage.clone());
+                rsx! {
+                    ImportConnectionsDialogSection {
+                        config_storage: config_storage_arc.clone(),
+                        colors,
+                        on_import: import_connections_action(
+                            show_import_connections_dialog,
+                            connections,
+                            readonly_connections,
+                            toast_manager,
+                            config_storage_arc.clone(),
+                        ),
+                        on_close: move |_| show_import_connections_dialog.set(false),
+                    }
+                }
+            }
+        }
+    }
+
+    {
+        let update_status = UPDATE_STATUS();
+        if let Some(ref info) = update_status.pending_update {
+            rsx! {
+                UpdateDialog {
+                    update_info: info.clone(),
+                    colors,
+                    on_update: {
+                        let update_download_progress = update_download_progress.clone();
+                        let update_downloaded_path = update_downloaded_path.clone();
+                        let toast_for_update = toast_for_update.clone();
+                        let info_for_closure = info.clone();
+                        move |_| {
+                            let info_clone = info_for_closure.clone();
+                            let mut update_download_progress = update_download_progress.clone();
+                            let mut update_downloaded_path = update_downloaded_path.clone();
+                            let mut toast_for_update = toast_for_update.clone();
+                            spawn(async move {
+                                if let Ok(mut manager) = UpdateManager::new() {
+                                    let (tx, mut rx) = tokio::sync::mpsc::channel::<(u64, u64)>(100);
+                                    let mut progress = update_download_progress.clone();
                                     spawn(async move {
-                                        if let Some(storage) = config_storage.read().as_ref() {
-                                            let _ = storage.delete_connection(id);
-                                        }
-
-                                        connection_pools.write().remove(&id);
-                                        connection_manager.read().remove_connection(id).await;
-                                        connection_states.write().remove(&id);
-
-                                        if let Some(storage) = config_storage.read().as_ref() {
-                                            if let Ok(saved) = storage.load_connections() {
-                                                connections.set(
-                                                    saved.into_iter().map(|c| (c.id, c.name)).collect(),
-                                                );
-                                            }
-                                        }
-
-                                        if selected_connection() == Some(id) {
-                                            selected_connection.set(None);
-                                            selected_key.set(String::new());
-                                            current_db.set(0);
+                                        while let Some((downloaded, total)) = rx.recv().await {
+                                            progress.set((downloaded, total));
                                         }
                                     });
-                                }
-                            },
-                            on_cancel: move |_| show_delete_connection_dialog.set(None),
-                        }
-                    }
-
-        if let Some(flush_id) = show_flush_dialog() {
-                        if let Some(pool) = connection_pools.read().get(&flush_id).cloned() {
-                            FlushDialogSection {
-                                pool,
-                                current_db: current_db(),
-                                colors,
-                                on_confirm: move |_| {
-                                    show_flush_dialog.set(None);
-                                    refresh_trigger.set(refresh_trigger() + 1);
-                                },
-                                on_cancel: move |_| show_flush_dialog.set(None),
-                            }
-                        }
-                    }
-
-        if let Some(import_id) = show_import_dialog() {
-                        if let Some(pool) = connection_pools.read().get(&import_id).cloned() {
-                            ImportOverlaySection {
-                                pool,
-                                on_close: move |_| show_import_dialog.set(None),
-                            }
-                        }
-                    }
-
-        if show_export_connections_dialog() {
-                        if let Some(storage) = config_storage.read().as_ref() {
-                            ExportConnectionsDialogSection {
-                                config_storage: Arc::new(storage.clone()),
-                                colors,
-                                on_close: move |_| show_export_connections_dialog.set(false),
-                            }
-                        }
-                    }
-
-        if show_import_connections_dialog() {
-            if let Some(storage) = config_storage.read().as_ref() {
-                {
-                    let config_storage_arc = Arc::new(storage.clone());
-                    rsx! {
-                        ImportConnectionsDialogSection {
-                            config_storage: config_storage_arc.clone(),
-                            colors,
-                            on_import: import_connections_action(
-                                show_import_connections_dialog,
-                                connections,
-                                readonly_connections,
-                                toast_manager,
-                                config_storage_arc.clone(),
-                            ),
-                            on_close: move |_| show_import_connections_dialog.set(false),
-                        }
-                    }
-                }
-            }
-        }
-
-        {
-            let update_status = UPDATE_STATUS();
-            if let Some(ref info) = update_status.pending_update {
-                rsx! {
-                    UpdateDialog {
-                        update_info: info.clone(),
-                        colors,
-                        on_update: {
-                            let update_download_progress = update_download_progress.clone();
-                            let update_downloaded_path = update_downloaded_path.clone();
-                            let toast_for_update = toast_for_update.clone();
-                            let info_for_closure = info.clone();
-                            move |_| {
-                                let info_clone = info_for_closure.clone();
-                                let mut update_download_progress = update_download_progress.clone();
-                                let mut update_downloaded_path = update_downloaded_path.clone();
-                                let mut toast_for_update = toast_for_update.clone();
-                                spawn(async move {
-                                    if let Ok(mut manager) = UpdateManager::new() {
-                                        let (tx, mut rx) = tokio::sync::mpsc::channel::<(u64, u64)>(100);
-                                        let mut progress = update_download_progress.clone();
-                                        spawn(async move {
-                                            while let Some((downloaded, total)) = rx.recv().await {
-                                                progress.set((downloaded, total));
-                                            }
-                                        });
-                                        match manager.download_update(&info_clone, Some(tx)).await {
-                                            Ok(path) => {
-                                                update_downloaded_path.set(Some(path.clone()));
-                                                match manager.install_update(&path) {
-                                                    Ok(result) => {
-                                                        set_pending_update(None);
-                                                        match result {
-                                                            InstallResult::RestartRequired => {
-                                                                toast_for_update.write().success("更新完成，请重启应用");
-                                                            }
-                                                            InstallResult::RestartInProgress => {
-                                                                toast_for_update.write().success("正在安装更新...");
-                                                            }
-                                                            InstallResult::OpenExternal(url) => {
-                                                                let _ = open::that(&url);
-                                                                toast_for_update.write().success("请在浏览器中下载更新");
-                                                            }
+                                    match manager.download_update(&info_clone, Some(tx)).await {
+                                        Ok(path) => {
+                                            update_downloaded_path.set(Some(path.clone()));
+                                            match manager.install_update(&path) {
+                                                Ok(result) => {
+                                                    set_pending_update(None);
+                                                    match result {
+                                                        InstallResult::RestartRequired => {
+                                                            toast_for_update.write().success("更新完成，请重启应用");
+                                                        }
+                                                        InstallResult::RestartInProgress => {
+                                                            toast_for_update.write().success("正在安装更新...");
+                                                        }
+                                                        InstallResult::OpenExternal(url) => {
+                                                            let _ = open::that(&url);
+                                                            toast_for_update.write().success("请在浏览器中下载更新");
                                                         }
                                                     }
-                                                    Err(e) => {
-                                                        let msg = format!("安装失败: {}", e);
-                                                        toast_for_update.write().error(&msg);
-                                                    }
+                                                }
+                                                Err(e) => {
+                                                    let msg = format!("安装失败: {}", e);
+                                                    toast_for_update.write().error(&msg);
                                                 }
                                             }
-                                            Err(e) => {
-                                                let msg = format!("下载失败: {}", e);
-                                                toast_for_update.write().error(&msg);
-                                            }
+                                        }
+                                        Err(e) => {
+                                            let msg = format!("下载失败: {}", e);
+                                            toast_for_update.write().error(&msg);
                                         }
                                     }
-                                });
-                            }
-                        },
-                        on_skip: {
-                            move |version: String| {
-                                spawn(async move {
-                                    if let Ok(mut manager) = UpdateManager::new() {
-                                        let _ = manager.skip_version(&version);
-                                    }
-                                    set_pending_update(None);
-                                });
-                            }
-                        },
-                        on_close: move |_| {
-                            set_pending_update(None);
-                        },
-                    }
+                                }
+                            });
+                        }
+                    },
+                    on_skip: {
+                        move |version: String| {
+                            spawn(async move {
+                                if let Ok(mut manager) = UpdateManager::new() {
+                                    let _ = manager.skip_version(&version);
+                                }
+                                set_pending_update(None);
+                            });
+                        }
+                    },
+                    on_close: move |_| {
+                        set_pending_update(None);
+                    },
                 }
-            } else {
-                rsx! {}
             }
+        } else {
+            rsx! {}
         }
+    }
 
-        ToastContainer { manager: toast_manager }
-        ImagePreview {}
-                }
+    ToastContainer { manager: toast_manager }
+    ImagePreview {}
+            }
 }
