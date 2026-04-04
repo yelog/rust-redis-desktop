@@ -13,9 +13,9 @@ use self::actions::{
     open_bool_signal, open_optional_uuid_signal, reorder_connections_action, save_settings_action,
 };
 use self::render::{
-    empty_connection_panel, spinner_panel, ExportConnectionsDialogSection,
-    FlushDialogSection, ImportConnectionsDialogSection, ImportOverlaySection,
-    SettingsDialogSection,
+    empty_connection_panel, spinner_panel, ConnectedTabShellSection,
+    ExportConnectionsDialogSection, FlushDialogSection, ImportConnectionsDialogSection,
+    ImportOverlaySection, MacTitlebarSection, SettingsDialogSection,
 };
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
@@ -627,42 +627,10 @@ pub fn App() -> Element {
                         overflow: "hidden",
 
                         if cfg!(target_os = "macos") {
-                            div {
-                                height: MACOS_TITLEBAR_HEIGHT,
-                                flex_shrink: "0",
-                                display: "flex",
-                                align_items: "center",
-                                justify_content: "space-between",
-                                padding_left: MACOS_TRAFFIC_LIGHT_PADDING_LEFT,
-                                padding_right: "16px",
-                                background: "linear-gradient(180deg, {COLOR_BG_SECONDARY} 0%, {COLOR_BG} 100%)",
-                                border_bottom: "1px solid {COLOR_BORDER}",
-                                user_select: "none",
-                                cursor: "default",
-                                onmousedown: move |_| desktop_for_drag.drag(),
-                                ondoubleclick: move |_| desktop_for_maximize.toggle_maximized(),
-
-                                div {
-                                    font_size: "13px",
-                                    font_weight: "600",
-                                    letter_spacing: "0.04em",
-                                    color: "{COLOR_TEXT}",
-
-                                    "Redis Desktop"
-                                }
-
-                                if let Some(label) = titlebar_context_label.clone() {
-                                    div {
-                                        max_width: "40%",
-                                        overflow: "hidden",
-                                        text_overflow: "ellipsis",
-                                        white_space: "nowrap",
-                                        font_size: "12px",
-                                        color: "{COLOR_TEXT_SECONDARY}",
-
-                                        "{label}"
-                                    }
-                                }
+                            MacTitlebarSection {
+                                context_label: titlebar_context_label.clone(),
+                                on_drag: move |_| desktop_for_drag.drag(),
+                                on_toggle_maximize: move |_| desktop_for_maximize.toggle_maximized(),
                             }
                         }
 
@@ -912,120 +880,18 @@ pub fn App() -> Element {
                                     { spinner_panel("正在加载连接...") }
                                 } else if selected_conn_state == ConnectionState::Connected {
                                     if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
-                                    div {
-                                        flex: "1",
-                                        min_width: "0",
-                                        min_height: "0",
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        background: "{COLOR_SURFACE_LOW}",
-                                        overflow: "hidden",
-
-                                        div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "8px",
-                                            padding: "10px 16px",
-                                            border_bottom: "1px solid {COLOR_BORDER}",
-                                            background: "{COLOR_BG_SECONDARY}",
-
-                                            for (tab, label) in [
-                                                (Tab::Data, "数据"),
-                                                (Tab::Terminal, "终端"),
-                                                (Tab::Monitor, "监控"),
-                                                (Tab::SlowLog, "慢日志"),
-                                                (Tab::Clients, "客户端"),
-                                                (Tab::PubSub, "Pub/Sub"),
-                                                (Tab::Script, "脚本"),
-                                            ] {
-                                                button {
-                                                    padding: "8px 14px",
-                                                    background: if current_tab() == tab { COLOR_BG } else { "transparent" },
-                                                    color: if current_tab() == tab { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
-                                                    border: if current_tab() == tab {
-                                                        format!("1px solid {}", COLOR_BORDER)
-                                                    } else {
-                                                        "1px solid transparent".to_string()
-                                                    },
-                                                    border_bottom: if current_tab() == tab {
-                                                        format!("2px solid {}", COLOR_ACCENT)
-                                                    } else {
-                                                        "2px solid transparent".to_string()
-                                                    },
-                                                    border_radius: "6px",
-                                                    cursor: "pointer",
-                                                    font_size: "13px",
-                                                    font_weight: if current_tab() == tab { "700" } else { "500" },
-                                                    transition: "all 150ms ease-out",
-                                                    onclick: move |_| current_tab.set(tab),
-
-                                                    "{label}"
-                                                }
-                                            }
+                                        ConnectedTabShellSection {
+                                            conn_id,
+                                            pool,
+                                            current_tab,
+                                            connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
+                                            selected_key,
+                                            current_db,
+                                            refresh_trigger,
+                                            colors,
+                                            resolved_theme_key: resolved_theme_key.to_string(),
+                                            auto_refresh_interval: app_settings.read().auto_refresh_interval,
                                         }
-
-                                        div {
-                                            flex: "1",
-                                            min_height: "0",
-                                            display: "flex",
-                                            flex_direction: "column",
-                                            overflow: "hidden",
-
-                                        if current_tab() == Tab::Data {
-                                        div {
-                                            flex: "1",
-                                            min_height: "0px",
-                                            overflow: "hidden",
-
-                                                KeyBrowser {
-                                                    key: "{conn_id}-{connection_versions.read().get(&conn_id).copied().unwrap_or(0)}-{resolved_theme_key}",
-                                                    connection_id: conn_id,
-                                                    connection_pool: pool.clone(),
-                                                    connection_version: connection_versions.read().get(&conn_id).copied().unwrap_or(0),
-                                                    selected_key: selected_key,
-                                                    current_db: current_db,
-                                                    refresh_trigger: refresh_trigger,
-                                                    colors,
-                                                    on_key_select: move |key: String| {
-                                                        selected_key.set(key);
-                                                        current_tab.set(Tab::Data);
-                                                    },
-                                                }
-                                            }
-                                        } else if current_tab() == Tab::Terminal {
-                                                Terminal {
-                                                    key: "{conn_id}",
-                                                    connection_pool: pool.clone(),
-                                                }
-                                            } else if current_tab() == Tab::Monitor {
-                                                MonitorPanel {
-                                                    key: "{conn_id}",
-                                                    connection_pool: pool.clone(),
-                                                    auto_refresh_interval: app_settings.read().auto_refresh_interval,
-                                                }
-                                            } else if current_tab() == Tab::SlowLog {
-                                                SlowLogPanel {
-                                                    key: "{conn_id}",
-                                                    connection_pool: pool.clone(),
-                                                }
-                                            } else if current_tab() == Tab::Clients {
-                                                ClientsPanel {
-                                                    key: "{conn_id}",
-                                                    connection_pool: pool.clone(),
-                                                }
-                                            } else if current_tab() == Tab::PubSub {
-                                                PubSubPanel {
-                                                    key: "{conn_id}",
-                                                    connection_pool: pool.clone(),
-                                                }
-                                            } else {
-                                                ScriptPanel {
-                                                    key: "{conn_id}",
-                                                    connection_pool: pool.clone(),
-                                                }
-                                            }
-                                        }
-                                    }
                                 } else {
                                     { spinner_panel("正在初始化连接...") }
                                 }

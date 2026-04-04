@@ -1,14 +1,17 @@
+use super::state::Tab;
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::ConnectionPool;
 use crate::theme::{
-    ThemeColors, ThemeId, COLOR_ACCENT, COLOR_ERROR, COLOR_SURFACE_LOW, COLOR_TEXT,
-    COLOR_TEXT_SECONDARY,
+    ThemeColors, ThemeId, COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BORDER, COLOR_ERROR,
+    COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
 };
 use crate::ui::{
-    ConnectionExportDialog, ConnectionImportDialog, FlushConfirmDialog, ImportPanel, SettingsDialog,
+    ClientsPanel, ConnectionExportDialog, ConnectionImportDialog, FlushConfirmDialog, ImportPanel,
+    KeyBrowser, MonitorPanel, PubSubPanel, ScriptPanel, SettingsDialog, SlowLogPanel, Terminal,
 };
 use dioxus::prelude::*;
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub(super) fn spinner_panel(message: &'static str) -> Element {
     rsx! {
@@ -100,6 +103,181 @@ pub(super) fn connection_error_panel(on_retry: EventHandler<MouseEvent>) -> Elem
                 font_size: "13px",
                 onclick: move |evt| on_retry.call(evt),
                 "重新连接"
+            }
+        }
+    }
+}
+
+#[component]
+pub(super) fn MacTitlebarSection(
+    context_label: Option<String>,
+    on_drag: EventHandler<MouseEvent>,
+    on_toggle_maximize: EventHandler<MouseEvent>,
+) -> Element {
+    rsx! {
+        div {
+            height: "46px",
+            flex_shrink: "0",
+            display: "flex",
+            align_items: "center",
+            justify_content: "space-between",
+            padding_left: "84px",
+            padding_right: "16px",
+            background: "linear-gradient(180deg, {COLOR_BG_SECONDARY} 0%, {COLOR_BG} 100%)",
+            border_bottom: "1px solid {COLOR_BORDER}",
+            user_select: "none",
+            cursor: "default",
+            onmousedown: move |evt| on_drag.call(evt),
+            ondoubleclick: move |evt| on_toggle_maximize.call(evt),
+
+            div {
+                font_size: "13px",
+                font_weight: "600",
+                letter_spacing: "0.04em",
+                color: "{COLOR_TEXT}",
+                "Redis Desktop"
+            }
+
+            if let Some(label) = context_label {
+                div {
+                    max_width: "40%",
+                    overflow: "hidden",
+                    text_overflow: "ellipsis",
+                    white_space: "nowrap",
+                    font_size: "12px",
+                    color: "{COLOR_TEXT_SECONDARY}",
+                    "{label}"
+                }
+            }
+        }
+    }
+}
+
+#[component]
+pub(super) fn ConnectedTabShellSection(
+    conn_id: Uuid,
+    pool: ConnectionPool,
+    current_tab: Signal<Tab>,
+    connection_version: u32,
+    selected_key: Signal<String>,
+    current_db: Signal<u8>,
+    refresh_trigger: Signal<u32>,
+    colors: ThemeColors,
+    resolved_theme_key: String,
+    auto_refresh_interval: u32,
+) -> Element {
+    rsx! {
+        div {
+            flex: "1",
+            min_width: "0",
+            min_height: "0",
+            display: "flex",
+            flex_direction: "column",
+            background: "{COLOR_SURFACE_LOW}",
+            overflow: "hidden",
+
+            div {
+                display: "flex",
+                align_items: "center",
+                gap: "8px",
+                padding: "10px 16px",
+                border_bottom: "1px solid {COLOR_BORDER}",
+                background: "{COLOR_BG_SECONDARY}",
+
+                for (tab, label) in [
+                    (Tab::Data, "数据"),
+                    (Tab::Terminal, "终端"),
+                    (Tab::Monitor, "监控"),
+                    (Tab::SlowLog, "慢日志"),
+                    (Tab::Clients, "客户端"),
+                    (Tab::PubSub, "Pub/Sub"),
+                    (Tab::Script, "脚本"),
+                ] {
+                    button {
+                        padding: "8px 14px",
+                        background: if current_tab() == tab { COLOR_BG } else { "transparent" },
+                        color: if current_tab() == tab { COLOR_TEXT } else { COLOR_TEXT_SECONDARY },
+                        border: if current_tab() == tab {
+                            format!("1px solid {}", COLOR_BORDER)
+                        } else {
+                            "1px solid transparent".to_string()
+                        },
+                        border_bottom: if current_tab() == tab {
+                            format!("2px solid {}", COLOR_ACCENT)
+                        } else {
+                            "2px solid transparent".to_string()
+                        },
+                        border_radius: "6px",
+                        cursor: "pointer",
+                        font_size: "13px",
+                        font_weight: if current_tab() == tab { "700" } else { "500" },
+                        transition: "all 150ms ease-out",
+                        onclick: move |_| current_tab.set(tab),
+                        "{label}"
+                    }
+                }
+            }
+
+            div {
+                flex: "1",
+                min_height: "0",
+                display: "flex",
+                flex_direction: "column",
+                overflow: "hidden",
+
+                if current_tab() == Tab::Data {
+                    div {
+                        flex: "1",
+                        min_height: "0px",
+                        overflow: "hidden",
+
+                        KeyBrowser {
+                            key: "{conn_id}-{connection_version}-{resolved_theme_key}",
+                            connection_id: conn_id,
+                            connection_pool: pool.clone(),
+                            connection_version,
+                            selected_key,
+                            current_db,
+                            refresh_trigger,
+                            colors,
+                            on_key_select: move |key: String| {
+                                selected_key.set(key);
+                                current_tab.set(Tab::Data);
+                            },
+                        }
+                    }
+                } else if current_tab() == Tab::Terminal {
+                    Terminal {
+                        key: "{conn_id}",
+                        connection_pool: pool.clone(),
+                    }
+                } else if current_tab() == Tab::Monitor {
+                    MonitorPanel {
+                        key: "{conn_id}",
+                        connection_pool: pool.clone(),
+                        auto_refresh_interval,
+                    }
+                } else if current_tab() == Tab::SlowLog {
+                    SlowLogPanel {
+                        key: "{conn_id}",
+                        connection_pool: pool.clone(),
+                    }
+                } else if current_tab() == Tab::Clients {
+                    ClientsPanel {
+                        key: "{conn_id}",
+                        connection_pool: pool.clone(),
+                    }
+                } else if current_tab() == Tab::PubSub {
+                    PubSubPanel {
+                        key: "{conn_id}",
+                        connection_pool: pool.clone(),
+                    }
+                } else {
+                    ScriptPanel {
+                        key: "{conn_id}",
+                        connection_pool: pool.clone(),
+                    }
+                }
             }
         }
     }
