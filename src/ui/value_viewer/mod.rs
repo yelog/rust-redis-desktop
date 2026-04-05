@@ -14,7 +14,7 @@ pub use self::image_preview::{ImagePreview, PreviewImageData, PREVIEW_IMAGE};
 use self::bitmap_viewer::BitmapViewer;
 use self::formatters::{
     base64_decode, copy_value_to_clipboard, detect_image_format, format_bytes, format_memory_usage,
-    format_ttl_label, is_binary_data, value_metric_label,
+    format_ttl_label, value_metric_label,
 };
 use self::hash_panel::HashPanel;
 use self::list_panel::ListPanel;
@@ -23,44 +23,31 @@ use self::set_panel::SetPanel;
 use self::stream_panel::StreamPanel;
 use self::zset_panel::ZSetPanel;
 use self::styles::{
-    compact_icon_action_button_style, data_section_controls_style, data_section_count_style,
-    data_section_toolbar_style, data_table_header_cell_style, data_table_header_row_style,
     destructive_action_button_style, image_preview_button_style, image_preview_info_chip_style,
     overlay_modal_actions_style, overlay_modal_backdrop_style, overlay_modal_body_style,
     overlay_modal_keyframes, overlay_modal_surface_style, overlay_modal_title_style,
-    primary_action_button_style, secondary_action_button_style, status_banner_style,
+    secondary_action_button_style,
 };
 use crate::connection::ConnectionPool;
-use crate::protobuf_schema::PROTO_REGISTRY;
 use crate::redis::{KeyInfo, KeyType};
-use crate::serialization::{
-    detect_serialization_format, is_java_serialization, is_protobuf_data, parse_to_json,
-    SerializationFormat,
-};
+use crate::serialization::{parse_to_json, SerializationFormat};
 use crate::theme::{
-    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
-    COLOR_BUTTON_SECONDARY, COLOR_BUTTON_SECONDARY_BORDER, COLOR_ERROR, COLOR_ERROR_BG, COLOR_INFO,
-    COLOR_INFO_BG, COLOR_OVERLAY_BACKDROP, COLOR_PRIMARY, COLOR_ROW_CREATE_BG, COLOR_ROW_EDIT_BG,
-    COLOR_SUCCESS, COLOR_SUCCESS_BG, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
-    COLOR_TEXT_SUBTLE, COLOR_WARNING,
+    COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
+    COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_ROW_CREATE_BG, COLOR_ROW_EDIT_BG, COLOR_SUCCESS,
+    COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_WARNING,
 };
 use crate::ui::context_menu::{ContextMenu, ContextMenuItem, ContextMenuState};
 use crate::ui::editable_field::EditableField;
 use crate::ui::icons::{IconCopy, IconEdit, IconMoreHorizontal, IconTrash};
 use crate::ui::java_viewer::JavaSerializedViewer;
 use crate::ui::json_viewer::{is_json_content, JsonViewer};
-use crate::ui::pagination::LargeKeyWarning;
 use crate::ui::{copy_text_to_clipboard, ServerInfoPanel, ToastManager};
 use dioxus::prelude::*;
-use serde_json;
-use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 const PAGE_SIZE: usize = 100;
 
 const LARGE_KEY_THRESHOLD: usize = 1000;
-const STATUS_SUCCESS_BG: &str = COLOR_SUCCESS_BG;
-const STATUS_ERROR_BG: &str = COLOR_ERROR_BG;
 const ROW_CREATE_BG: &str = COLOR_ROW_CREATE_BG;
 const ROW_EDIT_BG: &str = COLOR_ROW_EDIT_BG;
 
@@ -178,10 +165,10 @@ pub fn ValueViewer(
     let _bitmap_editing_offset = use_signal(String::new);
     let _bitmap_editing_value = use_signal(String::new);
 
-    let mut stream_status_message = use_signal(String::new);
-    let mut stream_status_error = use_signal(|| false);
-    let mut stream_search = use_signal(String::new);
-    let mut deleting_stream_entry = use_signal(|| None::<String>);
+    let stream_status_message = use_signal(String::new);
+    let stream_status_error = use_signal(|| false);
+    let stream_search = use_signal(String::new);
+    let deleting_stream_entry = use_signal(|| None::<String>);
     let deleting_stream_entry_exiting = use_signal(|| false);
 
     let pool = connection_pool.clone();
