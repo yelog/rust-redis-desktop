@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1-beta.3] - 2026-04-08
+
+### Added
+- add unified error types and error reporting infrastructure
+- improve settings dialog and search expansion
+
+### Changed
+- refactor app.rs into modular app components and workflows
+- refactor value viewer panels into extracted modules
+- refactor UI safety checks and startup error handling
+
+### Fixed
+- fix update checks to use the GitHub Pages update manifest instead of the GitHub Releases API
+- fix dialog header alignment and JSON preview overflow
+- encrypt stored connection credentials with AES
+
 ## [0.1.1-beta.2] - 2026-03-29
 
 ### Added
