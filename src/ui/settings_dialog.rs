@@ -2,18 +2,13 @@ use crate::autostart::AutostartManager;
 use crate::config::AppSettings;
 use crate::theme::{ThemeColors, ThemeId, ThemeMode, ThemePreference};
 use crate::ui::animated_dialog::AnimatedDialog;
-use crate::ui::icons::{
-    IconCheck, IconDownload, IconExternalLink, IconGitHub, IconGlobe, IconHelpCircle, IconRefresh,
-    IconStar, IconX,
-};
+use crate::ui::icons::{IconCheck, IconGitHub, IconRefresh, IconStar, IconX};
 use crate::updater::{get_current_version, trigger_manual_check, UPDATE_STATUS};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use dioxus::prelude::*;
 use once_cell::sync::Lazy;
 
 const GITHUB_REPO_URL: &str = "https://github.com/yelog/rust-redis-desktop";
-const GITHUB_RELEASES_URL: &str = "https://github.com/yelog/rust-redis-desktop/releases";
-const GITHUB_ISSUES_URL: &str = "https://github.com/yelog/rust-redis-desktop/issues";
 
 static ABOUT_ICON_DATA_URI: Lazy<String> = Lazy::new(|| {
     format!(
@@ -392,42 +387,6 @@ pub fn SettingsDialog(
                                         }
 
                                         AboutStarCard { colors }
-
-                                        AboutSectionCard {
-                                            title: "项目资源",
-                                            description: "查看源码、版本发布与问题反馈入口。",
-                                            colors,
-
-                                            AboutLinkRow {
-                                                title: "项目主页",
-                                                description: "查看源码、路线图和项目动态",
-                                                href: GITHUB_REPO_URL,
-                                                colors,
-                                                icon: rsx! {
-                                                    IconGlobe { size: Some(18), color: Some(colors.accent.to_string()) }
-                                                },
-                                            }
-
-                                            AboutLinkRow {
-                                                title: "版本发布",
-                                                description: "下载最新版本并查看发布说明",
-                                                href: GITHUB_RELEASES_URL,
-                                                colors,
-                                                icon: rsx! {
-                                                    IconDownload { size: Some(18), color: Some(colors.accent.to_string()) }
-                                                },
-                                            }
-
-                                            AboutLinkRow {
-                                                title: "问题反馈",
-                                                description: "提交 Bug、建议或跟进已知问题",
-                                                href: GITHUB_ISSUES_URL,
-                                                colors,
-                                                icon: rsx! {
-                                                    IconHelpCircle { size: Some(18), color: Some(colors.warning.to_string()) }
-                                                },
-                                            }
-                                        }
 
                                         AboutUpdateCard {
                                             colors,
@@ -860,107 +819,6 @@ fn AboutSectionCard(
             }
 
             {children}
-        }
-    }
-}
-
-#[component]
-fn AboutLinkRow(
-    title: &'static str,
-    description: &'static str,
-    href: &'static str,
-    colors: ThemeColors,
-    icon: Element,
-) -> Element {
-    let mut hover = use_signal(|| false);
-    let border_color = if hover() {
-        colors.outline_variant
-    } else {
-        colors.border
-    };
-
-    rsx! {
-        button {
-            width: "100%",
-            padding: "12px 14px",
-            background: if hover() {
-                colors.background_tertiary
-            } else {
-                colors.background_secondary
-            },
-            border: "1px solid {border_color}",
-            border_radius: "12px",
-            display: "flex",
-            align_items: "center",
-            justify_content: "space_between",
-            gap: "12px",
-            cursor: "pointer",
-            text_align: "left",
-            transition: "background 0.2s, border 0.2s, box-shadow 0.2s",
-            box_shadow: if hover() {
-                "0 6px 18px rgba(0, 0, 0, 0.08)"
-            } else {
-                "none"
-            },
-            onmouseenter: move |_| hover.set(true),
-            onmouseleave: move |_| hover.set(false),
-            onclick: move |_| {
-                let _ = open::that(href);
-            },
-
-            div {
-                display: "flex",
-                align_items: "center",
-                gap: "12px",
-                min_width: "0",
-
-                div {
-                    width: "36px",
-                    height: "36px",
-                    flex_shrink: "0",
-                    background: "{colors.background_tertiary}",
-                    border: "1px solid {colors.border}",
-                    border_radius: "10px",
-                    display: "flex",
-                    align_items: "center",
-                    justify_content: "center",
-
-                    {icon}
-                }
-
-                div {
-                    display: "flex",
-                    flex_direction: "column",
-                    gap: "4px",
-                    min_width: "0",
-
-                    div {
-                        color: "{colors.text}",
-                        font_size: "14px",
-                        font_weight: "600",
-                        line_height: "1.3",
-
-                        "{title}"
-                    }
-
-                    div {
-                        color: "{colors.text_secondary}",
-                        font_size: "12px",
-                        line_height: "1.5",
-
-                        "{description}"
-                    }
-                }
-            }
-
-            IconExternalLink {
-                size: Some(16),
-                color: Some(if hover() {
-                    colors.text.to_string()
-                } else {
-                    colors.text_subtle.to_string()
-                }),
-            }
         }
     }
 }
