@@ -1,3 +1,5 @@
+#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+
 mod autostart;
 mod config;
 mod connection;
@@ -16,6 +18,7 @@ mod updater;
 
 use config::ConfigStorage;
 use dioxus::desktop::tao::dpi::LogicalSize;
+use dioxus::desktop::tao::window::Icon;
 use dioxus::desktop::{
     muda::{accelerator::Accelerator, Menu, MenuItem, PredefinedMenuItem, Submenu},
     Config, WindowBuilder,
@@ -41,6 +44,14 @@ fn configure_window_builder(window_builder: WindowBuilder) -> WindowBuilder {
 #[cfg(not(target_os = "macos"))]
 fn configure_window_builder(window_builder: WindowBuilder) -> WindowBuilder {
     window_builder
+}
+
+fn load_window_icon() -> Option<Icon> {
+    let icon_bytes = include_bytes!("../icons/icon.png");
+    let image = image::load_from_memory(icon_bytes).ok()?;
+    let rgba = image.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    Icon::from_rgba(rgba.into_raw(), width, height).ok()
 }
 
 fn create_menu() -> std::result::Result<Menu, Box<dyn std::error::Error + Send + Sync>> {
@@ -134,6 +145,7 @@ fn run_app() -> Result<()> {
         WindowBuilder::new()
             .with_title("Redis Desktop")
             .with_inner_size(LogicalSize::new(1200, 800))
+            .with_window_icon(load_window_icon())
             .with_theme(preferred_window_theme(settings.theme_preference))
             .with_visible(true),
     );

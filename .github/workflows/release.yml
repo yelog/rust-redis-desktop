@@ -224,6 +224,10 @@ jobs:
           
           mkdir -p installer/app
           cp target/release/rust-redis-desktop.exe installer/app/
+          # Cargo can emit runtime sidecars next to the exe on Windows. Bundle them
+          # so the installed app matches the working target/release layout.
+          cp target/release/*.dll installer/app/ 2>/dev/null || true
+          cp target/release/*.dat installer/app/ 2>/dev/null || true
           
           magick icons/icon.png -resize 256x256 -background transparent -gravity center -extent 256x256 icon.ico
           cp icon.ico installer/
