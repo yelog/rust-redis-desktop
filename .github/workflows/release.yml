@@ -210,8 +210,8 @@ jobs:
       - name: Build
         run: cargo build --release
 
-      - name: Install NSIS and ImageMagick
-        run: choco install nsis imagemagick -y
+      - name: Install NSIS
+        run: choco install nsis -y
 
       - name: Prepare installer resources
         shell: bash
@@ -229,8 +229,7 @@ jobs:
           cp target/release/*.dll installer/app/ 2>/dev/null || true
           cp target/release/*.dat installer/app/ 2>/dev/null || true
           
-          magick icons/icon.png -resize 256x256 -background transparent -gravity center -extent 256x256 icon.ico
-          cp icon.ico installer/
+          cp icons/icon.ico installer/
           
           cp LICENSE installer/LICENSE.txt || echo "MIT License" > installer/LICENSE.txt
           
