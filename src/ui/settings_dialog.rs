@@ -1,9 +1,25 @@
 use crate::config::AppSettings;
 use crate::theme::{ThemeColors, ThemeId, ThemeMode, ThemePreference};
 use crate::ui::animated_dialog::AnimatedDialog;
-use crate::ui::icons::IconX;
+use crate::ui::icons::{
+    IconCheck, IconDownload, IconExternalLink, IconGitHub, IconGlobe, IconHelpCircle, IconRefresh,
+    IconStar, IconX,
+};
 use crate::updater::{get_current_version, trigger_manual_check, UPDATE_STATUS};
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use dioxus::prelude::*;
+use once_cell::sync::Lazy;
+
+const GITHUB_REPO_URL: &str = "https://github.com/yelog/rust-redis-desktop";
+const GITHUB_RELEASES_URL: &str = "https://github.com/yelog/rust-redis-desktop/releases";
+const GITHUB_ISSUES_URL: &str = "https://github.com/yelog/rust-redis-desktop/issues";
+
+static ABOUT_ICON_DATA_URI: Lazy<String> = Lazy::new(|| {
+    format!(
+        "data:image/png;base64,{}",
+        BASE64_STANDARD.encode(include_bytes!("../../icons/icon.png"))
+    )
+});
 
 #[derive(Clone, Copy, PartialEq, Default)]
 enum SettingsTab {
@@ -287,175 +303,98 @@ pub fn SettingsDialog(
                             let update_status = UPDATE_STATUS();
                             let version = get_current_version();
                             let checking = update_status.checking;
+                            let pending_version = update_status
+                                .pending_update
+                                .as_ref()
+                                .map(|info| info.version.clone());
+                            let channel_label = about_release_channel(&version);
 
                             rsx! {
                                 div {
                                     display: "flex",
                                     flex_direction: "column",
-                                    gap: "20px",
+                                    gap: "16px",
 
-                                    div {
-                                        display: "flex",
-                                        align_items: "center",
-                                        gap: "12px",
+                                    AboutHero {
+                                        version: version.clone(),
+                                        channel_label,
+                                        colors,
+                                    }
 
-                                        div {
-                                            font_size: "34px",
-                                            line_height: "1",
-                                            "🚀"
+                                    AboutStarCard { colors }
+
+                                    AboutSectionCard {
+                                        title: "项目资源",
+                                        description: "查看源码、版本发布与问题反馈入口。",
+                                        colors,
+
+                                        AboutLinkRow {
+                                            title: "项目主页",
+                                            description: "查看源码、路线图和项目动态",
+                                            href: GITHUB_REPO_URL,
+                                            colors,
+                                            icon: rsx! {
+                                                IconGlobe { size: Some(18), color: Some(colors.accent.to_string()) }
+                                            },
                                         }
 
-                                        div {
-                                            h2 {
-                                                margin: "0",
-                                                color: "{colors.text}",
-                                                font_size: "20px",
-                                                font_weight: "600",
+                                        AboutLinkRow {
+                                            title: "版本发布",
+                                            description: "下载最新版本并查看发布说明",
+                                            href: GITHUB_RELEASES_URL,
+                                            colors,
+                                            icon: rsx! {
+                                                IconDownload { size: Some(18), color: Some(colors.accent.to_string()) }
+                                            },
+                                        }
 
-                                                "Redis Desktop"
-                                            }
-
-                                            div {
-                                                color: "{colors.text_secondary}",
-                                                font_size: "13px",
-                                                margin_top: "4px",
-
-                                                "版本 {version}"
-                                            }
+                                        AboutLinkRow {
+                                            title: "问题反馈",
+                                            description: "提交 Bug、建议或跟进已知问题",
+                                            href: GITHUB_ISSUES_URL,
+                                            colors,
+                                            icon: rsx! {
+                                                IconHelpCircle { size: Some(18), color: Some(colors.warning.to_string()) }
+                                            },
                                         }
                                     }
 
-                                    div {
-                                        color: "{colors.text_secondary}",
-                                        font_size: "13px",
-                                        line_height: "1.6",
-
-                                        "一个用 Rust 编写的 Redis 桌面管理工具。支持多数据库管理、数据可视化、命令执行等功能。"
+                                    AboutUpdateCard {
+                                        colors,
+                                        auto_check_updates: auto_check_updates(),
+                                        checking,
+                                        pending_version,
+                                        on_set_auto_check: {
+                                            let apply = apply_settings.clone();
+                                            move |value| {
+                                                auto_check_updates.set(value);
+                                                apply();
+                                            }
+                                        },
+                                        on_manual_check: move |_| trigger_manual_check(),
                                     }
 
                                     div {
-                                        padding: "14px",
-                                        background: "{colors.background_tertiary}",
-                                        border: "1px solid {colors.border}",
-                                        border_radius: "10px",
                                         display: "flex",
                                         flex_direction: "column",
-                                        gap: "14px",
+                                        align_items: "center",
+                                        gap: "4px",
+                                        padding: "4px 0 2px 0",
+                                        text_align: "center",
 
                                         div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            justify_content: "space_between",
-                                            gap: "12px",
+                                            color: "{colors.text_subtle}",
+                                            font_size: "12px",
 
-                                            label {
-                                                color: "{colors.text}",
-                                                font_size: "14px",
-                                                font_weight: "500",
-
-                                                "自动更新"
-                                            }
-
-                                            div {
-                                                display: "flex",
-                                                flex_wrap: "wrap",
-                                                gap: "8px",
-
-                                                for (value, label) in [(true, "开启"), (false, "关闭")] {
-                                                    ChoiceChip {
-                                                        label,
-                                                        selected: auto_check_updates() == value,
-                                                        colors,
-                                                        compact: true,
-                                                        inactive_bg: Some(colors.background_secondary),
-                                                        on_click: {
-                                                            let apply = apply_settings.clone();
-                                                            move |_| {
-                                                                auto_check_updates.set(value);
-                                                                apply();
-                                                            }
-                                                        },
-                                                    }
-                                                }
-                                            }
+                                            "MIT License | yelog"
                                         }
 
                                         div {
-                                            display: "flex",
-                                            align_items: "center",
-                                            gap: "12px",
+                                            color: "{colors.text_subtle}",
+                                            font_size: "11px",
 
-                                            button {
-                                                padding: "8px 16px",
-                                                background: "{colors.primary}",
-                                                color: "{colors.primary_text}",
-                                                border: "none",
-                                                border_radius: "8px",
-                                                cursor: if checking { "not_allowed" } else { "pointer" },
-                                                font_size: "13px",
-                                                opacity: if checking { "0.6" } else { "1" },
-                                                disabled: checking,
-                                                onclick: move |_| trigger_manual_check(),
-
-                                                if checking {
-                                                    "检查中..."
-                                                } else {
-                                                    "检查更新"
-                                                }
-                                            }
-
-                                            if let Some(info) = update_status.pending_update {
-                                                div {
-                                                    color: "{colors.success}",
-                                                    font_size: "13px",
-
-                                                    "发现新版本 v{info.version}"
-                                                }
-                                            }
+                                            "Built with Rust, Dioxus, and Freya"
                                         }
-                                    }
-
-                                    div {
-                                        display: "flex",
-                                        flex_wrap: "wrap",
-                                        gap: "16px",
-
-                                        a {
-                                            href: "https://github.com/yelog/rust-redis-desktop",
-                                            target: "_blank",
-                                            color: "{colors.accent}",
-                                            font_size: "13px",
-                                            text_decoration: "none",
-
-                                            "GitHub"
-                                        }
-
-                                        a {
-                                            href: "https://github.com/yelog/rust-redis-desktop/releases",
-                                            target: "_blank",
-                                            color: "{colors.accent}",
-                                            font_size: "13px",
-                                            text_decoration: "none",
-
-                                            "下载"
-                                        }
-
-                                        a {
-                                            href: "https://github.com/yelog/rust-redis-desktop/issues",
-                                            target: "_blank",
-                                            color: "{colors.accent}",
-                                            font_size: "13px",
-                                            text_decoration: "none",
-
-                                            "反馈"
-                                        }
-                                    }
-
-                                    div {
-                                        color: "{colors.text_subtle}",
-                                        font_size: "12px",
-
-                                        "MIT License © 2024 yelog"
                                     }
                                 }
                             }
@@ -463,6 +402,602 @@ pub fn SettingsDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+fn about_release_channel(version: &str) -> &'static str {
+    if version.contains("beta") {
+        "Beta"
+    } else {
+        "Stable"
+    }
+}
+
+#[component]
+fn AboutHero(version: String, channel_label: &'static str, colors: ThemeColors) -> Element {
+    rsx! {
+        div {
+            padding: "22px",
+            background: "{colors.background_secondary}",
+            border: "1px solid {colors.border}",
+            border_radius: "18px",
+            display: "flex",
+            flex_direction: "column",
+            align_items: "center",
+            gap: "14px",
+            box_shadow: "0 6px 18px rgba(0, 0, 0, 0.10)",
+
+            div {
+                width: "80px",
+                height: "80px",
+                padding: "12px",
+                background: "{colors.background_tertiary}",
+                border: "1px solid {colors.outline_variant}",
+                border_radius: "20px",
+                display: "flex",
+                align_items: "center",
+                justify_content: "center",
+
+                img {
+                    src: "{ABOUT_ICON_DATA_URI.as_str()}",
+                    width: "56px",
+                    height: "56px",
+                    border_radius: "14px",
+                }
+            }
+
+            div {
+                display: "flex",
+                flex_direction: "column",
+                align_items: "center",
+                gap: "6px",
+                text_align: "center",
+
+                h2 {
+                    margin: "0",
+                    color: "{colors.text}",
+                    font_size: "26px",
+                    font_weight: "700",
+                    line_height: "1.1",
+
+                    "Rust Redis Desktop"
+                }
+
+                div {
+                    color: "{colors.text_secondary}",
+                    font_size: "13px",
+                    font_weight: "500",
+
+                    "连接、浏览、编辑和分析 Redis 数据的一体化桌面工具"
+                }
+            }
+
+            div {
+                display: "flex",
+                flex_wrap: "wrap",
+                justify_content: "center",
+                gap: "8px",
+
+                AboutBadge {
+                    label: format!("v{version}"),
+                    colors,
+                    emphasized: true,
+                }
+
+                AboutBadge {
+                    label: channel_label.to_string(),
+                    colors,
+                    emphasized: false,
+                }
+
+                AboutBadge {
+                    label: "Open Source".to_string(),
+                    colors,
+                    emphasized: false,
+                }
+            }
+
+            div {
+                max_width: "420px",
+                color: "{colors.text_secondary}",
+                font_size: "13px",
+                line_height: "1.6",
+                text_align: "center",
+
+                "支持多连接管理、数据查看与编辑、命令执行、监控分析等 Redis 日常工作流。"
+            }
+        }
+    }
+}
+
+#[component]
+fn AboutStarCard(colors: ThemeColors) -> Element {
+    rsx! {
+        div {
+            padding: "20px",
+            background: "{colors.background_secondary}",
+            border: "1px solid {colors.outline_variant}",
+            border_radius: "18px",
+            display: "flex",
+            flex_direction: "column",
+            gap: "14px",
+            box_shadow: "0 10px 24px rgba(0, 0, 0, 0.12)",
+
+            div {
+                display: "flex",
+                align_items: "center",
+                gap: "10px",
+
+                div {
+                    width: "34px",
+                    height: "34px",
+                    background: "{colors.primary}",
+                    border_radius: "17px",
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "center",
+
+                    IconStar { size: Some(18), color: Some(colors.primary_text.to_string()) }
+                }
+
+                div {
+                    color: "{colors.text_secondary}",
+                    font_size: "12px",
+                    font_weight: "600",
+
+                    "支持项目"
+                }
+            }
+
+            div {
+                display: "flex",
+                flex_direction: "column",
+                gap: "6px",
+
+                div {
+                    color: "{colors.text}",
+                    font_size: "18px",
+                    font_weight: "700",
+                    line_height: "1.3",
+
+                    "这个项目对你有帮助？欢迎点个 Star"
+                }
+
+                div {
+                    color: "{colors.text_secondary}",
+                    font_size: "13px",
+                    line_height: "1.6",
+
+                    "你的支持会直接帮助项目持续迭代，也能让更多开发者更快发现并使用它。"
+                }
+            }
+
+            AboutActionButton {
+                label: "前往 GitHub 点 Star".to_string(),
+                colors,
+                icon: rsx! {
+                    IconGitHub { size: Some(16), color: Some(colors.primary_text.to_string()) }
+                },
+                primary: true,
+                disabled: false,
+                on_click: move |_| {
+                    let _ = open::that(GITHUB_REPO_URL);
+                },
+            }
+        }
+    }
+}
+
+#[component]
+fn AboutUpdateCard(
+    colors: ThemeColors,
+    auto_check_updates: bool,
+    checking: bool,
+    pending_version: Option<String>,
+    on_set_auto_check: EventHandler<bool>,
+    on_manual_check: EventHandler<()>,
+) -> Element {
+    let enable_auto_check = on_set_auto_check.clone();
+    let disable_auto_check = on_set_auto_check.clone();
+
+    rsx! {
+        AboutSectionCard {
+            title: "版本更新",
+            description: "保留当前版本策略，按需检查新版本。",
+            colors,
+
+            div {
+                display: "flex",
+                flex_direction: "column",
+                gap: "14px",
+
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "space_between",
+                    flex_wrap: "wrap",
+                    gap: "12px",
+
+                    div {
+                        display: "flex",
+                        flex_direction: "column",
+                        gap: "4px",
+
+                        div {
+                            color: "{colors.text}",
+                            font_size: "14px",
+                            font_weight: "600",
+
+                            "自动检查更新"
+                        }
+
+                        div {
+                            color: "{colors.text_secondary}",
+                            font_size: "12px",
+                            line_height: "1.5",
+
+                            "应用启动后自动检查是否有新版本可用。"
+                        }
+                    }
+
+                    div {
+                        display: "flex",
+                        flex_wrap: "wrap",
+                        gap: "8px",
+
+                        ChoiceChip {
+                            label: "开启",
+                            selected: auto_check_updates,
+                            colors,
+                            compact: true,
+                            inactive_bg: Some(colors.background_tertiary),
+                            on_click: move |_| enable_auto_check.call(true),
+                        }
+
+                        ChoiceChip {
+                            label: "关闭",
+                            selected: !auto_check_updates,
+                            colors,
+                            compact: true,
+                            inactive_bg: Some(colors.background_tertiary),
+                            on_click: move |_| disable_auto_check.call(false),
+                        }
+                    }
+                }
+
+                div {
+                    height: "1px",
+                    background: "{colors.border}",
+                }
+
+                div {
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "space_between",
+                    flex_wrap: "wrap",
+                    gap: "12px",
+
+                    div {
+                        display: "flex",
+                        flex_direction: "column",
+                        gap: "4px",
+
+                        div {
+                            color: "{colors.text}",
+                            font_size: "14px",
+                            font_weight: "600",
+
+                            "手动检查更新"
+                        }
+
+                        div {
+                            color: "{colors.text_secondary}",
+                            font_size: "12px",
+                            line_height: "1.5",
+
+                            "需要时立即拉取最新版本信息。"
+                        }
+                    }
+
+                    AboutActionButton {
+                        label: if checking {
+                            "检查中...".to_string()
+                        } else {
+                            "检查更新".to_string()
+                        },
+                        colors,
+                        icon: rsx! {
+                            IconRefresh {
+                                size: Some(16),
+                                color: Some(if checking {
+                                    colors.text_secondary.to_string()
+                                } else {
+                                    colors.text.to_string()
+                                }),
+                            }
+                        },
+                        primary: false,
+                        disabled: checking,
+                        on_click: move |_| on_manual_check.call(()),
+                    }
+                }
+
+                if let Some(version) = pending_version {
+                    div {
+                        padding: "10px 12px",
+                        background: "{colors.success_bg}",
+                        border: "1px solid {colors.success}",
+                        border_radius: "12px",
+                        display: "flex",
+                        align_items: "center",
+                        gap: "8px",
+
+                        IconCheck { size: Some(16), color: Some(colors.success.to_string()) }
+
+                        div {
+                            color: "{colors.success}",
+                            font_size: "13px",
+                            font_weight: "600",
+
+                            "发现新版本 v{version}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn AboutSectionCard(
+    title: &'static str,
+    description: &'static str,
+    colors: ThemeColors,
+    children: Element,
+) -> Element {
+    rsx! {
+        div {
+            padding: "18px",
+            background: "{colors.background_secondary}",
+            border: "1px solid {colors.border}",
+            border_radius: "16px",
+            display: "flex",
+            flex_direction: "column",
+            gap: "14px",
+
+            div {
+                display: "flex",
+                flex_direction: "column",
+                gap: "4px",
+
+                div {
+                    color: "{colors.text}",
+                    font_size: "16px",
+                    font_weight: "700",
+
+                    "{title}"
+                }
+
+                div {
+                    color: "{colors.text_secondary}",
+                    font_size: "12px",
+                    line_height: "1.5",
+
+                    "{description}"
+                }
+            }
+
+            {children}
+        }
+    }
+}
+
+#[component]
+fn AboutLinkRow(
+    title: &'static str,
+    description: &'static str,
+    href: &'static str,
+    colors: ThemeColors,
+    icon: Element,
+) -> Element {
+    let mut hover = use_signal(|| false);
+    let border_color = if hover() {
+        colors.outline_variant
+    } else {
+        colors.border
+    };
+
+    rsx! {
+        button {
+            width: "100%",
+            padding: "12px 14px",
+            background: if hover() {
+                colors.background_tertiary
+            } else {
+                colors.background_secondary
+            },
+            border: "1px solid {border_color}",
+            border_radius: "12px",
+            display: "flex",
+            align_items: "center",
+            justify_content: "space_between",
+            gap: "12px",
+            cursor: "pointer",
+            text_align: "left",
+            transition: "background 0.2s, border 0.2s, box-shadow 0.2s",
+            box_shadow: if hover() {
+                "0 6px 18px rgba(0, 0, 0, 0.08)"
+            } else {
+                "none"
+            },
+            onmouseenter: move |_| hover.set(true),
+            onmouseleave: move |_| hover.set(false),
+            onclick: move |_| {
+                let _ = open::that(href);
+            },
+
+            div {
+                display: "flex",
+                align_items: "center",
+                gap: "12px",
+                min_width: "0",
+
+                div {
+                    width: "36px",
+                    height: "36px",
+                    flex_shrink: "0",
+                    background: "{colors.background_tertiary}",
+                    border: "1px solid {colors.border}",
+                    border_radius: "10px",
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "center",
+
+                    {icon}
+                }
+
+                div {
+                    display: "flex",
+                    flex_direction: "column",
+                    gap: "4px",
+                    min_width: "0",
+
+                    div {
+                        color: "{colors.text}",
+                        font_size: "14px",
+                        font_weight: "600",
+                        line_height: "1.3",
+
+                        "{title}"
+                    }
+
+                    div {
+                        color: "{colors.text_secondary}",
+                        font_size: "12px",
+                        line_height: "1.5",
+
+                        "{description}"
+                    }
+                }
+            }
+
+            IconExternalLink {
+                size: Some(16),
+                color: Some(if hover() {
+                    colors.text.to_string()
+                } else {
+                    colors.text_subtle.to_string()
+                }),
+            }
+        }
+    }
+}
+
+#[component]
+fn AboutBadge(label: String, colors: ThemeColors, emphasized: bool) -> Element {
+    let background = if emphasized {
+        colors.primary
+    } else {
+        colors.background_tertiary
+    };
+    let border_color = if emphasized {
+        colors.primary
+    } else {
+        colors.border
+    };
+    let text_color = if emphasized {
+        colors.primary_text
+    } else {
+        colors.text_secondary
+    };
+
+    rsx! {
+        div {
+            padding: "5px 10px",
+            background: "{background}",
+            border: "1px solid {border_color}",
+            border_radius: "999px",
+            color: "{text_color}",
+            font_size: "11px",
+            font_weight: "600",
+            line_height: "1",
+            white_space: "nowrap",
+
+            "{label}"
+        }
+    }
+}
+
+#[component]
+fn AboutActionButton(
+    label: String,
+    colors: ThemeColors,
+    icon: Element,
+    primary: bool,
+    disabled: bool,
+    on_click: EventHandler<()>,
+) -> Element {
+    let mut hover = use_signal(|| false);
+    let background = if primary {
+        colors.primary
+    } else if hover() && !disabled {
+        colors.background_tertiary
+    } else {
+        colors.background_secondary
+    };
+    let border_color = if primary {
+        colors.primary
+    } else if hover() && !disabled {
+        colors.outline_variant
+    } else {
+        colors.border
+    };
+    let text_color = if primary {
+        colors.primary_text
+    } else if disabled {
+        colors.text_secondary
+    } else {
+        colors.text
+    };
+
+    rsx! {
+        button {
+            padding: "10px 16px",
+            min_height: "38px",
+            background: "{background}",
+            border: "1px solid {border_color}",
+            border_radius: "10px",
+            display: "flex",
+            align_items: "center",
+            justify_content: "center",
+            gap: "8px",
+            cursor: if disabled { "not_allowed" } else { "pointer" },
+            color: "{text_color}",
+            font_size: "13px",
+            font_weight: "600",
+            opacity: if disabled { "0.7" } else { "1" },
+            transition: "background 0.2s, border 0.2s, box-shadow 0.2s",
+            box_shadow: if hover() && !disabled {
+                if primary {
+                    "0 8px 18px rgba(0, 0, 0, 0.16)"
+                } else {
+                    "0 4px 12px rgba(0, 0, 0, 0.08)"
+                }
+            } else {
+                "none"
+            },
+            disabled: disabled,
+            onmouseenter: move |_| hover.set(true),
+            onmouseleave: move |_| hover.set(false),
+            onclick: move |_| {
+                if !disabled {
+                    on_click.call(());
+                }
+            },
+
+            {icon}
+            div { "{label}" }
         }
     }
 }

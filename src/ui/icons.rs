@@ -679,6 +679,101 @@ pub fn IconUpload(size: Option<i32>, color: Option<String>) -> Element {
 }
 
 #[component]
+pub fn IconStar(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            polygon {
+                points: "12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2",
+            }
+        }
+    }
+}
+
+#[component]
+pub fn IconExternalLink(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            path { d: "M14 3h7v7" }
+            path { d: "M10 14 21 3" }
+            path { d: "M21 14v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" }
+        }
+    }
+}
+
+#[component]
+pub fn IconGlobe(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            circle { cx: "12", cy: "12", r: "10" }
+            path { d: "M2 12h20" }
+            path { d: "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z" }
+        }
+    }
+}
+
+#[component]
+pub fn IconGitHub(size: Option<i32>, color: Option<String>) -> Element {
+    let size = size.unwrap_or(16);
+    let color = color.unwrap_or_else(|| "currentColor".to_string());
+
+    rsx! {
+        svg {
+            width: "{size}",
+            height: "{size}",
+            view_box: "0 0 24 24",
+            fill: "none",
+            stroke: "{color}",
+            stroke_width: "2",
+            stroke_linecap: "round",
+            stroke_linejoin: "round",
+
+            path {
+                d: "M9 19c-4.5 1.5-5-2-7-2",
+            }
+            path {
+                d: "M15 22v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 19 4.77 5.07 5.07 0 0 0 18.91 1S17.73.65 15 2.48a13.38 13.38 0 0 0-6 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77 5.44 5.44 0 0 0 3.5 8.52c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22",
+            }
+        }
+    }
+}
+
+#[component]
 pub fn IconMoreHorizontal(size: Option<i32>, color: Option<String>) -> Element {
     let size = size.unwrap_or(16);
     let color = color.unwrap_or_else(|| "currentColor".to_string());
