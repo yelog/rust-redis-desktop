@@ -1,34 +1,40 @@
 use crate::updater::{Platform, Result, UpdateError, UpdateInfo};
 use semver::Version;
 use serde::Deserialize;
+use std::collections::HashMap;
+
+const UPDATE_MANIFEST_URL: &str = "https://yelog.github.io/rust-redis-desktop/update.json";
 
 #[derive(Debug, Clone)]
 pub struct UpdateChecker {
-    repo: String,
     pub current_version: String,
     pub check_beta: bool,
 }
 
 #[derive(Debug, Deserialize)]
-struct GitHubRelease {
-    tag_name: String,
-    body: String,
-    assets: Vec<GitHubAsset>,
-    prerelease: bool,
-    published_at: String,
+struct UpdateManifest {
+    channels: HashMap<String, ManifestChannel>,
 }
 
 #[derive(Debug, Deserialize)]
-struct GitHubAsset {
-    name: String,
-    browser_download_url: String,
+struct ManifestChannel {
+    version: String,
+    published_at: String,
+    #[serde(default)]
+    release_notes: String,
+    platforms: HashMap<String, ManifestPlatformAsset>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ManifestPlatformAsset {
+    url: String,
+    asset_name: String,
 }
 
 impl UpdateChecker {
     pub fn new(current_version: &str) -> Self {
         let is_beta = current_version.contains("-beta");
         Self {
-            repo: "yelog/rust-redis-desktop".to_string(),
             current_version: current_version.to_string(),
             check_beta: is_beta,
         }
@@ -40,48 +46,50 @@ impl UpdateChecker {
             .build()
             .map_err(|e| UpdateError::NetworkError(e.to_string()))?;
 
-        let url = format!("https://api.github.com/repos/{}/releases", self.repo);
-
         let response = client
-            .get(&url)
+            .get(UPDATE_MANIFEST_URL)
             .send()
             .await
             .map_err(|e| UpdateError::NetworkError(e.to_string()))?;
 
         if !response.status().is_success() {
             return Err(UpdateError::NetworkError(format!(
-                "GitHub API returned error: {}",
+                "Update manifest returned error: {}",
                 response.status()
             )));
         }
 
-        let releases: Vec<GitHubRelease> = response
+        let manifest: UpdateManifest = response
             .json()
             .await
             .map_err(|e| UpdateError::ParseError(e.to_string()))?;
 
-        for release in releases {
-            if release.prerelease != self.check_beta {
-                continue;
-            }
+        self.update_from_manifest(&manifest)
+    }
 
-            let release_version = release.tag_name.trim_start_matches('v');
+    fn update_from_manifest(&self, manifest: &UpdateManifest) -> Result<Option<UpdateInfo>> {
+        let channel_name = self.channel_name();
+        let Some(channel) = manifest.channels.get(channel_name) else {
+            return Ok(None);
+        };
 
-            if self.is_newer_version(release_version)? {
-                let asset = self.find_asset(&release.assets)?;
-
-                return Ok(Some(UpdateInfo {
-                    version: release_version.to_string(),
-                    release_notes: release.body,
-                    download_url: asset.browser_download_url.clone(),
-                    asset_name: asset.name.clone(),
-                    is_beta: release.prerelease,
-                    published_at: release.published_at,
-                }));
-            }
+        if !self.is_newer_version(&channel.version)? {
+            return Ok(None);
         }
 
-        Ok(None)
+        let platform = channel
+            .platforms
+            .get(Platform::current().manifest_key())
+            .ok_or(UpdateError::PlatformNotSupported)?;
+
+        Ok(Some(UpdateInfo {
+            version: channel.version.clone(),
+            release_notes: channel.release_notes.clone(),
+            download_url: platform.url.clone(),
+            asset_name: platform.asset_name.clone(),
+            is_beta: self.check_beta,
+            published_at: channel.published_at.clone(),
+        }))
     }
 
     fn is_newer_version(&self, new_version: &str) -> Result<bool> {
@@ -98,13 +106,20 @@ impl UpdateChecker {
         version.split('-').next().unwrap_or(version).to_string()
     }
 
-    fn find_asset<'a>(&self, assets: &'a [GitHubAsset]) -> Result<&'a GitHubAsset> {
-        let suffix = Platform::current().asset_suffix();
+    fn channel_name(&self) -> &'static str {
+        if self.check_beta {
+            "beta"
+        } else {
+            "stable"
+        }
+    }
 
-        assets
-            .iter()
-            .find(|a| a.name.ends_with(suffix))
-            .ok_or_else(|| UpdateError::PlatformNotSupported)
+    #[cfg(test)]
+    pub(crate) fn parse_manifest_json(&self, manifest_json: &str) -> Result<Option<UpdateInfo>> {
+        let manifest: UpdateManifest =
+            serde_json::from_str(manifest_json).map_err(|e| UpdateError::ParseError(e.to_string()))?;
+
+        self.update_from_manifest(&manifest)
     }
 }
 

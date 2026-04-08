@@ -450,20 +450,15 @@ jobs:
           # 创建 GitHub Pages 目录
           mkdir -p pages-output
           cp appcast.xml pages-output/
-          
-          echo "appcast.xml generated"
 
-      - name: Check Sparkle secrets
-        id: check-sparkle
-        run: |
-          if [ -n "${{ secrets.SPARKLE_PRIVATE_KEY }}" ]; then
-            echo "has_sparkle=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_sparkle=false" >> $GITHUB_OUTPUT
-          fi
+          curl -fsSL "https://yelog.github.io/rust-redis-desktop/update.json" -o existing-update.json || true
+          chmod +x scripts/generate-update-manifest.sh
+          ./scripts/generate-update-manifest.sh "$VERSION" "$IS_PRERELEASE" existing-update.json > update.json
+          cp update.json pages-output/
+          
+          echo "appcast.xml and update.json generated"
 
       - name: Upload appcast to pages artifact
-        if: steps.check-sparkle.outputs.has_sparkle == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: appcast-pages
@@ -471,7 +466,6 @@ jobs:
           retention-days: 1
 
       - name: Deploy appcast to GitHub Pages
-        if: steps.check-sparkle.outputs.has_sparkle == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

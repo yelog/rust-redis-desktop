@@ -37,8 +37,17 @@ impl Platform {
         match self {
             Platform::MacOSX86 => "x86_64.dmg",
             Platform::MacOSArm => "aarch64.dmg",
-            Platform::Windows => "x86_64-windows.zip",
+            Platform::Windows => "x86_64-setup.exe",
             Platform::Linux => "x86_64.AppImage",
+        }
+    }
+
+    pub fn manifest_key(&self) -> &'static str {
+        match self {
+            Platform::MacOSX86 => "macos-x86_64",
+            Platform::MacOSArm => "macos-aarch64",
+            Platform::Windows => "windows-x86_64",
+            Platform::Linux => "linux-x86_64",
         }
     }
 }
