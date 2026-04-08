@@ -65,6 +65,8 @@ pub struct AppSettings {
     pub theme_preference: ThemePreference,
     #[serde(default = "default_auto_check_updates")]
     pub auto_check_updates: bool,
+    #[serde(default)]
+    pub launch_at_startup: bool,
 }
 
 fn default_auto_check_updates() -> bool {
@@ -77,6 +79,7 @@ impl Default for AppSettings {
             auto_refresh_interval: 0,
             theme_preference: ThemePreference::default(),
             auto_check_updates: true,
+            launch_at_startup: false,
         }
     }
 }

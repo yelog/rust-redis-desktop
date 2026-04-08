@@ -1,3 +1,4 @@
+use crate::autostart::AutostartManager;
 use crate::config::AppSettings;
 use crate::theme::{ThemeColors, ThemeId, ThemeMode, ThemePreference};
 use crate::ui::animated_dialog::AnimatedDialog;
@@ -54,6 +55,8 @@ pub fn SettingsDialog(
     let mut light_theme = use_signal(|| settings.theme_preference.light_theme());
     let mut dark_theme = use_signal(|| settings.theme_preference.dark_theme());
     let mut auto_check_updates = use_signal(|| settings.auto_check_updates);
+    let launch_at_startup = use_signal(|| settings.launch_at_startup);
+    let launch_at_startup_error = use_signal(|| None::<String>);
     let close_button = on_close.clone();
 
     let apply_settings = {
@@ -71,6 +74,7 @@ pub fn SettingsDialog(
                 auto_refresh_interval: auto_refresh_interval(),
                 theme_preference: preference,
                 auto_check_updates: auto_check_updates(),
+                launch_at_startup: launch_at_startup(),
             });
         }
     };
@@ -216,6 +220,63 @@ pub fn SettingsDialog(
                                                         apply();
                                                     }
                                                 },
+                                            }
+                                        }
+                                    }
+                                }
+
+                                SettingsGroup {
+                                    label: "开机启动",
+                                    colors,
+
+                                    div {
+                                        display: "flex",
+                                        flex_direction: "column",
+                                        gap: "8px",
+
+                                        div {
+                                            display: "flex",
+                                            flex_wrap: "wrap",
+                                            gap: "8px",
+
+                                            for (value, label) in [(true, "开启"), (false, "关闭")] {
+                                                ChoiceChip {
+                                                    label,
+                                                    selected: launch_at_startup() == value,
+                                                    colors,
+                                                    on_click: {
+                                                        let apply = apply_settings.clone();
+                                                        let mut launch_at_startup = launch_at_startup.clone();
+                                                        let mut launch_at_startup_error = launch_at_startup_error.clone();
+                                                        move |_| {
+                                                            if launch_at_startup() == value {
+                                                                return;
+                                                            }
+
+                                                            launch_at_startup_error.set(None);
+
+                                                            match AutostartManager::set_enabled(value) {
+                                                                Ok(()) => {
+                                                                    launch_at_startup.set(value);
+                                                                    apply();
+                                                                }
+                                                                Err(err) => {
+                                                                    tracing::error!("Failed to update autostart: {}", err);
+                                                                    launch_at_startup_error.set(Some(format!("开机启动设置失败: {}", err)));
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                }
+                                            }
+                                        }
+
+                                        if let Some(error) = launch_at_startup_error() {
+                                            div {
+                                                color: "{colors.error}",
+                                                font_size: "12px",
+                                                line_height: "1.5",
+                                                "{error}"
                                             }
                                         }
                                     }
