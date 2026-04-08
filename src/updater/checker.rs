@@ -116,8 +116,8 @@ impl UpdateChecker {
 
     #[cfg(test)]
     pub(crate) fn parse_manifest_json(&self, manifest_json: &str) -> Result<Option<UpdateInfo>> {
-        let manifest: UpdateManifest =
-            serde_json::from_str(manifest_json).map_err(|e| UpdateError::ParseError(e.to_string()))?;
+        let manifest: UpdateManifest = serde_json::from_str(manifest_json)
+            .map_err(|e| UpdateError::ParseError(e.to_string()))?;
 
         self.update_from_manifest(&manifest)
     }

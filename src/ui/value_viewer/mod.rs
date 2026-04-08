@@ -10,24 +10,24 @@ mod stream_panel;
 mod styles;
 mod zset_panel;
 
-pub use self::image_preview::{ImagePreview, PreviewImageData, PREVIEW_IMAGE};
 use self::bitmap_viewer::BitmapViewer;
 use self::formatters::{
     base64_decode, copy_value_to_clipboard, detect_image_format, format_bytes, format_memory_usage,
     format_ttl_label, value_metric_label,
 };
 use self::hash_panel::HashPanel;
+pub use self::image_preview::{ImagePreview, PreviewImageData, PREVIEW_IMAGE};
 use self::list_panel::ListPanel;
 use self::protobuf_viewer::ProtobufViewer;
 use self::set_panel::SetPanel;
 use self::stream_panel::StreamPanel;
-use self::zset_panel::ZSetPanel;
 use self::styles::{
     destructive_action_button_style, image_preview_button_style, image_preview_info_chip_style,
     overlay_modal_actions_style, overlay_modal_backdrop_style, overlay_modal_body_style,
     overlay_modal_keyframes, overlay_modal_surface_style, overlay_modal_title_style,
     secondary_action_button_style,
 };
+use self::zset_panel::ZSetPanel;
 use crate::connection::ConnectionPool;
 use crate::redis::{KeyInfo, KeyType};
 use crate::serialization::{parse_to_json, SerializationFormat};
@@ -50,7 +50,6 @@ const PAGE_SIZE: usize = 100;
 const LARGE_KEY_THRESHOLD: usize = 1000;
 const ROW_CREATE_BG: &str = COLOR_ROW_CREATE_BG;
 const ROW_EDIT_BG: &str = COLOR_ROW_EDIT_BG;
-
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum BinaryFormat {

@@ -172,8 +172,14 @@ pub(super) async fn load_key_data(
                 zset_has_more.set(false);
             }
             KeyType::Hash => {
-                let total = pool.hash_len(&key).await.map_err(|e| format!("获取 hash 长度失败: {e}"))?;
-                let (cursor, items) = pool.get_hash_page(&key, 0, super::PAGE_SIZE).await.map_err(|e| format!("读取 hash 数据失败: {e}"))?;
+                let total = pool
+                    .hash_len(&key)
+                    .await
+                    .map_err(|e| format!("获取 hash 长度失败: {e}"))?;
+                let (cursor, items) = pool
+                    .get_hash_page(&key, 0, super::PAGE_SIZE)
+                    .await
+                    .map_err(|e| format!("读取 hash 数据失败: {e}"))?;
                 let fields: HashMap<String, String> = items.into_iter().collect();
                 tracing::info!("Hash loaded: {} fields (total: {})", fields.len(), total);
                 hash_value.set(fields);
@@ -196,7 +202,10 @@ pub(super) async fn load_key_data(
                 serialization_data.set(None);
             }
             KeyType::List => {
-                let total = pool.list_len(&key).await.map_err(|e| format!("获取 list 长度失败: {e}"))?;
+                let total = pool
+                    .list_len(&key)
+                    .await
+                    .map_err(|e| format!("获取 list 长度失败: {e}"))?;
                 let count = super::PAGE_SIZE.min(total as usize);
                 let items = if count == 0 {
                     Vec::new()
@@ -227,8 +236,14 @@ pub(super) async fn load_key_data(
                 serialization_data.set(None);
             }
             KeyType::Set => {
-                let total = pool.set_len(&key).await.map_err(|e| format!("获取 set 长度失败: {e}"))?;
-                let (cursor, items) = pool.get_set_page(&key, 0, super::PAGE_SIZE).await.map_err(|e| format!("读取 set 数据失败: {e}"))?;
+                let total = pool
+                    .set_len(&key)
+                    .await
+                    .map_err(|e| format!("获取 set 长度失败: {e}"))?;
+                let (cursor, items) = pool
+                    .get_set_page(&key, 0, super::PAGE_SIZE)
+                    .await
+                    .map_err(|e| format!("读取 set 数据失败: {e}"))?;
                 tracing::info!("Set loaded: {} members (total: {})", items.len(), total);
                 set_value.set(items);
                 set_cursor.set(cursor);
@@ -251,8 +266,14 @@ pub(super) async fn load_key_data(
                 serialization_data.set(None);
             }
             KeyType::ZSet => {
-                let total = pool.zset_card(&key).await.map_err(|e| format!("获取 zset 长度失败: {e}"))?;
-                let (cursor, items) = pool.get_zset_page(&key, 0, super::PAGE_SIZE).await.map_err(|e| format!("读取 zset 数据失败: {e}"))?;
+                let total = pool
+                    .zset_card(&key)
+                    .await
+                    .map_err(|e| format!("获取 zset 长度失败: {e}"))?;
+                let (cursor, items) = pool
+                    .get_zset_page(&key, 0, super::PAGE_SIZE)
+                    .await
+                    .map_err(|e| format!("读取 zset 数据失败: {e}"))?;
                 tracing::info!("ZSet loaded: {} members (total: {})", items.len(), total);
                 zset_value.set(items);
                 zset_cursor.set(cursor);
@@ -275,7 +296,10 @@ pub(super) async fn load_key_data(
                 serialization_data.set(None);
             }
             KeyType::Stream => {
-                let entries = pool.stream_range(&key, "-", "+").await.map_err(|e| format!("读取 stream 数据失败: {e}"))?;
+                let entries = pool
+                    .stream_range(&key, "-", "+")
+                    .await
+                    .map_err(|e| format!("读取 stream 数据失败: {e}"))?;
                 tracing::info!("Stream loaded: {} entries", entries.len());
                 stream_value.set(entries);
                 string_value.set(String::new());
@@ -422,7 +446,10 @@ pub(super) async fn load_more_list(
     }
     list_loading_more.set(true);
     let offset = list_value().len() as i64;
-    match pool.get_list_range(&key, offset, offset + super::PAGE_SIZE as i64 - 1).await {
+    match pool
+        .get_list_range(&key, offset, offset + super::PAGE_SIZE as i64 - 1)
+        .await
+    {
         Ok(items) => {
             let mut current = list_value();
             current.extend(items.clone());
@@ -447,13 +474,20 @@ pub(super) async fn search_hash_server(
     mut hash_loading_more: Signal<bool>,
 ) {
     hash_loading_more.set(true);
-    let redis_pattern = if pattern.is_empty() { "*".to_string() } else { format!("*{}*", pattern) };
+    let redis_pattern = if pattern.is_empty() {
+        "*".to_string()
+    } else {
+        format!("*{}*", pattern)
+    };
     let mut cursor: u64 = 0;
     let mut all_items: HashMap<String, String> = HashMap::new();
     let max_iterations = 1000;
     let mut iterations = 0;
     loop {
-        match pool.hash_scan_match(&key, &redis_pattern, cursor, super::PAGE_SIZE).await {
+        match pool
+            .hash_scan_match(&key, &redis_pattern, cursor, super::PAGE_SIZE)
+            .await
+        {
             Ok((new_cursor, items)) => {
                 for (field, value) in items {
                     all_items.insert(field, value);
@@ -490,13 +524,20 @@ pub(super) async fn search_zset_server(
     mut zset_loading_more: Signal<bool>,
 ) {
     zset_loading_more.set(true);
-    let redis_pattern = if pattern.is_empty() { "*".to_string() } else { format!("*{}*", pattern) };
+    let redis_pattern = if pattern.is_empty() {
+        "*".to_string()
+    } else {
+        format!("*{}*", pattern)
+    };
     let mut cursor: u64 = 0;
     let mut all_items: Vec<(String, f64)> = Vec::new();
     let max_iterations = 1000;
     let mut iterations = 0;
     loop {
-        match pool.zset_scan_match(&key, &redis_pattern, cursor, super::PAGE_SIZE).await {
+        match pool
+            .zset_scan_match(&key, &redis_pattern, cursor, super::PAGE_SIZE)
+            .await
+        {
             Ok((new_cursor, items)) => {
                 all_items.extend(items);
                 cursor = new_cursor;
@@ -531,13 +572,20 @@ pub(super) async fn search_set_server(
     mut set_loading_more: Signal<bool>,
 ) {
     set_loading_more.set(true);
-    let redis_pattern = if pattern.is_empty() { "*".to_string() } else { format!("*{}*", pattern) };
+    let redis_pattern = if pattern.is_empty() {
+        "*".to_string()
+    } else {
+        format!("*{}*", pattern)
+    };
     let mut cursor: u64 = 0;
     let mut all_items: Vec<String> = Vec::new();
     let max_iterations = 1000;
     let mut iterations = 0;
     loop {
-        match pool.set_scan_match(&key, &redis_pattern, cursor, super::PAGE_SIZE).await {
+        match pool
+            .set_scan_match(&key, &redis_pattern, cursor, super::PAGE_SIZE)
+            .await
+        {
             Ok((new_cursor, items)) => {
                 all_items.extend(items);
                 cursor = new_cursor;
