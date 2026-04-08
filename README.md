@@ -1,74 +1,209 @@
-# 🚀 rust-redis-desktop
+<p align="center">
+  <img src="./icons/icon.png" alt="Rust Redis Desktop logo" width="128" />
+</p>
 
-A Redis desktop manager written in Rust.
+<h1 align="center">Rust Redis Desktop</h1>
 
-> In experimental and development stages, please do not use in production environments
+<p align="center">A desktop Redis manager built with Rust, Dioxus, and Freya.</p>
 
-# ✨ Features
+This project is currently in beta and under active development. Expect rough edges, behavior changes, and incomplete workflows. It is not recommended for production-critical use yet.
 
-- 🗄️ **Database Management**: Easily connect to and manage multiple Redis instances.
-- 📊 **Data Visualization**: Visualize your Redis data with charts and graphs.
-- 🔍 **Key Inspection**: Inspect and edit keys, values, and their types.
-- 🛠️ **Command Execution**: Execute Redis commands directly from the interface.
-- 📋 **Clipboard Integration**: Copy and paste keys and values with ease.
-- 🔒 **Secure Connections**: Support for SSL/TLS connections to Redis servers.
-- 🖥️ **Cross-Platform**: Available for Windows, macOS, and Linux.
+## Current Status
 
-# ⚡️ Requirements
+- Current version: `0.1.1-beta.3`
+- Supported targets in release workflow:
+  - macOS (`x86_64`, `aarch64`)
+  - Windows (`x86_64`)
+  - Linux (`x86_64` AppImage and `.deb`)
+- Default theme: system-following `Tokyo Night` / `Tokyo Night Light`
 
-- Rust >= 1.56.0
-- Redis server (local or remote)
+## Features
 
-# 📦 Installation
+### Connection Management
 
-To install `rust-redis-desktop`, you can download the pre-built binaries from the [releases page](https://github.com/yelog/rust-redis-desktop/releases) or build from source.
+- Multiple saved Redis connections
+- Direct, Cluster, and Sentinel connection modes
+- SSL/TLS support
+- SSH tunnel support
+- Read-only connection flag
+- Drag-and-drop connection ordering
+- Connection import/export as JSON
+- Stored credentials are encrypted before being written to local config
 
-### Building from Source
+### Data Browsing and Editing
 
-1. Ensure you have Rust installed. If not, you can install it from [rustup.rs](https://rustup.rs/).
-2. Clone the repository:
-    ```sh
-    git clone https://github.com/yelog/rust-redis-desktop.git
-    cd rust-redis-desktop
-    ```
-3. Build the project:
-    ```sh
-    cargo build --release
-    ```
-4. Run the application:
-    ```sh
-    ./target/release/rust-redis-desktop
-    ```
+- Key browser with incremental scan and pattern search
+- Add, edit, delete, and batch-delete keys
+- Batch TTL operations
+- Type-aware viewers and editors for:
+  - String
+  - Hash
+  - List
+  - Set
+  - ZSet
+  - Stream
+  - Bitmap
+- JSON formatting and structured viewing
+- Image preview support for binary values
 
-# ⚙️ Configuration
+### Inspection and Operations
 
-Configuration options can be set via a configuration file or environment variables. The default configuration file is located at `~/.config/rust-redis-desktop/config.toml`.
+- Redis command terminal with:
+  - command execution
+  - command suggestions
+  - inline help via `HELP <command>`
+  - persisted command history
+- Lua script panel for `EVAL`, `SCRIPT LOAD`, and `SCRIPT FLUSH`
+- Pub/Sub panel for publishing and subscribing
+- Slowlog viewer
+- Client list viewer with client kill action
+- Server info panel
+- Monitor panel for memory and OPS trends
+- Memory analysis by key and prefix
 
-Example configuration:
-```toml
-[general]
-theme = "dark"
+### Serialization and Value Decoding
 
-[redis]
-default_connection = "redis://localhost:6379"
+- Automatic detection and decoding helpers for several formats, including:
+  - Java serialization
+  - Protobuf
+  - MsgPack
+  - CBOR
+  - BSON
+  - PHP serialization
+  - Python Pickle
+  - Kryo / FST
+- Protobuf schema import from `.proto` files
+
+### Application UX
+
+- Built-in light/dark theme system with multiple palettes
+- System-following theme mode
+- Automatic update checks
+- System tray support on macOS and Windows
+
+## Installation
+
+Download a prebuilt package from the [Releases](https://github.com/yelog/rust-redis-desktop/releases) page, or build from source.
+
+Release artifacts currently include:
+
+- macOS `.dmg`
+- Windows installer `.exe`
+- Linux `.AppImage`
+- Linux `.deb`
+
+## Build From Source
+
+### Prerequisites
+
+- A recent Rust toolchain with `cargo`
+- Platform GUI dependencies
+
+Linux builds require additional system packages. The release workflow currently installs:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y \
+  libgtk-3-dev \
+  libwebkit2gtk-4.1-dev \
+  libappindicator3-dev \
+  librsvg2-dev \
+  patchelf \
+  libgl1-mesa-dev \
+  libxcb-render0-dev \
+  libxcb-shape0-dev \
+  libxcb-xfixes0-dev \
+  libxkbcommon-dev \
+  libssl-dev \
+  pkg-config \
+  file \
+  desktop-file-utils \
+  libxdo-dev \
+  libfuse2
 ```
 
-# 📝 Roadmap
+### Build and Run
 
-- [ ] Implement advanced key filtering and searching
-- [ ] Add support for Redis Cluster
-- [ ] Enhance data visualization capabilities
-- [ ] Improve user interface and user experience
-- [ ] Add more comprehensive documentation and tutorials
+```sh
+git clone https://github.com/yelog/rust-redis-desktop.git
+cd rust-redis-desktop
+cargo run
+```
 
-# 🤝 Contributing
+For a release build:
 
-Contributions are welcome! Please read the [CONTRIBUTING.md](https://github.com/yelog/rust-redis-desktop/blob/main/CONTRIBUTING.md) for guidelines on how to contribute to this project.
+```sh
+cargo build --release
+```
 
-# 🔑 License
+The produced binary is:
 
-**rust-redis-desktop** is licensed under the `MIT License`. See the [LICENSE](https://github.com/yelog/rust-redis-desktop/blob/main/LICENSE) file for more details.
+```sh
+./target/release/rust-redis-desktop
+```
 
-# 📞 Contact
+## Configuration
 
-For any questions or feedback, please open an issue on GitHub or contact us at [yelogeek@gmail.com](mailto:yelogeek@gmail.com).
+The app stores its local state under the platform config directory used by `dirs::config_dir()`.
+
+Typical locations:
+
+```text
+Linux:   ~/.config/rust-redis-desktop/config.json
+macOS:   ~/Library/Application Support/rust-redis-desktop/config.json
+Windows: %AppData%\rust-redis-desktop\config.json
+```
+
+The configuration file contains saved connections, application settings, and command history.
+
+Example:
+
+```json
+{
+  "connections": [],
+  "settings": {
+    "auto_refresh_interval": 0,
+    "theme_preference": {
+      "system": {
+        "light": "tokyo_night_light",
+        "dark": "tokyo_night"
+      }
+    },
+    "auto_check_updates": true
+  },
+  "command_history": {
+    "entries": [],
+    "favorites": []
+  }
+}
+```
+
+Notes:
+
+- The project currently uses `config.json`, not `config.toml`.
+- Theme preference is persisted as structured JSON.
+- Connection credentials are encrypted before being saved.
+- There is no documented runtime configuration via environment variables at the moment.
+
+## Project Focus
+
+The current codebase is strongest in these areas:
+
+- Managing multiple Redis connections from a desktop UI
+- Inspecting and editing common Redis data structures
+- Working with operational tooling such as slowlog, clients, monitoring, and memory analysis
+- Exploring serialized or binary payloads without leaving the app
+
+Areas still improving:
+
+- Overall polish and consistency across all panels
+- Documentation depth
+- Some incomplete UI flows marked in-app as in progress
+
+## Contributing
+
+Issues and pull requests are welcome. If you plan to contribute, please open an issue first for larger changes so the direction can be aligned before implementation.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](./LICENSE).
