@@ -14,8 +14,8 @@ pub enum ThemeKind {
 #[serde(rename_all = "snake_case")]
 pub enum ThemeId {
     ClassicLight,
-    #[default]
     ClassicDark,
+    #[default]
     TokyoNight,
     TokyoNightLight,
     AtomOneLight,
@@ -26,15 +26,15 @@ pub enum ThemeId {
 
 impl ThemeId {
     pub const LIGHT_OPTIONS: [Self; 4] = [
-        Self::ClassicLight,
         Self::TokyoNightLight,
+        Self::ClassicLight,
         Self::AtomOneLight,
         Self::GitHubLight,
     ];
 
     pub const DARK_OPTIONS: [Self; 4] = [
-        Self::ClassicDark,
         Self::TokyoNight,
+        Self::ClassicDark,
         Self::OneDarkPro,
         Self::Dracula,
     ];
@@ -119,8 +119,8 @@ pub enum ThemePreference {
 impl Default for ThemePreference {
     fn default() -> Self {
         Self::System {
-            light: ThemeId::ClassicLight,
-            dark: ThemeId::ClassicDark,
+            light: ThemeId::TokyoNightLight,
+            dark: ThemeId::TokyoNight,
         }
     }
 }
@@ -138,7 +138,7 @@ impl ThemePreference {
         match self {
             Self::System { light, .. } => light,
             Self::Light(id) => id,
-            Self::Dark(_) => ThemeId::ClassicLight,
+            Self::Dark(_) => ThemeId::TokyoNightLight,
         }
     }
 
@@ -146,7 +146,7 @@ impl ThemePreference {
         match self {
             Self::System { dark, .. } => dark,
             Self::Dark(id) => id,
-            Self::Light(_) => ThemeId::ClassicDark,
+            Self::Light(_) => ThemeId::TokyoNight,
         }
     }
 
