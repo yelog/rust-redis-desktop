@@ -251,7 +251,7 @@ pub fn AnimatedDialog(
                         padding: "18px 24px 16px 24px",
                         display: "flex",
                         align_items: "center",
-                        justify_content: "space_between",
+                        justify_content: "space-between",
                         gap: "16px",
                         border_bottom: "1px solid {colors.border}",
 

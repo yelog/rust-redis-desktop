@@ -78,7 +78,7 @@ pub fn SettingsDialog(
                         div {
                             display: "flex",
                             align_items: "center",
-                            justify_content: "space_between",
+                            justify_content: "space-between",
                             gap: "12px",
 
                             div {
