@@ -6,16 +6,44 @@
 
 <p align="center">A desktop Redis manager built with Rust, Dioxus, and Freya.</p>
 
-This project is currently in beta and under active development. Expect rough edges, behavior changes, and incomplete workflows. It is not recommended for production-critical use yet.
-
-## Current Status
-
-- Current version: `0.1.1-beta.3`
-- Supported targets in release workflow:
-  - macOS (`x86_64`, `aarch64`)
-  - Windows (`x86_64`)
-  - Linux (`x86_64` AppImage and `.deb`)
-- Default theme: system-following `Tokyo Night` / `Tokyo Night Light`
+<table>
+  <tr>
+    <th>Json</th>
+    <th>Hash/Set/Zset/List</th>
+  </tr>
+  <tr>
+    <td>
+      <img width="1416" height="988" alt="image" src="https://github.com/user-attachments/assets/0bdbd928-cc13-410c-9964-ebeaf9b2c7da" />
+    </td>
+    <td>
+      <img width="1416" height="988" alt="image" src="https://github.com/user-attachments/assets/ffa8d83f-7ea7-44d8-b16b-2da8f1e2a172" />
+    </td>
+  </tr>
+  <tr>
+    <th>Image</th>
+    <th>Stream</th>
+  </tr>
+  <tr>
+    <td>
+      <img width="1416" height="988" alt="image" src="https://github.com/user-attachments/assets/13bae773-a677-41aa-80f1-5c2e17a0ba95" />
+    </td>
+    <td>
+      <img width="1416" height="988" alt="image" src="https://github.com/user-attachments/assets/0a605f0c-f87e-482e-900f-78a4e900c1db" />
+    </td>
+  </tr>
+  <tr>
+    <th>Java Serialization</th>
+    <th>Multiple Themes</th>
+  </tr>
+  <tr>
+    <td>
+      <img width="1416" height="988" alt="image" src="https://github.com/user-attachments/assets/268f5765-04f4-42c5-9489-839d804f6edc" />
+    </td>
+    <td>
+      <img width="1416" height="988" alt="image" src="https://github.com/user-attachments/assets/35f75ba5-426f-4223-bfe4-b3d38bb6291d" />
+    </td>
+  </tr>
+</table>
 
 ## Features
 
