@@ -46,6 +46,7 @@ pub fn AnimatedDialog(
     max_height: Option<String>,
     title: Option<String>,
     show_close_button: Option<bool>,
+    scrollable_body: Option<bool>,
     children: Element,
 ) -> Element {
     let width_val = width.unwrap_or_else(|| "450px".to_string());
@@ -53,6 +54,7 @@ pub fn AnimatedDialog(
     let title_text = title.unwrap_or_default();
     let has_title = !title_text.is_empty();
     let show_close = show_close_button.unwrap_or(true);
+    let body_scrollable = scrollable_body.unwrap_or(true);
 
     let mut visibility = use_signal(VisibilityState::default);
     let backdrop_color = colors.overlay_backdrop;
@@ -347,7 +349,9 @@ pub fn AnimatedDialog(
 
                 div {
                     padding: if has_title { "20px 24px 24px 24px" } else { "24px" },
-                    overflow_y: "auto",
+                    display: "flex",
+                    flex_direction: "column",
+                    overflow_y: if body_scrollable { "auto" } else { "hidden" },
                     overflow_x: "hidden",
                     flex: "1",
                     min_height: "0",

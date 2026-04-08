@@ -87,10 +87,13 @@ pub fn SettingsDialog(
             width: "560px".to_string(),
             title: "".to_string(),
             show_close_button: false,
+            scrollable_body: false,
 
             div {
                 display: "flex",
                 flex_direction: "column",
+                flex: "1",
+                min_height: "0",
                 gap: "18px",
 
                 {
@@ -165,74 +168,49 @@ pub fn SettingsDialog(
                     background: "{colors.border}",
                 }
 
-                {
-                    match current_tab() {
-                        SettingsTab::General => rsx! {
-                            div {
-                                display: "flex",
-                                flex_direction: "column",
-                                gap: "16px",
+                div {
+                    flex: "1",
+                    min_height: "0",
+                    overflow_y: "auto",
+                    overflow_x: "hidden",
 
-                                SettingsGroup {
-                                    label: "服务器信息自动刷新",
-                                    colors,
+                    {
+                        match current_tab() {
+                            SettingsTab::General => rsx! {
+                                div {
+                                    display: "flex",
+                                    flex_direction: "column",
+                                    gap: "16px",
 
-                                    div {
-                                        display: "flex",
-                                        flex_wrap: "wrap",
-                                        gap: "8px",
+                                    SettingsGroup {
+                                        label: "服务器信息自动刷新",
+                                        colors,
 
-                                        for (value, label) in [(0, "关闭"), (5, "5秒"), (10, "10秒"), (30, "30秒"), (60, "60秒")] {
-                                            ChoiceChip {
-                                                label,
-                                                selected: auto_refresh_interval() == value,
-                                                colors,
-                                                on_click: {
-                                                    let apply = apply_settings.clone();
-                                                    move |_| {
-                                                        auto_refresh_interval.set(value);
-                                                        apply();
-                                                    }
-                                                },
+                                        div {
+                                            display: "flex",
+                                            flex_wrap: "wrap",
+                                            gap: "8px",
+
+                                            for (value, label) in [(0, "关闭"), (5, "5秒"), (10, "10秒"), (30, "30秒"), (60, "60秒")] {
+                                                ChoiceChip {
+                                                    label,
+                                                    selected: auto_refresh_interval() == value,
+                                                    colors,
+                                                    on_click: {
+                                                        let apply = apply_settings.clone();
+                                                        move |_| {
+                                                            auto_refresh_interval.set(value);
+                                                            apply();
+                                                        }
+                                                    },
+                                                }
                                             }
                                         }
                                     }
-                                }
 
-                                SettingsGroup {
-                                    label: "自动检查更新",
-                                    colors,
-
-                                    div {
-                                        display: "flex",
-                                        flex_wrap: "wrap",
-                                        gap: "8px",
-
-                                        for (value, label) in [(true, "开启"), (false, "关闭")] {
-                                            ChoiceChip {
-                                                label,
-                                                selected: auto_check_updates() == value,
-                                                colors,
-                                                on_click: {
-                                                    let apply = apply_settings.clone();
-                                                    move |_| {
-                                                        auto_check_updates.set(value);
-                                                        apply();
-                                                    }
-                                                },
-                                            }
-                                        }
-                                    }
-                                }
-
-                                SettingsGroup {
-                                    label: "开机启动",
-                                    colors,
-
-                                    div {
-                                        display: "flex",
-                                        flex_direction: "column",
-                                        gap: "8px",
+                                    SettingsGroup {
+                                        label: "自动检查更新",
+                                        colors,
 
                                         div {
                                             display: "flex",
@@ -242,219 +220,251 @@ pub fn SettingsDialog(
                                             for (value, label) in [(true, "开启"), (false, "关闭")] {
                                                 ChoiceChip {
                                                     label,
-                                                    selected: launch_at_startup() == value,
+                                                    selected: auto_check_updates() == value,
                                                     colors,
                                                     on_click: {
                                                         let apply = apply_settings.clone();
-                                                        let mut launch_at_startup = launch_at_startup.clone();
-                                                        let mut launch_at_startup_error = launch_at_startup_error.clone();
                                                         move |_| {
-                                                            if launch_at_startup() == value {
-                                                                return;
-                                                            }
-
-                                                            launch_at_startup_error.set(None);
-
-                                                            match AutostartManager::set_enabled(value) {
-                                                                Ok(()) => {
-                                                                    launch_at_startup.set(value);
-                                                                    apply();
-                                                                }
-                                                                Err(err) => {
-                                                                    tracing::error!("Failed to update autostart: {}", err);
-                                                                    launch_at_startup_error.set(Some(format!("开机启动设置失败: {}", err)));
-                                                                }
-                                                            }
+                                                            auto_check_updates.set(value);
+                                                            apply();
                                                         }
                                                     },
                                                 }
                                             }
                                         }
+                                    }
 
-                                        if let Some(error) = launch_at_startup_error() {
+                                    SettingsGroup {
+                                        label: "开机启动",
+                                        colors,
+
+                                        div {
+                                            display: "flex",
+                                            flex_direction: "column",
+                                            gap: "8px",
+
                                             div {
-                                                color: "{colors.error}",
-                                                font_size: "12px",
-                                                line_height: "1.5",
-                                                "{error}"
+                                                display: "flex",
+                                                flex_wrap: "wrap",
+                                                gap: "8px",
+
+                                                for (value, label) in [(true, "开启"), (false, "关闭")] {
+                                                    ChoiceChip {
+                                                        label,
+                                                        selected: launch_at_startup() == value,
+                                                        colors,
+                                                        on_click: {
+                                                            let apply = apply_settings.clone();
+                                                            let mut launch_at_startup = launch_at_startup.clone();
+                                                            let mut launch_at_startup_error = launch_at_startup_error.clone();
+                                                            move |_| {
+                                                                if launch_at_startup() == value {
+                                                                    return;
+                                                                }
+
+                                                                launch_at_startup_error.set(None);
+
+                                                                match AutostartManager::set_enabled(value) {
+                                                                    Ok(()) => {
+                                                                        launch_at_startup.set(value);
+                                                                        apply();
+                                                                    }
+                                                                    Err(err) => {
+                                                                        tracing::error!("Failed to update autostart: {}", err);
+                                                                        launch_at_startup_error.set(Some(format!("开机启动设置失败: {}", err)));
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                    }
+                                                }
+                                            }
+
+                                            if let Some(error) = launch_at_startup_error() {
+                                                div {
+                                                    color: "{colors.error}",
+                                                    font_size: "12px",
+                                                    line_height: "1.5",
+                                                    "{error}"
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                        },
-                        SettingsTab::Appearance => rsx! {
-                            div {
-                                display: "flex",
-                                flex_direction: "column",
-                                gap: "16px",
-
-                                SettingsGroup {
-                                    label: "主题模式",
-                                    colors,
-
-                                    div {
-                                        display: "flex",
-                                        flex_wrap: "wrap",
-                                        gap: "8px",
-
-                                        for (mode, label) in [
-                                            (ThemeMode::System, "跟随系统"),
-                                            (ThemeMode::Dark, "暗色"),
-                                            (ThemeMode::Light, "亮色"),
-                                        ] {
-                                            ChoiceChip {
-                                                label,
-                                                selected: theme_mode() == mode,
-                                                colors,
-                                                on_click: {
-                                                    let apply = apply_settings.clone();
-                                                    move |_| {
-                                                        theme_mode.set(mode);
-                                                        apply();
-                                                    }
-                                                },
-                                            }
-                                        }
-                                    }
-                                }
-
-                                {
-                                    let mode = theme_mode();
-                                    let show_light = matches!(mode, ThemeMode::System | ThemeMode::Light);
-                                    let show_dark = matches!(mode, ThemeMode::System | ThemeMode::Dark);
-
-                                    rsx! {
-                                        if show_light {
-                                            ThemeSelector {
-                                                label: "亮色主题",
-                                                options: ThemeId::LIGHT_OPTIONS,
-                                                selected: light_theme(),
-                                                colors,
-                                                on_select: {
-                                                    let apply = apply_settings.clone();
-                                                    move |id: ThemeId| {
-                                                        light_theme.set(id);
-                                                        apply();
-                                                    }
-                                                },
-                                            }
-                                        }
-
-                                        if show_dark {
-                                            ThemeSelector {
-                                                label: "暗色主题",
-                                                options: ThemeId::DARK_OPTIONS,
-                                                selected: dark_theme(),
-                                                colors,
-                                                on_select: {
-                                                    let apply = apply_settings.clone();
-                                                    move |id: ThemeId| {
-                                                        dark_theme.set(id);
-                                                        apply();
-                                                    }
-                                                },
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        SettingsTab::About => {
-                            let update_status = UPDATE_STATUS();
-                            let version = get_current_version();
-                            let checking = update_status.checking;
-                            let pending_version = update_status
-                                .pending_update
-                                .as_ref()
-                                .map(|info| info.version.clone());
-                            let channel_label = about_release_channel(&version);
-
-                            rsx! {
+                            },
+                            SettingsTab::Appearance => rsx! {
                                 div {
                                     display: "flex",
                                     flex_direction: "column",
                                     gap: "16px",
 
-                                    AboutHero {
-                                        version: version.clone(),
-                                        channel_label,
-                                        colors,
-                                    }
-
-                                    AboutStarCard { colors }
-
-                                    AboutSectionCard {
-                                        title: "项目资源",
-                                        description: "查看源码、版本发布与问题反馈入口。",
+                                    SettingsGroup {
+                                        label: "主题模式",
                                         colors,
 
-                                        AboutLinkRow {
-                                            title: "项目主页",
-                                            description: "查看源码、路线图和项目动态",
-                                            href: GITHUB_REPO_URL,
-                                            colors,
-                                            icon: rsx! {
-                                                IconGlobe { size: Some(18), color: Some(colors.accent.to_string()) }
-                                            },
-                                        }
+                                        div {
+                                            display: "flex",
+                                            flex_wrap: "wrap",
+                                            gap: "8px",
 
-                                        AboutLinkRow {
-                                            title: "版本发布",
-                                            description: "下载最新版本并查看发布说明",
-                                            href: GITHUB_RELEASES_URL,
-                                            colors,
-                                            icon: rsx! {
-                                                IconDownload { size: Some(18), color: Some(colors.accent.to_string()) }
-                                            },
-                                        }
-
-                                        AboutLinkRow {
-                                            title: "问题反馈",
-                                            description: "提交 Bug、建议或跟进已知问题",
-                                            href: GITHUB_ISSUES_URL,
-                                            colors,
-                                            icon: rsx! {
-                                                IconHelpCircle { size: Some(18), color: Some(colors.warning.to_string()) }
-                                            },
-                                        }
-                                    }
-
-                                    AboutUpdateCard {
-                                        colors,
-                                        auto_check_updates: auto_check_updates(),
-                                        checking,
-                                        pending_version,
-                                        on_set_auto_check: {
-                                            let apply = apply_settings.clone();
-                                            move |value| {
-                                                auto_check_updates.set(value);
-                                                apply();
+                                            for (mode, label) in [
+                                                (ThemeMode::System, "跟随系统"),
+                                                (ThemeMode::Dark, "暗色"),
+                                                (ThemeMode::Light, "亮色"),
+                                            ] {
+                                                ChoiceChip {
+                                                    label,
+                                                    selected: theme_mode() == mode,
+                                                    colors,
+                                                    on_click: {
+                                                        let apply = apply_settings.clone();
+                                                        move |_| {
+                                                            theme_mode.set(mode);
+                                                            apply();
+                                                        }
+                                                    },
+                                                }
                                             }
-                                        },
-                                        on_manual_check: move |_| trigger_manual_check(),
+                                        }
                                     }
 
+                                    {
+                                        let mode = theme_mode();
+                                        let show_light = matches!(mode, ThemeMode::System | ThemeMode::Light);
+                                        let show_dark = matches!(mode, ThemeMode::System | ThemeMode::Dark);
+
+                                        rsx! {
+                                            if show_light {
+                                                ThemeSelector {
+                                                    label: "亮色主题",
+                                                    options: ThemeId::LIGHT_OPTIONS,
+                                                    selected: light_theme(),
+                                                    colors,
+                                                    on_select: {
+                                                        let apply = apply_settings.clone();
+                                                        move |id: ThemeId| {
+                                                            light_theme.set(id);
+                                                            apply();
+                                                        }
+                                                    },
+                                                }
+                                            }
+
+                                            if show_dark {
+                                                ThemeSelector {
+                                                    label: "暗色主题",
+                                                    options: ThemeId::DARK_OPTIONS,
+                                                    selected: dark_theme(),
+                                                    colors,
+                                                    on_select: {
+                                                        let apply = apply_settings.clone();
+                                                        move |id: ThemeId| {
+                                                            dark_theme.set(id);
+                                                            apply();
+                                                        }
+                                                    },
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            SettingsTab::About => {
+                                let update_status = UPDATE_STATUS();
+                                let version = get_current_version();
+                                let checking = update_status.checking;
+                                let pending_version = update_status
+                                    .pending_update
+                                    .as_ref()
+                                    .map(|info| info.version.clone());
+                                let channel_label = about_release_channel(&version);
+
+                                rsx! {
                                     div {
                                         display: "flex",
                                         flex_direction: "column",
-                                        align_items: "center",
-                                        gap: "4px",
-                                        padding: "4px 0 2px 0",
-                                        text_align: "center",
+                                        gap: "16px",
 
-                                        div {
-                                            color: "{colors.text_subtle}",
-                                            font_size: "12px",
+                                        AboutHero {
+                                            version: version.clone(),
+                                            channel_label,
+                                            colors,
+                                        }
 
-                                            "MIT License | yelog"
+                                        AboutStarCard { colors }
+
+                                        AboutSectionCard {
+                                            title: "项目资源",
+                                            description: "查看源码、版本发布与问题反馈入口。",
+                                            colors,
+
+                                            AboutLinkRow {
+                                                title: "项目主页",
+                                                description: "查看源码、路线图和项目动态",
+                                                href: GITHUB_REPO_URL,
+                                                colors,
+                                                icon: rsx! {
+                                                    IconGlobe { size: Some(18), color: Some(colors.accent.to_string()) }
+                                                },
+                                            }
+
+                                            AboutLinkRow {
+                                                title: "版本发布",
+                                                description: "下载最新版本并查看发布说明",
+                                                href: GITHUB_RELEASES_URL,
+                                                colors,
+                                                icon: rsx! {
+                                                    IconDownload { size: Some(18), color: Some(colors.accent.to_string()) }
+                                                },
+                                            }
+
+                                            AboutLinkRow {
+                                                title: "问题反馈",
+                                                description: "提交 Bug、建议或跟进已知问题",
+                                                href: GITHUB_ISSUES_URL,
+                                                colors,
+                                                icon: rsx! {
+                                                    IconHelpCircle { size: Some(18), color: Some(colors.warning.to_string()) }
+                                                },
+                                            }
+                                        }
+
+                                        AboutUpdateCard {
+                                            colors,
+                                            auto_check_updates: auto_check_updates(),
+                                            checking,
+                                            pending_version,
+                                            on_set_auto_check: {
+                                                let apply = apply_settings.clone();
+                                                move |value| {
+                                                    auto_check_updates.set(value);
+                                                    apply();
+                                                }
+                                            },
+                                            on_manual_check: move |_| trigger_manual_check(),
                                         }
 
                                         div {
-                                            color: "{colors.text_subtle}",
-                                            font_size: "11px",
+                                            display: "flex",
+                                            flex_direction: "column",
+                                            align_items: "center",
+                                            gap: "4px",
+                                            padding: "4px 0 2px 0",
+                                            text_align: "center",
 
-                                            "Built with Rust, Dioxus, and Freya"
+                                            div {
+                                                color: "{colors.text_subtle}",
+                                                font_size: "12px",
+
+                                                "MIT License | yelog"
+                                            }
+
+                                            div {
+                                                color: "{colors.text_subtle}",
+                                                font_size: "11px",
+
+                                                "Built with Rust, Dioxus, and Freya"
+                                            }
                                         }
                                     }
                                 }
