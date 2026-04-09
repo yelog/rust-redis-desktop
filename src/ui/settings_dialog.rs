@@ -1,12 +1,13 @@
 use crate::autostart::AutostartManager;
 use crate::config::AppSettings;
 use crate::theme::{ThemeColors, ThemeId, ThemeMode, ThemePreference};
-use crate::ui::animated_dialog::AnimatedDialog;
+use crate::ui::animated_dialog::{AnimatedDialog, EXIT_ANIMATION_DURATION_MS};
 use crate::ui::icons::{IconCheck, IconGitHub, IconRefresh, IconStar, IconX};
 use crate::updater::{get_current_version, trigger_manual_check, UPDATE_STATUS};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use dioxus::prelude::*;
 use once_cell::sync::Lazy;
+use std::time::Duration;
 
 const GITHUB_REPO_URL: &str = "https://github.com/yelog/rust-redis-desktop";
 
@@ -52,7 +53,7 @@ pub fn SettingsDialog(
     let mut auto_check_updates = use_signal(|| settings.auto_check_updates);
     let launch_at_startup = use_signal(|| settings.launch_at_startup);
     let launch_at_startup_error = use_signal(|| None::<String>);
-    let close_button = on_close.clone();
+    let dialog_open = use_signal(|| true);
 
     let apply_settings = {
         let on_change = on_change.clone();
@@ -76,7 +77,7 @@ pub fn SettingsDialog(
 
     rsx! {
         AnimatedDialog {
-            is_open: true,
+            is_open: dialog_open(),
             on_close: on_close.clone(),
             colors,
             width: "560px".to_string(),
@@ -150,7 +151,23 @@ pub fn SettingsDialog(
                                 border_radius: "8px",
                                 cursor: "pointer",
                                 title: "关闭",
-                                onclick: move |_| close_button.call(()),
+                                onclick: {
+                                    let mut dialog_open = dialog_open.clone();
+                                    let on_close = on_close.clone();
+                                    move |_| {
+                                        if dialog_open() {
+                                            dialog_open.set(false);
+                                            let on_close = on_close.clone();
+                                            spawn(async move {
+                                                tokio::time::sleep(Duration::from_millis(
+                                                    EXIT_ANIMATION_DURATION_MS,
+                                                ))
+                                                .await;
+                                                on_close.call(());
+                                            });
+                                        }
+                                    }
+                                },
 
                                 IconX { size: Some(14), color: Some(colors.text_secondary.to_string()) }
                             }

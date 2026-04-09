@@ -3,7 +3,7 @@ use crate::ui::icons::IconX;
 use dioxus::prelude::*;
 use std::time::Duration;
 
-const EXIT_ANIMATION_DURATION_MS: u64 = 200;
+pub const EXIT_ANIMATION_DURATION_MS: u64 = 200;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum VisibilityState {
@@ -59,8 +59,6 @@ pub fn AnimatedDialog(
     let mut visibility = use_signal(VisibilityState::default);
     let backdrop_color = colors.overlay_backdrop;
     let dialog_id = use_signal(|| format!("dialog-{}", uuid::Uuid::new_v4()));
-
-    let should_show = is_open || *visibility.read() == VisibilityState::Exiting;
 
     {
         let current_visibility = *visibility.read();
@@ -122,11 +120,11 @@ pub fn AnimatedDialog(
         }
     });
 
-    if !should_show {
+    let state = *visibility.read();
+    if state == VisibilityState::Hidden {
         return rsx! {};
     }
 
-    let state = *visibility.read();
     let is_exiting = state == VisibilityState::Exiting;
     let animation_name = if is_exiting {
         "modalFadeOut"
