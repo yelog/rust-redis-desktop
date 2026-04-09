@@ -1,4 +1,6 @@
+use crate::config::ConfigStorage;
 use crate::error::AppError;
+use crate::i18n::I18n;
 use std::path::PathBuf;
 use tracing::error;
 
@@ -68,9 +70,14 @@ impl ErrorReporter {
     }
 
     fn show_error_dialog(message: &str) {
+        let settings = ConfigStorage::new()
+            .ok()
+            .and_then(|storage| storage.load_settings().ok())
+            .unwrap_or_default();
+        let i18n = I18n::new(settings.language_preference.resolve());
         let _ = rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
-            .set_title("Redis Desktop - Startup Error")
+            .set_title(&format!("Redis Desktop - {}", i18n.t("Startup Error")))
             .set_description(message)
             .set_buttons(rfd::MessageButtons::Ok)
             .show();

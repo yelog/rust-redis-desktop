@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::redis::KeyType;
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR,
@@ -62,13 +63,13 @@ fn key_type_tone(key_type: Option<&KeyType>) -> (&'static str, &'static str, &'s
     }
 }
 
-fn ttl_label(row: &KeyTableRow) -> String {
+fn ttl_label(row: &KeyTableRow, no_expiry_label: &str) -> String {
     if !row.has_details {
         "--".to_string()
     } else if let Some(ttl) = row.ttl {
         format!("{ttl}s")
     } else {
-        "无期限".to_string()
+        no_expiry_label.to_string()
     }
 }
 
@@ -82,6 +83,7 @@ pub fn KeyTable(
     on_copy_key: EventHandler<String>,
     on_request_delete: EventHandler<String>,
 ) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             width: "100%",
@@ -110,7 +112,7 @@ pub fn KeyTable(
                             text_transform: "uppercase",
                             letter_spacing: "0.14em",
 
-                            if selection_mode { "选" } else { "" }
+                            {if selection_mode { i18n.read().t("Select") } else { String::new() }}
                         }
 
                         th {
@@ -171,6 +173,7 @@ pub fn KeyTable(
                         {
                             let is_active = selected_key == row.key;
                             let (badge_bg, badge_fg, badge_border) = key_type_tone(row.key_type.as_ref());
+                            let ttl = ttl_label(&row, &i18n.read().t("No expiry"));
                             let row_key = row.key.clone();
                             let checkbox_key = row.key.clone();
                             let edit_key = row.key.clone();
@@ -256,7 +259,7 @@ pub fn KeyTable(
                                             font_size: "12px",
                                             font_family: "Consolas, 'Courier New', monospace",
 
-                                            "{ttl_label(&row)}"
+                                            "{ttl}"
                                         }
                                     }
 

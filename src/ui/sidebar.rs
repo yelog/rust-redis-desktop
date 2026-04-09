@@ -1,4 +1,5 @@
 use crate::connection::ConnectionState;
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::icons::*;
 use dioxus::prelude::*;
@@ -24,6 +25,7 @@ pub fn Sidebar(
     on_flush_connection: EventHandler<Uuid>,
     on_open_settings: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut context_menu = use_signal(|| None::<(Uuid, (i32, i32))>);
     let context_menu_exiting = use_signal(|| false);
     let mut hover_edit = use_signal(|| false);
@@ -61,9 +63,9 @@ pub fn Sidebar(
                     font_size: "12px",
 
                     if connections.is_empty() {
-                        "No connections"
+                        {i18n.read().t("No connections")}
                     } else {
-                        "{connections.len()} connection(s)"
+                        {format!("{} {}", connections.len(), i18n.read().t("connection(s)"))}
                     }
                 }
             }
@@ -78,7 +80,7 @@ pub fn Sidebar(
                 cursor: "pointer",
                 margin_bottom: "16px",
 
-                "+ New Connection"
+                {format!("+ {}", i18n.read().t("New connection"))}
             }
 
             div {
@@ -207,7 +209,7 @@ pub fn Sidebar(
                         gap: "4px",
 
                         IconSettings { size: Some(14) }
-                        " 设置"
+                        {format!(" {}", i18n.read().t("Settings"))}
                     }
                 }
             }
@@ -274,7 +276,7 @@ pub fn Sidebar(
                         },
 
                         IconRefresh { size: Some(14) }
-                        "Reconnect"
+                        {i18n.read().t("Reconnect")}
                     }
 
                     div {
@@ -308,7 +310,7 @@ pub fn Sidebar(
                         },
 
                         IconX { size: Some(14) }
-                        "Close"
+                        {i18n.read().t("Close")}
                     }
 
                     div {
@@ -342,7 +344,7 @@ pub fn Sidebar(
                         },
 
                         IconAlert { size: Some(14) }
-                        "FlushDB"
+                        {i18n.read().t("FlushDB")}
                     }
 
                     div {
@@ -382,7 +384,7 @@ pub fn Sidebar(
                         },
 
                         IconEdit { size: Some(14) }
-                        "Edit"
+                        {i18n.read().t("Edit")}
                     }
 
                     div {
@@ -416,7 +418,7 @@ pub fn Sidebar(
                         },
 
                         IconTrash { size: Some(14) }
-                        "Delete"
+                        {i18n.read().t("Delete")}
                     }
                 }
 

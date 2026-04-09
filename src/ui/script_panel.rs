@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::theme::{
     COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_ERROR, COLOR_PRIMARY,
     COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
@@ -51,13 +52,21 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
         saved
     });
     let mut script_name = use_signal(String::new);
+    let mut status_is_success = use_signal(|| true);
+    let i18n = use_i18n();
+    let execute_button_label = if is_executing() {
+        i18n.read().t("Executing...")
+    } else {
+        i18n.read().t("Execute Script")
+    };
 
     let execute_script = {
         let pool = connection_pool.clone();
         move |_| {
             let script = script_content();
             if script.is_empty() {
-                status_message.set(Some("请输入脚本内容".to_string()));
+                status_is_success.set(false);
+                status_message.set(Some(i18n.read().t("Enter script content")));
                 return;
             }
 
@@ -79,16 +88,24 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
             let mut result_output = result_output.clone();
             let mut status_message = status_message.clone();
             let mut is_executing = is_executing.clone();
+            let mut status_is_success = status_is_success.clone();
+            let i18n = i18n.clone();
 
             spawn(async move {
                 match pool.eval_script(&script, &keys, &args).await {
                     Ok(value) => {
                         result_output.set(format_redis_value(&value));
-                        status_message.set(Some("执行成功".to_string()));
+                        status_is_success.set(true);
+                        status_message.set(Some(i18n.read().t("Execution succeeded")));
                     }
                     Err(e) => {
                         result_output.set(String::new());
-                        status_message.set(Some(format!("执行失败: {}", e)));
+                        status_is_success.set(false);
+                        status_message.set(Some(format!(
+                            "{}: {}",
+                            i18n.read().t("Execution failed"),
+                            e
+                        )));
                     }
                 }
                 is_executing.set(false);
@@ -101,7 +118,8 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
         move |_| {
             let script = script_content();
             if script.is_empty() {
-                status_message.set(Some("请输入脚本内容".to_string()));
+                status_is_success.set(false);
+                status_message.set(Some(i18n.read().t("Enter script content")));
                 return;
             }
 
@@ -109,15 +127,19 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
             let script = script.clone();
             let mut result_output = result_output.clone();
             let mut status_message = status_message.clone();
+            let mut status_is_success = status_is_success.clone();
+            let i18n = i18n.clone();
 
             spawn(async move {
                 match pool.script_load(&script).await {
                     Ok(sha) => {
-                        result_output.set(format!("脚本已加载，SHA: {}", sha));
-                        status_message.set(Some("脚本加载成功".to_string()));
+                        result_output.set(format!("{}: {}", i18n.read().t("Script loaded, SHA"), sha));
+                        status_is_success.set(true);
+                        status_message.set(Some(i18n.read().t("Script loaded successfully")));
                     }
                     Err(e) => {
-                        status_message.set(Some(format!("加载失败: {}", e)));
+                        status_is_success.set(false);
+                        status_message.set(Some(format!("{}: {}", i18n.read().t("Load failed"), e)));
                     }
                 }
             });
@@ -129,14 +151,18 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
         move |_| {
             let pool = pool.clone();
             let mut status_message = status_message.clone();
+            let mut status_is_success = status_is_success.clone();
+            let i18n = i18n.clone();
 
             spawn(async move {
                 match pool.script_flush().await {
                     Ok(_) => {
-                        status_message.set(Some("脚本缓存已清空".to_string()));
+                        status_is_success.set(true);
+                        status_message.set(Some(i18n.read().t("Script cache cleared")));
                     }
                     Err(e) => {
-                        status_message.set(Some(format!("清空失败: {}", e)));
+                        status_is_success.set(false);
+                        status_message.set(Some(format!("{}: {}", i18n.read().t("Clear failed"), e)));
                     }
                 }
             });
@@ -148,7 +174,8 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
         let script = script_content();
 
         if name.is_empty() || script.is_empty() {
-            status_message.set(Some("请输入脚本名称和内容".to_string()));
+            status_is_success.set(false);
+            status_message.set(Some(i18n.read().t("Enter a script name and content")));
             return;
         }
 
@@ -160,7 +187,8 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
             },
         );
         script_name.set(String::new());
-        status_message.set(Some(format!("脚本 '{}' 已保存", name)));
+        status_is_success.set(true);
+        status_message.set(Some(format!("{} '{}'", i18n.read().t("Saved script"), name)));
     };
 
     let mut load_saved_script = move |name: String| {
@@ -197,7 +225,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "13px",
                         font_weight: "500",
-                        "Lua 脚本"
+                        {i18n.read().t("Lua Script")}
                     }
 
                     textarea {
@@ -228,7 +256,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "13px",
                         font_weight: "500",
-                        "已保存脚本"
+                        {i18n.read().t("Saved Scripts")}
                     }
 
                     div {
@@ -244,7 +272,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                                 font_size: "12px",
                                 text_align: "center",
                                 padding: "20px",
-                                "暂无保存的脚本"
+                                {i18n.read().t("No saved scripts")}
                             }
                         } else {
                             for (name, _) in saved_scripts.read().clone() {
@@ -278,7 +306,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                                             let name = name.clone();
                                             move |_| load_saved_script(name.clone())
                                         },
-                                        "加载"
+                                        {i18n.read().t("Load")}
                                     }
 
                                     button {
@@ -292,7 +320,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                                             let name = name.clone();
                                             move |_| delete_saved_script(name.clone())
                                         },
-                                        "删除"
+                                        {i18n.read().t("Delete")}
                                     }
                                 }
                             }
@@ -313,7 +341,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "11px",
                         margin_bottom: "4px",
-                        "KEYS (逗号分隔)"
+                        {i18n.read().t("KEYS (comma-separated)")}
                     }
 
                     input {
@@ -339,7 +367,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "11px",
                         margin_bottom: "4px",
-                        "ARGV (逗号分隔)"
+                        {i18n.read().t("ARGV (comma-separated)")}
                     }
 
                     input {
@@ -365,7 +393,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "11px",
                         margin_bottom: "4px",
-                        "脚本名称"
+                        {i18n.read().t("Script Name")}
                     }
 
                     input {
@@ -379,7 +407,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                         box_sizing: "border_box",
                         value: "{script_name}",
                         oninput: move |e| script_name.set(e.value()),
-                        placeholder: "保存脚本名称",
+                        placeholder: i18n.read().t("Saved script name"),
                     }
                 }
             }
@@ -398,7 +426,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                     font_size: "13px",
                     disabled: is_executing(),
                     onclick: execute_script,
-                    if is_executing() { "执行中..." } else { "执行脚本" }
+                    {execute_button_label}
                 }
 
                 button {
@@ -410,7 +438,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                     cursor: "pointer",
                     font_size: "13px",
                     onclick: load_script,
-                    "加载脚本 (SCRIPT LOAD)"
+                    {i18n.read().t("Load Script (SCRIPT LOAD)")}
                 }
 
                 button {
@@ -422,7 +450,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                     cursor: "pointer",
                     font_size: "13px",
                     onclick: save_script,
-                    "保存脚本"
+                    {i18n.read().t("Save Script")}
                 }
 
                 button {
@@ -434,14 +462,14 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                     cursor: "pointer",
                     font_size: "13px",
                     onclick: flush_scripts,
-                    "清空缓存 (SCRIPT FLUSH)"
+                    {i18n.read().t("Clear Cache (SCRIPT FLUSH)")}
                 }
             }
 
             if let Some(msg) = status_message() {
                 div {
                     padding: "8px 12px",
-                    background: if msg.contains("成功") { COLOR_SUCCESS } else { COLOR_ERROR },
+                    background: if status_is_success() { COLOR_SUCCESS } else { COLOR_ERROR },
                     border_radius: "4px",
                     color: "white",
                     font_size: "13px",
@@ -460,7 +488,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "13px",
                     font_weight: "500",
-                    "执行结果"
+                    {i18n.read().t("Execution Result")}
                 }
 
                 div {
@@ -478,7 +506,7 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                     if result_output().is_empty() {
                         span {
                             color: COLOR_TEXT_SUBTLE,
-                            "执行结果将显示在这里"
+                            {i18n.read().t("Execution results will appear here")}
                         }
                     } else {
                         "{result_output}"

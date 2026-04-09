@@ -12,6 +12,7 @@ use super::{
     BinaryFormat, HashDeleteTarget, LARGE_KEY_THRESHOLD, PAGE_SIZE, ROW_CREATE_BG, ROW_EDIT_BG,
 };
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::KeyInfo;
 use crate::serialization::SerializationFormat;
 use crate::theme::{
@@ -69,6 +70,7 @@ pub(super) fn HashPanel(
     deleting_hash_field_exiting: Signal<bool>,
     mut hash_action: Signal<Option<String>>,
 ) -> Element {
+    let i18n = use_i18n();
     let hash_val = hash_value();
     let active_hash_action = hash_action();
     let editing_field_name = editing_hash_field();
@@ -110,7 +112,7 @@ pub(super) fn HashPanel(
                         border_radius: "6px",
                         color: COLOR_TEXT,
                         value: "{search_value}",
-                        placeholder: "搜索 key 或 value",
+                        placeholder: i18n.read().t("Search key or value"),
                         oninput: {
                             let pool = connection_pool.clone();
                             let key = display_key.clone();
@@ -193,7 +195,7 @@ pub(super) fn HashPanel(
                                 }
                             },
 
-                            if hash_loading_more() { "搜索中..." } else { "服务端搜索" }
+                            {if hash_loading_more() { i18n.read().t("Searching...") } else { i18n.read().t("Search server") }}
                         }
                     }
 
@@ -211,7 +213,7 @@ pub(super) fn HashPanel(
                             hash_status_error.set(false);
                         },
 
-                        "+ 新增行"
+                        {i18n.read().t("+ Add row")}
                     }
 
                     div {
@@ -225,24 +227,24 @@ pub(super) fn HashPanel(
                     margin_left: "auto",
                     flex_shrink: "0",
                     style: "{secondary_action_button_style()}",
-                    title: "复制",
+                    title: i18n.read().t("Copy"),
                     onclick: {
                         let hash = hash_val.clone();
                         move |_| {
                             let json = serde_json::to_string_pretty(&hash).unwrap_or_default();
                             match copy_value_to_clipboard(&json) {
                                 Ok(_) => {
-                                    toast_manager.write().success("复制成功");
+                                    toast_manager.write().success(&i18n.read().t("Copied"));
                                 }
                                 Err(error) => {
-                                    toast_manager.write().error(&format!("复制失败：{error}"));
+                                    toast_manager.write().error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                 }
                             }
                         }
                     },
 
                     IconCopy { size: Some(14) }
-                    "复制"
+                    {i18n.read().t("Copy")}
                 }
             }
 
@@ -361,7 +363,7 @@ pub(super) fn HashPanel(
                                         border_radius: "6px",
                                         color: COLOR_TEXT,
                                         value: "{new_hash_key}",
-                                        placeholder: "输入 field key",
+                                        placeholder: i18n.read().t("Enter field key"),
                                         oninput: move |event| new_hash_key.set(event.value()),
                                     }
                                 }
@@ -381,7 +383,7 @@ pub(super) fn HashPanel(
                                         font_family: "Consolas, 'Courier New', monospace",
                                         resize: "vertical",
                                         value: "{new_hash_value}",
-                                        placeholder: "输入 field value",
+                                        placeholder: i18n.read().t("Enter field value"),
                                         oninput: move |event| new_hash_value.set(event.value()),
                                     }
                                 }
@@ -411,13 +413,13 @@ pub(super) fn HashPanel(
                                                     let value = new_hash_value();
                                                     spawn(async move {
                                                         if field.is_empty() {
-                                                            hash_status_message.set("新增失败：key 不能为空".to_string());
+                                                            hash_status_message.set(i18n.read().t("Create failed: key cannot be empty"));
                                                             hash_status_error.set(true);
                                                             return;
                                                         }
 
                                                         if existing_hash.contains_key(&field) {
-                                                            hash_status_message.set("新增失败：key 已存在".to_string());
+                                                            hash_status_message.set(i18n.read().t("Create failed: key already exists"));
                                                             hash_status_error.set(true);
                                                             return;
                                                         }
@@ -431,7 +433,7 @@ pub(super) fn HashPanel(
                                                                 creating_hash_row.set(false);
                                                                 new_hash_key.set(String::new());
                                                                 new_hash_value.set(String::new());
-                                                                hash_status_message.set("新增成功".to_string());
+                                                                hash_status_message.set(i18n.read().t("Created"));
                                                                 hash_status_error.set(false);
                                                                 if let Err(error) = data_loader::load_key_data(
                                                                     pool.clone(),
@@ -472,7 +474,7 @@ pub(super) fn HashPanel(
                                                             }
                                                             Err(error) => {
                                                                 tracing::error!("Failed to create hash field: {}", error);
-                                                                hash_status_message.set(format!("新增失败：{error}"));
+                                                                hash_status_message.set(format!("{}{}", i18n.read().t("Create failed: "), error));
                                                                 hash_status_error.set(true);
                                                             }
                                                         }
@@ -482,7 +484,7 @@ pub(super) fn HashPanel(
                                                 }
                                             },
 
-                                            if active_hash_action.as_deref() == Some("create") { "保存中..." } else { "保存" }
+                                            {if active_hash_action.as_deref() == Some("create") { i18n.read().t("Saving...") } else { i18n.read().t("Save") }}
                                         }
 
                                         button {
@@ -499,7 +501,7 @@ pub(super) fn HashPanel(
                                                 new_hash_value.set(String::new());
                                             },
 
-                                            "取消"
+                                            {i18n.read().t("Cancel")}
                                         }
                                     }
                                 }
@@ -583,13 +585,13 @@ pub(super) fn HashPanel(
                                                         let next_value = editing_hash_value();
                                                         spawn(async move {
                                                             if next_field.is_empty() {
-                                                                hash_status_message.set("保存失败：key 不能为空".to_string());
+                                                                hash_status_message.set(i18n.read().t("Save failed: key cannot be empty"));
                                                                 hash_status_error.set(true);
                                                                 return;
                                                             }
 
                                                             if next_field != original_field && existing_hash.contains_key(&next_field) {
-                                                                hash_status_message.set("保存失败：目标 key 已存在".to_string());
+                                                                hash_status_message.set(i18n.read().t("Save failed: target key already exists"));
                                                                 hash_status_error.set(true);
                                                                 return;
                                                             }
@@ -612,7 +614,7 @@ pub(super) fn HashPanel(
                                                                     editing_hash_field.set(None);
                                                                     editing_hash_key.set(String::new());
                                                                     editing_hash_value.set(String::new());
-                                                                    hash_status_message.set("保存成功".to_string());
+                                                                    hash_status_message.set(i18n.read().t("Saved"));
                                                                     hash_status_error.set(false);
                                                                     if let Err(error) = data_loader::load_key_data(
                                                                         pool.clone(),
@@ -653,7 +655,7 @@ pub(super) fn HashPanel(
                                                                 }
                                                                 Err(error) => {
                                                                     tracing::error!("Failed to save hash field: {}", error);
-                                                                    hash_status_message.set(format!("保存失败：{error}"));
+                                                                    hash_status_message.set(format!("{}{}", i18n.read().t("Save failed: "), error));
                                                                     hash_status_error.set(true);
                                                                 }
                                                             }
@@ -663,7 +665,7 @@ pub(super) fn HashPanel(
                                                     }
                                                 },
 
-                                                if active_hash_action.as_deref() == Some(format!("save:{field}").as_str()) { "保存中..." } else { "保存" }
+                                                {if active_hash_action.as_deref() == Some(format!("save:{field}").as_str()) { i18n.read().t("Saving...") } else { i18n.read().t("Save") }}
                                             }
 
                                             button {
@@ -680,7 +682,7 @@ pub(super) fn HashPanel(
                                                     editing_hash_value.set(String::new());
                                                 },
 
-                                                "取消"
+                                                {i18n.read().t("Cancel")}
                                             }
                                         }
                                     }
@@ -741,18 +743,18 @@ pub(super) fn HashPanel(
                                             button {
                                                 style: "{compact_icon_action_button_style(false, active_hash_action.is_some())}",
                                                 disabled: active_hash_action.is_some(),
-                                                title: "复制值",
-                                                aria_label: "复制值",
+                                                title: i18n.read().t("Copy value"),
+                                                aria_label: i18n.read().t("Copy value"),
                                                 onclick: {
                                                     let value = value.clone();
                                                     move |_| {
                                                         match copy_value_to_clipboard(&value) {
                                                             Ok(_) => {
-                                                                toast_manager.write().success("复制成功");
+                                                                toast_manager.write().success(&i18n.read().t("Copied"));
                                                             }
                                                             Err(error) => {
                                                                 tracing::error!("Failed to copy hash value: {}", error);
-                                                                toast_manager.write().error(&format!("复制失败：{error}"));
+                                                                toast_manager.write().error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                                             }
                                                         }
                                                     }
@@ -764,8 +766,8 @@ pub(super) fn HashPanel(
                                             button {
                                                 style: "{compact_icon_action_button_style(false, active_hash_action.is_some())}",
                                                 disabled: active_hash_action.is_some(),
-                                                title: "编辑 key-value",
-                                                aria_label: "编辑 key-value",
+                                                title: i18n.read().t("Edit key-value"),
+                                                aria_label: i18n.read().t("Edit key-value"),
                                                 onclick: {
                                                     let field = field.clone();
                                                     let value = value.clone();
@@ -794,8 +796,8 @@ pub(super) fn HashPanel(
                                                             .set(Some(HashDeleteTarget { field: field.clone() }));
                                                     }
                                                 },
-                                                title: "删除",
-                                                aria_label: "删除",
+                                                title: i18n.read().t("Delete"),
+                                                aria_label: i18n.read().t("Delete"),
 
                                                 IconTrash { size: Some(15) }
                                             }
@@ -814,9 +816,9 @@ pub(super) fn HashPanel(
                                     text_align: "center",
 
                                     if normalized_search.is_empty() {
-                                        "当前 hash 没有字段"
+                                        {i18n.read().t("This hash has no fields")}
                                     } else {
-                                        "没有匹配的字段"
+                                        {i18n.read().t("No matching fields")}
                                     }
                                 }
                             }
@@ -839,13 +841,13 @@ pub(super) fn HashPanel(
                         h3 {
                             style: "{overlay_modal_title_style()}",
 
-                            "确认删除"
+                            {i18n.read().t("Confirm delete")}
                         }
 
                         p {
                             style: "{overlay_modal_body_style()}",
 
-                            "确定删除 hash field '{target.field}' 吗？"
+                            {format!("{} '{:?}'?", i18n.read().t("Delete hash field"), target.field)}
                         }
 
                         div {
@@ -869,7 +871,7 @@ pub(super) fn HashPanel(
                                     }
                                 },
 
-                                "取消"
+                                {i18n.read().t("Cancel")}
                             }
 
                             button {
@@ -902,7 +904,7 @@ pub(super) fn HashPanel(
                                                         editing_hash_key.set(String::new());
                                                         editing_hash_value.set(String::new());
                                                     }
-                                                    hash_status_message.set("删除成功".to_string());
+                                                    hash_status_message.set(i18n.read().t("Deleted"));
                                                     hash_status_error.set(false);
                                                     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                                                     dhf.set(None);
@@ -946,7 +948,7 @@ pub(super) fn HashPanel(
                                                 }
                                                 Err(error) => {
                                                     tracing::error!("Failed to delete hash field: {}", error);
-                                                    hash_status_message.set(format!("删除失败：{error}"));
+                                                    hash_status_message.set(format!("{}{}", i18n.read().t("Delete failed: "), error));
                                                     hash_status_error.set(true);
                                                 }
                                             }
@@ -959,9 +961,9 @@ pub(super) fn HashPanel(
                                 if active_hash_action.as_deref()
                                     == Some(format!("delete:{}", target.field).as_str())
                                 {
-                                    "删除中..."
+                                    {i18n.read().t("Deleting...")}
                                 } else {
-                                    "确认删除"
+                                    {i18n.read().t("Confirm delete")}
                                 }
                             }
                         }
@@ -976,7 +978,7 @@ pub(super) fn HashPanel(
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "13px",
 
-                    "加载中..."
+                    {i18n.read().t("Loading...")}
                 }
             }
 
@@ -987,7 +989,7 @@ pub(super) fn HashPanel(
                     color: COLOR_TEXT_SUBTLE,
                     font_size: "12px",
 
-                    "向下滚动加载更多..."
+                    {i18n.read().t("Scroll down to load more...")}
                 }
             }
         }

@@ -1,5 +1,6 @@
 use crate::config::{ConfigStorage, HistoryEntry};
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::{find_command, find_commands, RedisCommand};
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_CONTROL_BG,
@@ -67,6 +68,7 @@ fn CommandSuggestion(cmd: &'static RedisCommand, on_select: EventHandler<String>
 
 #[component]
 fn CommandHelp(cmd: &'static RedisCommand, on_close: EventHandler<()>) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             padding: "12px",
@@ -113,7 +115,7 @@ fn CommandHelp(cmd: &'static RedisCommand, on_close: EventHandler<()>) -> Elemen
 
                     onclick: move |_| on_close.call(()),
 
-                    "关闭"
+                    {i18n.read().t("Close")}
                 }
             }
 
@@ -152,6 +154,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
     let mut show_help = use_signal(|| None::<String>);
     let mut selected_suggestion_index = use_signal(|| 0usize);
     let config_storage = use_signal(|| ConfigStorage::new().ok());
+    let i18n = use_i18n();
 
     let suggestions = {
         let input = input.clone();
@@ -242,6 +245,11 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
     };
 
     let current_suggestions = suggestions();
+    let submit_button_label = if executing() {
+        "...".to_string()
+    } else {
+        i18n.read().t("Run")
+    };
 
     rsx! {
         div {
@@ -259,7 +267,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "12px",
 
-                    "输入命令后按 TAB 查看补全建议，输入 HELP <command> 查看命令帮助"
+                    {i18n.read().t("Press TAB after typing a command to view suggestions, or enter HELP <command> to view command help")}
                 }
             }
 
@@ -444,7 +452,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                         disabled: executing(),
                         onclick: move |_| execute_command(),
 
-                        if executing() { "..." } else { "Run" }
+                        {submit_button_label}
                     }
                 }
             }

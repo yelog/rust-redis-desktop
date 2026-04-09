@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::connection::ConnectionPool;
 use crate::theme::{
     COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_SUCCESS,
@@ -7,6 +8,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) -> Element {
+    let i18n = use_i18n();
     let mut import_data = use_signal(String::new);
     let mut status_message = use_signal(|| None::<String>);
     let mut is_importing = use_signal(|| false);
@@ -17,7 +19,7 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
         move |_| {
             let data = import_data();
             if data.is_empty() {
-                status_message.set(Some("请输入要导入的数据".to_string()));
+                status_message.set(Some(i18n.read().t("Please enter data to import")));
                 return;
             }
 
@@ -34,11 +36,11 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
                 match pool.import_json_data(&data).await {
                     Ok(count) => {
                         imported_count.set(count);
-                        status_message.set(Some(format!("成功导入 {} 个键", count)));
+                        status_message.set(Some(format!("{} {}", i18n.read().t("Imported keys:"), count)));
                         import_data.set(String::new());
                     }
                     Err(e) => {
-                        status_message.set(Some(format!("导入失败: {}", e)));
+                        status_message.set(Some(format!("{}{}", i18n.read().t("Import failed: "), e)));
                     }
                 }
                 is_importing.set(false);
@@ -119,7 +121,7 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
                     margin: "0",
                     color: COLOR_TEXT,
                     font_size: "16px",
-                    "导入数据"
+                    {i18n.read().t("Import data")}
                 }
 
                 button {
@@ -147,7 +149,7 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "13px",
                         margin_bottom: "8px",
-                        "JSON 数据格式"
+                        {i18n.read().t("JSON format")}
                     }
 
                     textarea {
@@ -164,7 +166,7 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
                         resize: "vertical",
                         value: "{import_data}",
                         oninput: move |e| import_data.set(e.value()),
-                        placeholder: "粘贴 JSON 数据...",
+                        placeholder: i18n.read().t("Paste JSON data..."),
                     }
                 }
 
@@ -180,7 +182,7 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
                         cursor: "pointer",
                         font_size: "12px",
                         onclick: load_sample,
-                        "加载示例数据"
+                        {i18n.read().t("Load sample data")}
                     }
                 }
 
@@ -212,7 +214,7 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
                     cursor: "pointer",
                     font_size: "13px",
                     onclick: move |_| on_close.call(()),
-                    "取消"
+                    {i18n.read().t("Cancel")}
                 }
 
                 button {
@@ -225,7 +227,7 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
                     font_size: "13px",
                     disabled: is_importing(),
                     onclick: do_import,
-                    if is_importing() { "导入中..." } else { "导入" }
+                    {if is_importing() { i18n.read().t("Importing...") } else { i18n.read().t("Import") }}
                 }
             }
         }

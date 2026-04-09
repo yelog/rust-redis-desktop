@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT,
     COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SOFT, COLOR_TEXT_SUBTLE, COLOR_WARNING,
@@ -119,6 +120,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
     let mut refresh_trigger = use_signal(|| 0u32);
     let mut killing_client = use_signal(|| None::<String>);
     let mut status_message = use_signal(String::new);
+    let i18n = use_i18n();
 
     use_effect({
         let pool = connection_pool.clone();
@@ -164,7 +166,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                     font_size: "18px",
                     margin: "0",
 
-                    "👥 客户端连接 ({client_list.len()})"
+                    {format!("👥 {} ({})", i18n.read().t("Client Connections"), client_list.len())}
                 }
 
                 button {
@@ -177,7 +179,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                     font_size: "12px",
                     onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
 
-                    "🔄 刷新"
+                    {format!("🔄 {}", i18n.read().t("Refresh"))}
                 }
             }
 
@@ -203,7 +205,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                         text_align: "center",
                         padding: "40px",
 
-                        "加载中..."
+                        {i18n.read().t("Loading...")}
                     }
                 } else if client_list.is_empty() {
                     div {
@@ -211,7 +213,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                         text_align: "center",
                         padding: "40px",
 
-                        "暂无客户端连接"
+                        {i18n.read().t("No client connections")}
                     }
                 } else {
                     div {
@@ -247,7 +249,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "地址"
+                                        {i18n.read().t("Address")}
                                     }
 
                                     th {
@@ -257,7 +259,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "名称"
+                                        {i18n.read().t("Name")}
                                     }
 
                                     th {
@@ -277,7 +279,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "连接时间"
+                                        {i18n.read().t("Connection Time")}
                                     }
 
                                     th {
@@ -287,7 +289,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "空闲"
+                                        {i18n.read().t("Idle")}
                                     }
 
                                     th {
@@ -297,7 +299,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "命令"
+                                        {i18n.read().t("Command")}
                                     }
 
                                     th {
@@ -308,7 +310,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "操作"
+                                        {i18n.read().t("Actions")}
                                     }
                                 }
                             }
@@ -400,10 +402,18 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                                                             killing_client.set(Some(addr.clone()));
                                                             match kill_client(&pool, &addr).await {
                                                                 Ok(_) => {
-                                                                    status_message.set(format!("已断开客户端 {}", addr));
+                                                                    status_message.set(format!(
+                                                                        "{} {}",
+                                                                        i18n.read().t("Disconnected client"),
+                                                                        addr
+                                                                    ));
                                                                 }
                                                                 Err(e) => {
-                                                                    status_message.set(format!("断开失败: {}", e));
+                                                                    status_message.set(format!(
+                                                                        "{}: {}",
+                                                                        i18n.read().t("Failed to disconnect client"),
+                                                                        e
+                                                                    ));
                                                                 }
                                                             }
                                                             killing_client.set(None);
@@ -414,7 +424,7 @@ pub fn ClientsPanel(connection_pool: ConnectionPool) -> Element {
                                                 if killing_client() == Some(client.addr.clone()) {
                                                     "..."
                                                 } else {
-                                                    "断开"
+                                                    {i18n.read().t("Disconnect")}
                                                 }
                                             }
                                         }

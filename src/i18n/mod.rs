@@ -1,14 +1,16 @@
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 mod en;
+mod phrases;
 mod zh_cn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Language {
     #[default]
-    ZhCN,
     En,
+    ZhCN,
 }
 
 impl Language {
@@ -27,10 +29,14 @@ impl Language {
     }
 
     pub fn from_code(code: &str) -> Option<Self> {
-        match code.to_lowercase().as_str() {
-            "zh-cn" | "zh_cn" | "zh" => Some(Language::ZhCN),
-            "en" | "en-us" | "en_us" => Some(Language::En),
-            _ => None,
+        let normalized = code.trim().to_lowercase().replace('_', "-");
+
+        if normalized.starts_with("zh") {
+            Some(Language::ZhCN)
+        } else if normalized.starts_with("en") {
+            Some(Language::En)
+        } else {
+            None
         }
     }
 
@@ -39,25 +45,64 @@ impl Language {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum LanguagePreference {
+    #[default]
+    System,
+    ZhCN,
+    En,
+}
+
+impl LanguagePreference {
+    pub fn resolve(self) -> Language {
+        match self {
+            LanguagePreference::System => get_system_language(),
+            LanguagePreference::ZhCN => Language::ZhCN,
+            LanguagePreference::En => Language::En,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            LanguagePreference::System => "Follow System",
+            LanguagePreference::ZhCN => "简体中文",
+            LanguagePreference::En => "English",
+        }
+    }
+
+    pub fn all() -> [LanguagePreference; 3] {
+        [
+            LanguagePreference::System,
+            LanguagePreference::ZhCN,
+            LanguagePreference::En,
+        ]
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct I18n {
     pub lang: Language,
     strings: HashMap<String, String>,
+    fallback_strings: HashMap<String, String>,
 }
 
 impl I18n {
     pub fn new(lang: Language) -> Self {
-        let strings = match lang {
-            Language::ZhCN => zh_cn::load(),
-            Language::En => en::load(),
-        };
-        Self { lang, strings }
+        let fallback_strings = en::load();
+        let strings = load_strings(lang);
+        Self {
+            lang,
+            strings,
+            fallback_strings,
+        }
     }
 
     pub fn t(&self, key: &str) -> String {
         self.strings
             .get(key)
             .cloned()
+            .or_else(|| self.fallback_strings.get(key).cloned())
             .unwrap_or_else(|| key.to_string())
     }
 
@@ -72,17 +117,25 @@ impl I18n {
 
     pub fn switch(&mut self, lang: Language) {
         self.lang = lang;
-        self.strings = match lang {
-            Language::ZhCN => zh_cn::load(),
-            Language::En => en::load(),
-        };
+        self.strings = load_strings(lang);
     }
 }
 
 impl Default for I18n {
     fn default() -> Self {
-        Self::new(Language::default())
+        Self::new(get_system_language())
     }
+}
+
+fn load_strings(lang: Language) -> HashMap<String, String> {
+    match lang {
+        Language::ZhCN => zh_cn::load(),
+        Language::En => en::load(),
+    }
+}
+
+pub fn use_i18n() -> Signal<I18n> {
+    use_context::<Signal<I18n>>()
 }
 
 #[macro_export]
@@ -100,17 +153,14 @@ macro_rules! t {
 }
 
 pub fn get_system_language() -> Language {
-    std::env::var("LANG")
-        .ok()
-        .and_then(|lang| {
-            let lang_lower = lang.to_lowercase();
-            if lang_lower.starts_with("zh") {
-                Some(Language::ZhCN)
-            } else if lang_lower.starts_with("en") {
-                Some(Language::En)
-            } else {
-                None
-            }
+    sys_locale::get_locale()
+        .as_deref()
+        .and_then(Language::from_code)
+        .or_else(|| {
+            std::env::var("LANG")
+                .ok()
+                .as_deref()
+                .and_then(Language::from_code)
         })
-        .unwrap_or_default()
+        .unwrap_or(Language::En)
 }

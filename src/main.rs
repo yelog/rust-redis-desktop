@@ -28,6 +28,7 @@ use dioxus::desktop::{
 };
 use error::{AppError, Result, StartupError};
 use error_reporting::ErrorReporter;
+use i18n::I18n;
 use theme::preferred_window_theme;
 use tray::{create_shared_state, init_tray};
 use ui::App;
@@ -57,15 +58,25 @@ fn load_window_icon() -> Option<Icon> {
     Icon::from_rgba(rgba.into_raw(), width, height).ok()
 }
 
-fn create_menu() -> std::result::Result<Menu, Box<dyn std::error::Error + Send + Sync>> {
+fn create_menu(i18n: &I18n) -> std::result::Result<Menu, Box<dyn std::error::Error + Send + Sync>> {
     let menu = Menu::new();
 
-    let app_menu = Submenu::new("Redis Desktop", true);
+    let app_menu = Submenu::new(&i18n.t("Redis Desktop"), true);
     let settings_accelerator = Accelerator::try_from("CmdOrCtrl+Comma").ok();
     let update_accelerator = Accelerator::try_from("CmdOrCtrl+U").ok();
     app_menu.append_items(&[
-        &MenuItem::with_id("check_updates", "检查更新...", true, update_accelerator),
-        &MenuItem::with_id("preferences", "Settings...", true, settings_accelerator),
+        &MenuItem::with_id(
+            "check_updates",
+            &i18n.t("Check for updates..."),
+            true,
+            update_accelerator,
+        ),
+        &MenuItem::with_id(
+            "preferences",
+            &i18n.t("Settings..."),
+            true,
+            settings_accelerator,
+        ),
         &PredefinedMenuItem::separator(),
         &PredefinedMenuItem::hide(None),
         &PredefinedMenuItem::hide_others(None),
@@ -74,7 +85,7 @@ fn create_menu() -> std::result::Result<Menu, Box<dyn std::error::Error + Send +
         &PredefinedMenuItem::quit(None),
     ])?;
 
-    let edit_menu = Submenu::new("Edit", true);
+    let edit_menu = Submenu::new(&i18n.t("Edit"), true);
     edit_menu.append_items(&[
         &PredefinedMenuItem::undo(None),
         &PredefinedMenuItem::redo(None),
@@ -86,7 +97,7 @@ fn create_menu() -> std::result::Result<Menu, Box<dyn std::error::Error + Send +
         &PredefinedMenuItem::select_all(None),
     ])?;
 
-    let window_menu = Submenu::new("Window", true);
+    let window_menu = Submenu::new(&i18n.t("Window"), true);
     window_menu.append_items(&[
         &PredefinedMenuItem::minimize(None),
         &PredefinedMenuItem::maximize(None),
@@ -116,6 +127,12 @@ fn main() {
 }
 
 fn run_app() -> Result<()> {
+    let settings = ConfigStorage::new()
+        .ok()
+        .and_then(|s| s.load_settings().ok())
+        .unwrap_or_default();
+    let i18n = I18n::new(settings.language_preference.resolve());
+
     if let Ok(mut manager) = UpdateManager::new() {
         if manager.should_auto_check() {
             match tokio::runtime::Runtime::new() {
@@ -136,17 +153,12 @@ fn run_app() -> Result<()> {
         }
     }
 
-    let menu =
-        create_menu().map_err(|e| AppError::Startup(StartupError::MenuCreation { source: e }))?;
-
-    let settings = ConfigStorage::new()
-        .ok()
-        .and_then(|s| s.load_settings().ok())
-        .unwrap_or_default();
+    let menu = create_menu(&i18n)
+        .map_err(|e| AppError::Startup(StartupError::MenuCreation { source: e }))?;
 
     let window_builder = configure_window_builder(
         WindowBuilder::new()
-            .with_title("Redis Desktop")
+            .with_title(&i18n.t("Redis Desktop"))
             .with_inner_size(LogicalSize::new(1200, 800))
             .with_window_icon(load_window_icon())
             .with_theme(preferred_window_theme(settings.theme_preference))

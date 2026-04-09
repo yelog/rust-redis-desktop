@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::theme::{
     COLOR_BG, COLOR_BORDER, COLOR_BUTTON_SECONDARY, COLOR_BUTTON_SECONDARY_BORDER, COLOR_ERROR,
     COLOR_ERROR_BG, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST,
@@ -18,14 +19,14 @@ pub fn is_json_content(content: &str) -> bool {
 
 pub fn format_json(content: &str) -> Result<String, String> {
     let value: Value =
-        serde_json::from_str(content).map_err(|e| format!("JSON 解析错误: {}", e))?;
-    serde_json::to_string_pretty(&value).map_err(|e| format!("JSON 格式化错误: {}", e))
+        serde_json::from_str(content).map_err(|e| format!("JSON parse error: {}", e))?;
+    serde_json::to_string_pretty(&value).map_err(|e| format!("JSON formatting error: {}", e))
 }
 
 pub fn minify_json(content: &str) -> Result<String, String> {
     let value: Value =
-        serde_json::from_str(content).map_err(|e| format!("JSON 解析错误: {}", e))?;
-    serde_json::to_string(&value).map_err(|e| format!("JSON 压缩错误: {}", e))
+        serde_json::from_str(content).map_err(|e| format!("JSON parse error: {}", e))?;
+    serde_json::to_string(&value).map_err(|e| format!("JSON minify error: {}", e))
 }
 
 fn highlight_json_value(value: &Value, indent: usize) -> Vec<HighlightSegment> {
@@ -170,6 +171,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
     let mut view_mode = use_signal(ViewMode::default);
     let mut parse_error = use_signal(|| None::<String>);
     let mut toast_manager = use_context::<Signal<ToastManager>>();
+    let i18n = use_i18n();
 
     let display_value = value.clone();
     let formatted = format_json(&display_value).unwrap_or_else(|e| {
@@ -188,11 +190,18 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
 
     let copy_to_clipboard = {
         let val = formatted.clone();
+        let i18n = i18n.clone();
         move |_| {
             if let Err(e) = copy_value_to_clipboard(&val) {
-                toast_manager.write().error(&format!("复制失败：{}", e));
+                toast_manager.write().error(&format!(
+                    "{}: {}",
+                    i18n.read().t("Copy failed"),
+                    i18n.read().t(&e)
+                ));
             } else {
-                toast_manager.write().success("已复制到剪贴板");
+                toast_manager
+                    .write()
+                    .success(&i18n.read().t("Copied to clipboard"));
             }
         }
     };
@@ -244,7 +253,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                         font_weight: "500",
                         onclick: move |_| view_mode.set(ViewMode::Pretty),
 
-                        "格式化"
+                        {i18n.read().t("Pretty")}
                     }
 
                     button {
@@ -263,7 +272,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                         font_weight: "500",
                         onclick: move |_| view_mode.set(ViewMode::Raw),
 
-                        "压缩"
+                        {i18n.read().t("Minify")}
                     }
 
                     if editable && !editing {
@@ -283,7 +292,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                                 parse_error.set(None);
                             },
 
-                            "编辑"
+                            {i18n.read().t("Edit")}
                         }
                     }
                 }
@@ -306,7 +315,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                     onclick: copy_to_clipboard,
 
                     IconCopy { size: Some(14) }
-                    "复制"
+                    {i18n.read().t("Copy")}
                 }
             }
 
@@ -370,11 +379,12 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                                             Err(e) => parse_error.set(Some(e)),
                                         }
                                     }
-                                    Err(e) => parse_error.set(Some(format!("JSON 无效: {}", e))),
+                                    Err(e) => parse_error
+                                        .set(Some(format!("{}: {}", i18n.read().t("Invalid JSON"), e))),
                                 }
                             },
 
-                            "保存"
+                            {i18n.read().t("Save")}
                         }
 
                         button {
@@ -389,7 +399,7 @@ pub fn JsonViewer(value: String, on_change: EventHandler<String>, editable: bool
                                 parse_error.set(None);
                             },
 
-                            "取消"
+                            {i18n.read().t("Cancel")}
                         }
                     }
                 }

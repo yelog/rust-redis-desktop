@@ -29,6 +29,7 @@ use self::styles::{
 };
 use self::zset_panel::ZSetPanel;
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::{KeyInfo, KeyType};
 use crate::serialization::{parse_to_json, SerializationFormat};
 use crate::theme::{
@@ -79,6 +80,7 @@ pub fn ValueViewer(
     selected_key: Signal<String>,
     on_refresh: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let key_info = use_signal(|| None::<KeyInfo>);
     let mut string_value = use_signal(String::new);
     let hash_value = use_signal(HashMap::new);
@@ -411,16 +413,16 @@ pub fn ValueViewer(
                                                             align_items: "center",
                                                             justify_content: "center",
                                                             color: COLOR_TEXT_SECONDARY,
-                                                            title: "复制路径",
-                                                            aria_label: "复制路径",
+                                                            title: i18n.read().t("Copy path"),
+                                                            aria_label: i18n.read().t("Copy path"),
                                                             onclick: {
                                                                 let key = display_key.clone();
                                                                 move |_| match copy_value_to_clipboard(&key) {
                                                                     Ok(_) => {
-                                                                        toast_manager.write().success("Key 路径已复制");
+                                                                        toast_manager.write().success(&i18n.read().t("Key path copied"));
                                                                     }
                                                                     Err(error) => {
-                                                                        toast_manager.write().error(&format!("复制失败：{error}"));
+                                                                        toast_manager.write().error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                                                     }
                                                                 }
                                                             },
@@ -439,8 +441,8 @@ pub fn ValueViewer(
                                                             align_items: "center",
                                                             justify_content: "center",
                                                             color: COLOR_TEXT_SECONDARY,
-                                                            title: "更多操作",
-                                                            aria_label: "更多操作",
+                                                            title: i18n.read().t("More actions"),
+                                                            aria_label: i18n.read().t("More actions"),
                                                             onclick: move |event| {
                                                                 let coords = event.client_coordinates();
                                                                 header_menu.set(Some(ContextMenuState::new(
@@ -503,7 +505,7 @@ pub fn ValueViewer(
                                                         display: "inline-flex",
                                                         align_items: "center",
 
-                                                        "内存 {memory_badge}"
+                                                        {format!("{} {}", i18n.read().t("Memory"), memory_badge)}
                                                     }
 
                                                     if ttl_editing() {
@@ -527,7 +529,7 @@ pub fn ValueViewer(
                                                                 text_align: "center",
                                                                 r#type: "text",
                                                                 value: "{ttl_input}",
-                                                                placeholder: "秒",
+                                                                placeholder: i18n.read().t("Seconds"),
                                                                 oninput: move |event| ttl_input.set(event.value()),
                                                             }
 
@@ -541,21 +543,21 @@ pub fn ValueViewer(
                                                                 cursor: "pointer",
                                                                 font_size: "11px",
                                                                 disabled: ttl_processing(),
-                                                                title: "应用 TTL",
+                                                                title: i18n.read().t("Apply TTL"),
                                                                 onclick: {
                                                                     let pool = connection_pool.clone();
                                                                     let key = display_key.clone();
                                                                     move |_| {
                                                                         let ttl_text = ttl_input().trim().to_string();
                                                                         if ttl_text.is_empty() {
-                                                                            toast_manager.write().error("请输入 TTL");
+                                                                            toast_manager.write().error(&i18n.read().t("Please enter a TTL"));
                                                                             return;
                                                                         }
 
                                                                         let ttl = match ttl_text.parse::<i64>() {
                                                                             Ok(ttl) if ttl > 0 || ttl == -1 => ttl,
                                                                             _ => {
-                                                                                toast_manager.write().error("TTL 必须大于 0 或 -1 表示永久");
+                                                                                toast_manager.write().error(&i18n.read().t("TTL must be greater than 0 or -1 for permanent"));
                                                                                 return;
                                                                             }
                                                                         };
@@ -568,7 +570,7 @@ pub fn ValueViewer(
                                                                             if ttl == -1 {
                                                                                 match pool.remove_ttl(&key).await {
                                                                                     Ok(_) => {
-                                                                                        toast_manager.write().success("已设为永久");
+                                                                                        toast_manager.write().success(&i18n.read().t("Permanently persisted"));
                                                                                         ttl_editing.set(false);
                     if let Err(error) = data_loader::load_key_data(
                                                                                             pool.clone(),
@@ -604,13 +606,13 @@ pub fn ValueViewer(
                                                                                         }
                                                                                     }
                                                                                     Err(error) => {
-                                                                                        toast_manager.write().error(&format!("设置失败：{error}"));
+                                                                                        toast_manager.write().error(&format!("{}{}", i18n.read().t("Set failed: "), error));
                                                                                     }
                                                                                 }
                                                                             } else {
                                                                                 match pool.set_ttl(&key, ttl).await {
                                                                                     Ok(_) => {
-                                                                                        toast_manager.write().success("TTL 已更新");
+                                                                                        toast_manager.write().success(&i18n.read().t("TTL updated"));
                                                                                         ttl_editing.set(false);
                     if let Err(error) = data_loader::load_key_data(
                                                                                             pool.clone(),
@@ -646,7 +648,7 @@ pub fn ValueViewer(
                                                                                         }
                                                                                     }
                                                                                     Err(error) => {
-                                                                                        toast_manager.write().error(&format!("TTL 更新失败：{error}"));
+                                                                                        toast_manager.write().error(&format!("{}{}", i18n.read().t("TTL update failed: "), error));
                                                                                     }
                                                                                 }
                                                                             }
@@ -668,7 +670,7 @@ pub fn ValueViewer(
                                                                 border_radius: "6px",
                                                                 cursor: "pointer",
                                                                 font_size: "11px",
-                                                                title: "取消 TTL 编辑",
+                                                                title: i18n.read().t("Cancel TTL edit"),
                                                                 onclick: {
                                                                     let ttl_reset_value = ttl_reset_value.clone();
                                                                     move |_| {
@@ -706,7 +708,7 @@ pub fn ValueViewer(
                                         color: COLOR_TEXT_SECONDARY,
                                         font_size: "13px",
 
-                                        "选择一个 Key 以查看和编辑详情"
+                                        {i18n.read().t("Select a key to view and edit details")}
                                     }
                                 }
                             }
@@ -732,7 +734,7 @@ pub fn ValueViewer(
                                     border_radius: "12px",
                                     background: COLOR_BG_SECONDARY,
 
-                                    "正在加载 Key 内容..."
+                                    {i18n.read().t("Loading key content...")}
                                 }
                             } else if display_key.is_empty() {
                                 ServerInfoPanel {
@@ -799,16 +801,16 @@ pub fn ValueViewer(
                                                                         font_size: "12px",
 
                                                                         match detected_format {
-                                                                            Some(SerializationFormat::Java) => "Java 序列化对象",
-                                                                            Some(SerializationFormat::Php) => "PHP 序列化数据",
-                                                                            Some(SerializationFormat::MsgPack) => "MessagePack 数据",
-                                                                            Some(SerializationFormat::Pickle) => "Python Pickle 数据",
-                                                                            Some(SerializationFormat::Kryo) => "Kryo 序列化数据",
-                                                                            Some(SerializationFormat::Fst) => "FST 序列化数据",
-                                                                            Some(SerializationFormat::Bson) => "BSON 数据",
-                                                                            Some(SerializationFormat::Cbor) => "CBOR 数据",
-                                                                            Some(SerializationFormat::Protobuf) => "Protobuf 数据",
-                                                                            _ => "序列化数据",
+                                                                            Some(SerializationFormat::Java) => "Java serialized object",
+                                                                            Some(SerializationFormat::Php) => "PHP serialized data",
+                                                                            Some(SerializationFormat::MsgPack) => "MessagePack data",
+                                                                            Some(SerializationFormat::Pickle) => "Python Pickle data",
+                                                                            Some(SerializationFormat::Kryo) => "Kryo serialized data",
+                                                                            Some(SerializationFormat::Fst) => "FST serialized data",
+                                                                            Some(SerializationFormat::Bson) => "BSON data",
+                                                                            Some(SerializationFormat::Cbor) => "CBOR data",
+                                                                            Some(SerializationFormat::Protobuf) => "Protobuf data",
+                                                                            _ => "Serialized data",
                                                                         }
                                                                     }
                                                                 } else {
@@ -816,7 +818,7 @@ pub fn ValueViewer(
                                                                         color: COLOR_WARNING,
                                                                         font_size: "12px",
 
-                                                                        "二进制数据"
+                                                                        {i18n.read().t("Binary data")}
                                                                     }
                                                                 }
 
@@ -861,7 +863,7 @@ pub fn ValueViewer(
                                                                             opacity: if is_image { "1.0" } else { "0.6" },
                                                                             onclick: move |_| binary_format.set(BinaryFormat::Image),
 
-                                                                            "图片"
+                                                                            {i18n.read().t("Image")}
                                                                         }
                                                                     }
                                                                 }
@@ -1000,7 +1002,7 @@ pub fn ValueViewer(
                                                                                         binary_format.set(BinaryFormat::Bitmap);
                                                                                     }
                                                                                     Err(e) => {
-                                                                                        toast_manager.write().error(&format!("加载 Bitmap 失败: {}", e));
+                                                                                        toast_manager.write().error(&format!("{}{}", i18n.read().t("Load bitmap failed: "), e));
                                                                                     }
                                                                                 }
                                                                             });
@@ -1012,7 +1014,7 @@ pub fn ValueViewer(
 
                                                                 button {
                                                                     style: "{secondary_action_button_style()}",
-                                                                    title: "复制",
+                                                                    title: i18n.read().t("Copy"),
                                                                     onclick: move |_| {
                                                                         let current_format = binary_format();
                                                                         let serial_info = serialization_data();
@@ -1036,16 +1038,16 @@ pub fn ValueViewer(
                                                                         };
                                                                         match copy_text_to_clipboard(&copy_text) {
                                                                             Ok(_) => {
-                                                                                toast_manager.write().success("复制成功");
+                                                                                toast_manager.write().success(&i18n.read().t("Copied"));
                                                                             }
                                                                             Err(e) => {
-                                                                                toast_manager.write().error(&format!("复制失败：{}", e));
+                                                                                toast_manager.write().error(&format!("{}{}", i18n.read().t("Copy failed: "), e));
                                                                             }
                                                                         }
                                                                     },
 
                                                                     IconCopy { size: Some(14) }
-                                                                    "复制"
+                                                                    {i18n.read().t("Copy")}
                                                                 }
                                                             }
                                                         }
@@ -1067,7 +1069,7 @@ pub fn ValueViewer(
                                                                                 border_radius: "8px",
                                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                                "解析失败"
+                                                                                {i18n.read().t("Parse failed")}
                                                                             }
                                                                         }
                                                                     }
@@ -1089,7 +1091,7 @@ pub fn ValueViewer(
                                                                                     border_radius: "8px",
                                                                                     color: COLOR_ERROR,
 
-                                                                                    "PHP 解析错误: {e}"
+                                                                                    {format!("{}{}", i18n.read().t("PHP parse error: "), e)}
                                                                                 }
                                                                             },
                                                                         }
@@ -1101,7 +1103,7 @@ pub fn ValueViewer(
                                                                                 border_radius: "8px",
                                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                                "解析失败"
+                                                                                {i18n.read().t("Parse failed")}
                                                                             }
                                                                         }
                                                                     }
@@ -1123,7 +1125,7 @@ pub fn ValueViewer(
                                                                                     border_radius: "8px",
                                                                                     color: COLOR_ERROR,
 
-                                                                                    "MsgPack 解析错误: {e}"
+                                                                                    {format!("{}{}", i18n.read().t("MsgPack parse error: "), e)}
                                                                                 }
                                                                             },
                                                                         }
@@ -1135,7 +1137,7 @@ pub fn ValueViewer(
                                                                                 border_radius: "8px",
                                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                                "解析失败"
+                                                                                {i18n.read().t("Parse failed")}
                                                                             }
                                                                         }
                                                                     }
@@ -1157,7 +1159,7 @@ pub fn ValueViewer(
                                                                                     border_radius: "8px",
                                                                                     color: COLOR_ERROR,
 
-                                                                                    "Pickle 解析错误: {e}"
+                                                                                    {format!("{}{}", i18n.read().t("Pickle parse error: "), e)}
                                                                                 }
                                                                             },
                                                                         }
@@ -1169,7 +1171,7 @@ pub fn ValueViewer(
                                                                                 border_radius: "8px",
                                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                                "解析失败"
+                                                                                {i18n.read().t("Parse failed")}
                                                                             }
                                                                         }
                                                                     }
@@ -1192,7 +1194,7 @@ pub fn ValueViewer(
                                                                                          border_radius: "8px",
                                                                                          color: COLOR_ERROR,
 
-                                                                                         "Kryo/FST 解析错误: {e}"
+                                                                                         {format!("{}{}", i18n.read().t("Kryo/FST parse error: "), e)}
                                                                                      }
                                                                                  },
                                                                              }
@@ -1204,7 +1206,7 @@ pub fn ValueViewer(
                                                                                      border_radius: "8px",
                                                                                      color: COLOR_TEXT_SECONDARY,
 
-                                                                                     "非 Kryo/FST 数据"
+                                                                                     {i18n.read().t("Not Kryo/FST data")}
                                                                                  }
                                                                              }
                                                                          }
@@ -1216,7 +1218,7 @@ pub fn ValueViewer(
                                                                                  border_radius: "8px",
                                                                                  color: COLOR_TEXT_SECONDARY,
 
-                                                                                 "解析失败"
+                                                                                 {i18n.read().t("Parse failed")}
                                                                              }
                                                                          }
                                                                      }
@@ -1238,7 +1240,7 @@ pub fn ValueViewer(
                                                                                      border_radius: "8px",
                                                                                      color: COLOR_ERROR,
 
-                                                                                     "BSON 解析错误: {e}"
+                                                                                     {format!("{}{}", i18n.read().t("BSON parse error: "), e)}
                                                                                  }
                                                                              },
                                                                          }
@@ -1250,7 +1252,7 @@ pub fn ValueViewer(
                                                                                  border_radius: "8px",
                                                                                  color: COLOR_TEXT_SECONDARY,
 
-                                                                                 "解析失败"
+                                                                                 {i18n.read().t("Parse failed")}
                                                                              }
                                                                          }
                                                                      }
@@ -1272,7 +1274,7 @@ pub fn ValueViewer(
                                                                                      border_radius: "8px",
                                                                                      color: COLOR_ERROR,
 
-                                                                                     "CBOR 解析错误: {e}"
+                                                                                     {format!("{}{}", i18n.read().t("CBOR parse error: "), e)}
                                                                                  }
                                                                              },
                                                                          }
@@ -1284,7 +1286,7 @@ pub fn ValueViewer(
                                                                                  border_radius: "8px",
                                                                                  color: COLOR_TEXT_SECONDARY,
 
-                                                                                 "解析失败"
+                                                                                 {i18n.read().t("Parse failed")}
                                                                              }
                                                                          }
                                                                      }
@@ -1330,7 +1332,7 @@ pub fn ValueViewer(
                                                                                     color: COLOR_TEXT_SECONDARY,
                                                                                     font_size: "13px",
 
-                                                                                    "{format} 图片 - {file_size_formatted}"
+                                                                                    {format!("{} {} - {}", format, i18n.read().t("Image"), file_size_formatted)}
                                                                                 }
 
                                                                                 div {
@@ -1374,7 +1376,7 @@ pub fn ValueViewer(
                                                                                         let _ = open::that(&file_path_clone);
                                                                                     },
 
-                                                                                    "用系统图片查看器打开"
+                                                                                    {i18n.read().t("Open with system image viewer")}
                                                                                 }
                                                                             }
                                                                         }
@@ -1386,7 +1388,7 @@ pub fn ValueViewer(
                                                                                 border_radius: "8px",
                                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                                "非图片数据"
+                                                                                {i18n.read().t("Not image data")}
                                                                             }
                                                                         }
                                                                     }
@@ -1406,7 +1408,7 @@ pub fn ValueViewer(
                                                                                 border_radius: "8px",
                                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                                "非 Protobuf 数据"
+                                                                                {i18n.read().t("Not Protobuf data")}
                                                                             }
                                                                         }
                                                                     }
@@ -1441,7 +1443,7 @@ pub fn ValueViewer(
                                                                                 border_radius: "8px",
                                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                                "点击 \"Bitmap\" 按钮加载可视化数据"
+                                                                                {i18n.read().t("Click the Bitmap button to load visualization data")}
                                                                             }
                                                                         }
                                                                     }
@@ -1482,7 +1484,7 @@ pub fn ValueViewer(
                                                         }
                                                     } else {
                                                         EditableField {
-                                                            label: "Value".to_string(),
+                                                                            label: i18n.read().t("Value"),
                                                             value: str_val.clone(),
                                                             editable: !is_binary(),
                                                             multiline: true,
@@ -1716,7 +1718,7 @@ pub fn ValueViewer(
                                                             div {
                                                                 color: COLOR_TEXT_SECONDARY,
 
-                                                                "暂不支持该类型的编辑"
+                                                                {i18n.read().t("Editing this type is not supported yet")}
                                                             }
                                                         }
                                                     }
@@ -1738,7 +1740,7 @@ pub fn ValueViewer(
                                     border_radius: "12px",
                                     background: COLOR_BG_SECONDARY,
 
-                                    "未能加载 Key 数据"
+                                    {i18n.read().t("Failed to load key data")}
                                 }
                             }
                         }
@@ -1769,9 +1771,9 @@ pub fn ValueViewer(
                                         ContextMenuItem {
                                             icon: Some(rsx! { IconEdit { size: Some(14) } }),
                                             label: if ttl_editing() {
-                                                "收起 TTL 编辑".to_string()
+                                                i18n.read().t("Collapse TTL editor")
                                             } else {
-                                                "编辑 TTL".to_string()
+                                                i18n.read().t("Edit TTL")
                                             },
                                             danger: false,
                                             disabled: false,
@@ -1784,7 +1786,7 @@ pub fn ValueViewer(
 
                                         ContextMenuItem {
                                             icon: Some(rsx! { IconTrash { size: Some(14) } }),
-                                            label: "删除 Key".to_string(),
+                                            label: i18n.read().t("Delete key"),
                                             danger: true,
                                             disabled: false,
                                             onclick: move |_| {
@@ -1810,13 +1812,13 @@ pub fn ValueViewer(
                                     h3 {
                                         style: "{overlay_modal_title_style()}",
 
-                                        "确认删除"
+                                        {i18n.read().t("Confirm delete")}
                                     }
 
                                     p {
                                         style: "{overlay_modal_body_style()}",
 
-                                        "确定删除当前 Key \"{display_key}\" 吗？此操作不可恢复。"
+                                        {format!("{} \"{}\". {}", i18n.read().t("Delete current key?"), display_key, i18n.read().t("This action cannot be undone."))}
                                     }
 
                                     div {
@@ -1827,7 +1829,7 @@ pub fn ValueViewer(
                                             disabled: delete_key_processing(),
                                             onclick: move |_| delete_key_confirm.set(false),
 
-                                            "取消"
+                                            {i18n.read().t("Cancel")}
                                         }
 
                                         button {
@@ -1845,12 +1847,12 @@ pub fn ValueViewer(
                                                         match pool.delete_key(&key).await {
                                                             Ok(_) => {
                                                                 delete_key_confirm.set(false);
-                                                                toast_manager.write().success("Key 已删除");
+                                                                toast_manager.write().success(&i18n.read().t("Delete key succeeded"));
                                                                 selected_key.set(String::new());
                                                                 on_refresh.call(());
                                                             }
                                                             Err(error) => {
-                                                                toast_manager.write().error(&format!("删除失败：{error}"));
+                                                                toast_manager.write().error(&format!("{}{}", i18n.read().t("Delete failed: "), error));
                                                             }
                                                         }
 
@@ -1859,7 +1861,7 @@ pub fn ValueViewer(
                                                 }
                                             },
 
-                                            if delete_key_processing() { "删除中..." } else { "确认删除" }
+                                            {if delete_key_processing() { i18n.read().t("Deleting...") } else { i18n.read().t("Confirm delete") }}
                                         }
                                     }
                                 }

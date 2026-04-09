@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::config::ConfigStorage;
 use crate::connection::ConnectionConfig;
 use crate::theme::ThemeColors;
@@ -29,6 +30,7 @@ pub fn ConnectionExportDialog(
     colors: ThemeColors,
     on_close: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut state = use_signal(|| ExportState::Exporting);
     let mut started = use_signal(|| false);
 
@@ -42,7 +44,7 @@ pub fn ConnectionExportDialog(
                     let result = async {
                         let connections = config_storage
                             .load_connections()
-                            .map_err(|e| format!("Failed to load: {}", e))?;
+                            .map_err(|e| format!("{}{}", i18n.read().t("Failed to load: "), e))?;
 
                         let exported = ExportedConnections {
                             version: "1.0".to_string(),
@@ -51,7 +53,7 @@ pub fn ConnectionExportDialog(
                         };
 
                         serde_json::to_string_pretty(&exported)
-                            .map_err(|e| format!("Serialization failed: {}", e))
+                            .map_err(|e| format!("{}{}", i18n.read().t("Serialization failed: "), e))
                     }
                     .await;
 
@@ -81,7 +83,7 @@ pub fn ConnectionExportDialog(
                 font_size: "18px",
 
                 IconDownload { size: Some(20) }
-                "Export Connections"
+                {i18n.read().t("Export connections")}
             }
 
             match state() {
@@ -91,7 +93,7 @@ pub fn ConnectionExportDialog(
                         text_align: "center",
                         color: "{colors.text_secondary}",
 
-                        "Exporting..."
+                        {i18n.read().t("Exporting...")}
                     }
                 },
                 ExportState::Success(ref json) => rsx! {
@@ -121,13 +123,14 @@ pub fn ConnectionExportDialog(
 
 #[component]
 fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<()>) -> Element {
+    let i18n = use_i18n();
     let mut toast_manager = use_context::<Signal<ToastManager>>();
 
     let copy_to_clipboard = {
         let json = json.clone();
         move |_| {
             if copy_text_to_clipboard(&json).is_ok() {
-                toast_manager.write().success("Copied to clipboard");
+                toast_manager.write().success(&i18n.read().t("Copied to clipboard"));
             }
         }
     };
@@ -146,12 +149,12 @@ fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<(
                 if let Some(path) = file_path {
                     match std::fs::write(path.path(), &json) {
                         Ok(_) => {
-                            toast_manager.write().success("Exported to file");
+                            toast_manager.write().success(&i18n.read().t("Exported to file"));
                         }
                         Err(e) => {
                             toast_manager
                                 .write()
-                                .error(&format!("Failed to save: {}", e));
+                                .error(&format!("{}{}", i18n.read().t("Failed to save: "), e));
                         }
                     }
                 }
@@ -165,7 +168,7 @@ fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<(
             margin_bottom: "12px",
             font_size: "13px",
 
-            "Export successful! Copy the content below:"
+            {i18n.read().t("Export successful! Copy the content below:")}
         }
 
         div {
@@ -205,7 +208,7 @@ fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<(
 
                 onclick: copy_to_clipboard,
 
-                "Copy to Clipboard"
+                {i18n.read().t("Copy to clipboard")}
             }
 
             button {
@@ -219,7 +222,7 @@ fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<(
                 font_size: "13px",
                 onclick: export_to_file,
 
-                "Export as File"
+                {i18n.read().t("Export as file")}
             }
         }
     }
@@ -239,6 +242,7 @@ pub fn ConnectionImportDialog(
     on_import: EventHandler<usize>,
     on_close: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut import_text = use_signal(String::new);
     let mut state = use_signal(|| ImportState::Idle);
     let mut preview = use_signal(|| None::<Vec<ConnectionConfig>>);
@@ -261,7 +265,7 @@ pub fn ConnectionImportDialog(
                 font_size: "18px",
 
                 IconUpload { size: Some(20) }
-                "Import Connections"
+                {i18n.read().t("Import connections")}
             }
 
             match state() {
@@ -276,7 +280,7 @@ pub fn ConnectionImportDialog(
                             font_weight: "600",
                             margin_bottom: "12px",
 
-                            "Successfully imported {count} connection(s)"
+                            {format!("{} {}", i18n.read().t("Successfully imported connections:"), count)}
                         }
 
                         button {
@@ -289,7 +293,7 @@ pub fn ConnectionImportDialog(
                             font_size: "13px",
                             onclick: move |_| on_close.call(()),
 
-                            "Close"
+                            {i18n.read().t("Close")}
                         }
                     }
                 },
@@ -299,7 +303,7 @@ pub fn ConnectionImportDialog(
                         text_align: "center",
                         color: "{colors.text_secondary}",
 
-                        "Importing..."
+                        {i18n.read().t("Importing...")}
                     }
                 },
                 ImportState::Idle => rsx! {
@@ -308,7 +312,7 @@ pub fn ConnectionImportDialog(
                         margin_bottom: "12px",
                         font_size: "13px",
 
-                        "Paste the exported JSON content:"
+                        {i18n.read().t("Paste the exported JSON content:")}
                     }
 
                     textarea {
@@ -344,7 +348,7 @@ pub fn ConnectionImportDialog(
                                 font_size: "13px",
                                 margin_bottom: "8px",
 
-                                "Found {connections.len()} connection(s)"
+                                {format!("{} {}", i18n.read().t("Found connections:"), connections.len())}
                             }
 
                             div {
@@ -403,13 +407,13 @@ pub fn ConnectionImportDialog(
                                         }
                                         Err(e) => {
                                             preview.set(None);
-                                            error_msg.set(Some(format!("Parse error: {}", e)));
+                                            error_msg.set(Some(format!("{}{}", i18n.read().t("Parse error: "), e)));
                                         }
                                     }
                                 }
                             },
 
-                            "Preview"
+                            {i18n.read().t("Preview")}
                         }
 
                         button {
@@ -445,7 +449,7 @@ pub fn ConnectionImportDialog(
                                 }
                             },
 
-                            "Import"
+                            {i18n.read().t("Import")}
                         }
 
                         button {
@@ -458,7 +462,7 @@ pub fn ConnectionImportDialog(
                             font_size: "13px",
                             onclick: move |_| on_close.call(()),
 
-                            "Cancel"
+                            {i18n.read().t("Cancel")}
                         }
                     }
                 },

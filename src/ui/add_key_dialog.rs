@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::KeyType;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
@@ -41,6 +42,7 @@ pub fn AddKeyDialog(
     on_save: EventHandler<String>,
     on_cancel: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut key_name = use_signal(String::new);
     let mut key_type = use_signal(|| KeyType::String);
     let mut ttl = use_signal(|| String::from("-1"));
@@ -85,7 +87,7 @@ pub fn AddKeyDialog(
             colors,
             width: "500px".to_string(),
             max_height: "80vh".to_string(),
-            title: "新增 Key".to_string(),
+            title: i18n.read().t("Add key"),
 
             div {
                 if let Some(err) = error_msg() {
@@ -185,7 +187,7 @@ pub fn AddKeyDialog(
                     font_size: "12px",
                     margin_bottom: "4px",
 
-                    "Value"
+                    {i18n.read().t("Value")}
                 }
 
                 match key_type() {
@@ -633,7 +635,7 @@ pub fn AddKeyDialog(
                     onclick: move |_| {
                         let key = key_name.read().trim().to_string();
                         if key.is_empty() {
-                            error_msg.set(Some("Key 名称不能为空".to_string()));
+                            error_msg.set(Some(i18n.read().t("Key name cannot be empty")));
                             return;
                         }
 
@@ -698,9 +700,9 @@ pub fn AddKeyDialog(
                     },
 
                     if processing() {
-                        "保存中..."
+                        {i18n.read().t("Saving...")}
                     } else {
-                        "✓ 保存"
+                        {format!("✓ {}", i18n.read().t("Save"))}
                     }
                 }
             }

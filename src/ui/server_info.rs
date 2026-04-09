@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::ServerInfo;
 use dioxus::prelude::*;
 use std::time::Duration;
@@ -14,9 +15,9 @@ const COLOR_PRIMARY: &str = "var(--theme-primary)";
 const COLOR_ACCENT: &str = "var(--theme-accent)";
 const COLOR_SUCCESS: &str = "var(--theme-success, #107c10)";
 
-fn format_uptime(seconds: u64) -> String {
+fn format_uptime(seconds: u64, i18n: &crate::i18n::I18n) -> String {
     if seconds == 0 {
-        return "0秒".to_string();
+        return format!("0 {}", i18n.t("seconds"));
     }
 
     let days = seconds / 86400;
@@ -26,16 +27,16 @@ fn format_uptime(seconds: u64) -> String {
 
     let mut parts = Vec::new();
     if days > 0 {
-        parts.push(format!("{days}天"));
+        parts.push(format!("{days} {}", i18n.t("days")));
     }
     if hours > 0 {
-        parts.push(format!("{hours}小时"));
+        parts.push(format!("{hours} {}", i18n.t("hours")));
     }
     if minutes > 0 {
-        parts.push(format!("{minutes}分钟"));
+        parts.push(format!("{minutes} {}", i18n.t("minutes")));
     }
     if secs > 0 && parts.is_empty() {
-        parts.push(format!("{secs}秒"));
+        parts.push(format!("{secs} {}", i18n.t("seconds")));
     }
 
     parts.join(" ")
@@ -137,6 +138,7 @@ fn StatCard(title: String, value: String, subtitle: Option<String>) -> Element {
 
 #[component]
 fn InfoTable(sections: Vec<InfoSection>, search_keyword: String) -> Element {
+    let i18n = use_i18n();
     let keyword = search_keyword.trim().to_lowercase();
     let has_search = !keyword.is_empty();
 
@@ -179,7 +181,7 @@ fn InfoTable(sections: Vec<InfoSection>, search_keyword: String) -> Element {
                     font_size: "13px",
                     padding_left: "4px",
 
-                    "详细信息"
+                    {i18n.read().t("Details")}
                 }
 
                 if has_search {
@@ -190,7 +192,11 @@ fn InfoTable(sections: Vec<InfoSection>, search_keyword: String) -> Element {
                         padding: "2px 8px",
                         border_radius: "4px",
 
-                        "找到 {filtered_sections.iter().map(|s| s.items.len()).sum::<usize>()} 条匹配"
+                        {format!(
+                            "{} {}",
+                            filtered_sections.iter().map(|s| s.items.len()).sum::<usize>(),
+                            i18n.read().t("matches found")
+                        )}
                     }
                 }
             }
@@ -203,9 +209,9 @@ fn InfoTable(sections: Vec<InfoSection>, search_keyword: String) -> Element {
                     font_size: "14px",
 
                     if has_search {
-                        "未找到匹配 \"{search_keyword}\" 的信息"
+                        {format!("{} \"{}\"", i18n.read().t("No information matched"), search_keyword)}
                     } else {
-                        "暂无信息"
+                        {i18n.read().t("No information")}
                     }
                 }
             } else {
@@ -270,6 +276,7 @@ fn InfoTable(sections: Vec<InfoSection>, search_keyword: String) -> Element {
 #[component]
 fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
     let mut search_keyword = use_signal(String::new);
+    let i18n = use_i18n();
 
     rsx! {
         div {
@@ -300,7 +307,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                         color: COLOR_ACCENT,
                         font_size: "14px",
 
-                        "Redis 服务器已连接"
+                        {i18n.read().t("Redis server connected")}
                     }
                 }
 
@@ -322,7 +329,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                         font_size: "14px",
                         margin_top: "4px",
 
-                        "{mode} 模式"
+                        {format!("{} {}", mode, i18n.read().t("mode"))}
                     }
                 }
             }
@@ -334,7 +341,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                 if let Some(pid) = info.process_id {
                     StatCard {
-                        title: "进程 ID".to_string(),
+                        title: i18n.read().t("Process ID"),
                         value: pid.to_string(),
                         subtitle: None,
                     }
@@ -342,7 +349,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                 if let Some(port) = info.tcp_port {
                     StatCard {
-                        title: "端口".to_string(),
+                        title: i18n.read().t("Port"),
                         value: port.to_string(),
                         subtitle: None,
                     }
@@ -350,16 +357,16 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                 if let Some(ref os) = info.os {
                     StatCard {
-                        title: "操作系统".to_string(),
+                        title: i18n.read().t("Operating System"),
                         value: os.clone(),
-                        subtitle: info.arch_bits.clone().map(|b| format!("{b} 位")),
+                        subtitle: info.arch_bits.clone().map(|b| format!("{b}-{}", i18n.read().t("bit"))),
                     }
                 }
 
                 if let Some(uptime) = info.uptime_in_seconds {
                     StatCard {
-                        title: "运行时间".to_string(),
-                        value: format_uptime(uptime),
+                        title: i18n.read().t("Uptime"),
+                        value: format_uptime(uptime, &i18n.read()),
                         subtitle: None,
                     }
                 }
@@ -374,7 +381,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                     margin_bottom: "12px",
                     padding_left: "4px",
 
-                    "内存信息"
+                    {i18n.read().t("Memory Information")}
                 }
 
                 div {
@@ -384,7 +391,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                     if let Some(ref mem) = info.used_memory_human {
                         StatCard {
-                            title: "已用内存".to_string(),
+                            title: i18n.read().t("Used Memory"),
                             value: mem.clone(),
                             subtitle: info.used_memory.map(|b| format!("{} bytes", b)),
                         }
@@ -392,7 +399,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                     if let Some(ref peak) = info.used_memory_peak_human {
                         StatCard {
-                            title: "峰值内存".to_string(),
+                            title: i18n.read().t("Peak Memory"),
                             value: peak.clone(),
                             subtitle: None,
                         }
@@ -400,7 +407,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                     if let Some(ratio) = info.mem_fragmentation_ratio {
                         StatCard {
-                            title: "内存碎片率".to_string(),
+                            title: i18n.read().t("Memory Fragmentation Ratio"),
                             value: format!("{ratio:.2}"),
                             subtitle: None,
                         }
@@ -408,7 +415,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                     if let Some(ref allocator) = info.mem_allocator {
                         StatCard {
-                            title: "内存分配器".to_string(),
+                            title: i18n.read().t("Memory Allocator"),
                             value: allocator.clone(),
                             subtitle: None,
                         }
@@ -425,7 +432,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                     margin_bottom: "12px",
                     padding_left: "4px",
 
-                    "连接与统计"
+                    {i18n.read().t("Connections and Stats")}
                 }
 
                 div {
@@ -435,18 +442,18 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                     if let Some(clients) = info.connected_clients {
                         StatCard {
-                            title: "当前连接数".to_string(),
+                            title: i18n.read().t("Current Connections"),
                             value: clients.to_string(),
-                            subtitle: info.max_clients.map(|m| format!("最大: {m}")),
+                            subtitle: info.max_clients.map(|m| format!("{}: {m}", i18n.read().t("Max"))),
                         }
                     }
 
                     if info.keys_total > 0 {
                         StatCard {
-                            title: "Key 总数".to_string(),
+                            title: i18n.read().t("Total Keys"),
                             value: info.keys_total.to_string(),
                             subtitle: if info.expires_total > 0 {
-                                Some(format!("{} 个设置了过期时间", info.expires_total))
+                                Some(format!("{} {}", info.expires_total, i18n.read().t("with expiration")))
                             } else {
                                 None
                             },
@@ -455,7 +462,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                     if let Some(ops) = info.instantaneous_ops_per_sec {
                         StatCard {
-                            title: "每秒操作数".to_string(),
+                            title: i18n.read().t("Operations Per Second"),
                             value: ops.to_string(),
                             subtitle: None,
                         }
@@ -463,7 +470,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                     if let Some(cmds) = info.total_commands_processed {
                         StatCard {
-                            title: "总命令数".to_string(),
+                            title: i18n.read().t("Total Commands"),
                             value: format_number(cmds),
                             subtitle: None,
                         }
@@ -481,7 +488,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                         margin_bottom: "12px",
                         padding_left: "4px",
 
-                        "持久化状态"
+                        {i18n.read().t("Persistence Status")}
                     }
 
                     div {
@@ -492,9 +499,9 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                         if info.aof_enabled == Some(1) {
                             StatCard {
                                 title: "AOF".to_string(),
-                                value: "已启用".to_string(),
+                                value: i18n.read().t("Enabled"),
                                 subtitle: if info.aof_rewrite_in_progress == Some(1) {
-                                    Some("正在重写...".to_string())
+                                    Some(i18n.read().t("Rewriting..."))
                                 } else {
                                     None
                                 },
@@ -503,7 +510,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
 
                         if let Some(changes) = info.rdb_changes_since_last_save {
                             StatCard {
-                                title: "RDB 待保存变更".to_string(),
+                                title: i18n.read().t("RDB Pending Save Changes"),
                                 value: changes.to_string(),
                                 subtitle: None,
                             }
@@ -529,7 +536,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                         font_size: "13px",
                         white_space: "nowrap",
 
-                        "搜索"
+                        {i18n.read().t("Search")}
                     }
 
                     input {
@@ -541,7 +548,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                         color: COLOR_TEXT,
                         font_size: "13px",
                         value: "{search_keyword}",
-                        placeholder: "输入关键字搜索（支持 key 和 value）",
+                        placeholder: i18n.read().t("Enter a keyword to search keys and values"),
                         oninput: move |e| search_keyword.set(e.value()),
                     }
 
@@ -556,7 +563,7 @@ fn ServerInfoContent(info: ServerInfo, raw_info: String) -> Element {
                             font_size: "12px",
                             onclick: move |_| search_keyword.set(String::new()),
 
-                            "清除"
+                            {i18n.read().t("Clear")}
                         }
                     }
                 }
@@ -574,12 +581,12 @@ async fn load_server_info(pool: ConnectionPool) -> Result<(ServerInfo, String), 
     let raw = pool
         .get_raw_info()
         .await
-        .map_err(|e| format!("获取服务器信息失败: {e}"))?;
+        .map_err(|e| format!("Failed to load server info: {e}"))?;
 
     let info = pool
         .get_server_info()
         .await
-        .map_err(|e| format!("解析服务器信息失败: {e}"))?;
+        .map_err(|e| format!("Failed to parse server info: {e}"))?;
 
     Ok((info, raw))
 }
@@ -595,6 +602,7 @@ pub fn ServerInfoPanel(
     let loading = use_signal(|| true);
     let error_msg = use_signal(String::new);
     let mut refresh_trigger = use_signal(|| 0u32);
+    let i18n = use_i18n();
 
     let pool = connection_pool.clone();
 
@@ -656,6 +664,11 @@ pub fn ServerInfoPanel(
     let error = error_msg();
     let info = server_info();
     let raw = raw_info();
+    let refresh_label = if is_loading {
+        i18n.read().t("Refreshing...")
+    } else {
+        format!("🔄 {}", i18n.read().t("Refresh"))
+    };
 
     rsx! {
         div {
@@ -684,7 +697,7 @@ pub fn ServerInfoPanel(
                         font_size: "12px",
                         onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
 
-                        if is_loading { "刷新中..." } else { "🔄 刷新" }
+                        {refresh_label}
                     }
                 }
 
@@ -696,7 +709,7 @@ pub fn ServerInfoPanel(
                         height: "200px",
                         color: COLOR_TEXT_SECONDARY,
 
-                        "加载中..."
+                        {i18n.read().t("Loading...")}
                     }
                 } else if !error.is_empty() {
                     div {
@@ -721,7 +734,7 @@ pub fn ServerInfoPanel(
                         height: "200px",
                         color: COLOR_TEXT_SECONDARY,
 
-                        "无法获取服务器信息"
+                        {i18n.read().t("Unable to load server info")}
                     }
                 }
             }

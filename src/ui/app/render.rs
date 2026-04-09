@@ -1,6 +1,7 @@
 use super::state::Tab;
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::theme::{
     ThemeColors, ThemeId, COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BORDER, COLOR_ERROR,
     COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
@@ -13,7 +14,7 @@ use dioxus::prelude::*;
 use std::sync::Arc;
 use uuid::Uuid;
 
-pub(super) fn spinner_panel(message: &'static str) -> Element {
+pub(super) fn spinner_panel(message: String) -> Element {
     rsx! {
         div {
             flex: "1",
@@ -50,6 +51,7 @@ pub(super) fn spinner_panel(message: &'static str) -> Element {
 }
 
 pub(super) fn empty_connection_panel() -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             flex: "1",
@@ -65,18 +67,19 @@ pub(super) fn empty_connection_panel() -> Element {
                 font_size: "28px",
                 font_weight: "700",
                 color: "{COLOR_TEXT}",
-                "Redis 工作台"
+                {i18n.read().t("Redis Workspace")}
             }
 
             div {
                 font_size: "14px",
-                "从左侧选择一个连接，或先创建新的 Redis 连接。"
+                {i18n.read().t("Select a connection from the left, or create a new Redis connection first.")}
             }
         }
     }
 }
 
 pub(super) fn connection_error_panel(on_retry: EventHandler<MouseEvent>) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             flex: "1",
@@ -90,7 +93,7 @@ pub(super) fn connection_error_panel(on_retry: EventHandler<MouseEvent>) -> Elem
             div {
                 color: "{COLOR_ERROR}",
                 font_size: "14px",
-                "连接失败，请检查连接配置后重试"
+                {i18n.read().t("Connection failed. Check the configuration and try again.")}
             }
 
             button {
@@ -102,7 +105,7 @@ pub(super) fn connection_error_panel(on_retry: EventHandler<MouseEvent>) -> Elem
                 cursor: "pointer",
                 font_size: "13px",
                 onclick: move |evt| on_retry.call(evt),
-                "重新连接"
+                {i18n.read().t("Reconnect")}
             }
         }
     }
@@ -114,6 +117,7 @@ pub(super) fn MacTitlebarSection(
     on_drag: EventHandler<MouseEvent>,
     on_toggle_maximize: EventHandler<MouseEvent>,
 ) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             height: "46px",
@@ -135,7 +139,7 @@ pub(super) fn MacTitlebarSection(
                 font_weight: "600",
                 letter_spacing: "0.04em",
                 color: "{COLOR_TEXT}",
-                "Redis Desktop"
+                {i18n.read().t("Redis Desktop")}
             }
 
             if let Some(label) = context_label {
@@ -166,6 +170,7 @@ pub(super) fn ConnectedTabShellSection(
     resolved_theme_key: String,
     auto_refresh_interval: u32,
 ) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             flex: "1",
@@ -185,13 +190,13 @@ pub(super) fn ConnectedTabShellSection(
                 background: "{COLOR_BG_SECONDARY}",
 
                 for (tab, label) in [
-                    (Tab::Data, "数据"),
-                    (Tab::Terminal, "终端"),
-                    (Tab::Monitor, "监控"),
-                    (Tab::SlowLog, "慢日志"),
-                    (Tab::Clients, "客户端"),
-                    (Tab::PubSub, "Pub/Sub"),
-                    (Tab::Script, "脚本"),
+                    (Tab::Data, i18n.read().t("Data")),
+                    (Tab::Terminal, i18n.read().t("Terminal")),
+                    (Tab::Monitor, i18n.read().t("Monitor")),
+                    (Tab::SlowLog, i18n.read().t("Slow Log")),
+                    (Tab::Clients, i18n.read().t("Clients")),
+                    (Tab::PubSub, "Pub/Sub".to_string()),
+                    (Tab::Script, i18n.read().t("Scripts")),
                 ] {
                     button {
                         padding: "8px 14px",

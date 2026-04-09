@@ -9,6 +9,7 @@ use super::styles::{
 };
 use super::{BinaryFormat, LARGE_KEY_THRESHOLD};
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::KeyInfo;
 use crate::serialization::SerializationFormat;
 use crate::theme::{
@@ -58,6 +59,7 @@ pub(super) fn StreamPanel(
     mut deleting_stream_entry: Signal<Option<String>>,
     mut deleting_stream_entry_exiting: Signal<bool>,
 ) -> Element {
+    let i18n = use_i18n();
     let stream_val = stream_value();
     let stream_search_value = stream_search();
     let normalized_stream_search = stream_search_value.trim().to_lowercase();
@@ -101,7 +103,7 @@ pub(super) fn StreamPanel(
                         border_radius: "6px",
                         color: COLOR_TEXT,
                         value: "{stream_search}",
-                        placeholder: "搜索 ID 或字段",
+                        placeholder: i18n.read().t("Search ID or field"),
                         oninput: move |event| stream_search.set(event.value()),
                     }
 
@@ -120,24 +122,24 @@ pub(super) fn StreamPanel(
                     margin_left: "auto",
                     flex_shrink: "0",
                     style: "{secondary_action_button_style()}",
-                    title: "复制",
+                    title: i18n.read().t("Copy"),
                     onclick: {
                         let stream = stream_val.clone();
                         move |_| {
                             let json = serde_json::to_string_pretty(&stream).unwrap_or_default();
                             match copy_value_to_clipboard(&json) {
                                 Ok(_) => {
-                                    toast_manager.write().success("复制成功");
+                                    toast_manager.write().success(&i18n.read().t("Copied"));
                                 }
                                 Err(error) => {
-                                    toast_manager.write().error(&format!("复制失败：{error}"));
+                                    toast_manager.write().error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                 }
                             }
                         }
                     },
 
                     IconCopy { size: Some(14) }
-                    "复制"
+                    {i18n.read().t("Copy")}
                 }
             }
 
@@ -206,9 +208,9 @@ pub(super) fn StreamPanel(
                                     color: COLOR_TEXT_SECONDARY,
 
                                     if normalized_stream_search.is_empty() {
-                                        "暂无数据"
+                                        {i18n.read().t("No data")}
                                     } else {
-                                        "未找到匹配的条目"
+                                        {i18n.read().t("No matching entries")}
                                     }
                                 }
                             }
@@ -270,7 +272,7 @@ pub(super) fn StreamPanel(
 
                                         button {
                                             style: "{compact_icon_action_button_style(true, false)}",
-                                            title: "删除",
+                                            title: i18n.read().t("Delete"),
                                             onclick: {
                                                 let entry_id = entry_id.clone();
                                                 move |_| {
@@ -302,13 +304,13 @@ pub(super) fn StreamPanel(
                         h3 {
                             style: "{overlay_modal_title_style()}",
 
-                            "确认删除"
+                            {i18n.read().t("Confirm delete")}
                         }
 
                         p {
                             style: "{overlay_modal_body_style()}",
 
-                            "确定要删除 entry \"{entry_id}\" 吗？"
+                            {format!("{} \"{}\"?", i18n.read().t("Delete entry"), entry_id)}
                         }
 
                         div {
@@ -333,7 +335,7 @@ pub(super) fn StreamPanel(
                                     }
                                 },
 
-                                "取消"
+                                {i18n.read().t("Cancel")}
                             }
 
                             button {
@@ -352,7 +354,7 @@ pub(super) fn StreamPanel(
                                         spawn(async move {
                                             match pool.stream_delete(&key, &entry_id).await {
                                                 Ok(true) => {
-                                                    stream_status_message.set("删除成功".to_string());
+                                                    stream_status_message.set(i18n.read().t("Deleted"));
                                                     stream_status_error.set(false);
                                                     deleting_stream_entry_exiting.set(true);
                                                     tokio::time::sleep(std::time::Duration::from_millis(
@@ -398,12 +400,12 @@ pub(super) fn StreamPanel(
                                                 }
                                                 Ok(false) => {
                                                     stream_status_message
-                                                        .set("Entry 不存在".to_string());
+                                                        .set(i18n.read().t("Entry does not exist"));
                                                     stream_status_error.set(true);
                                                 }
                                                 Err(error) => {
                                                     stream_status_message
-                                                        .set(format!("删除失败：{error}"));
+                                                        .set(format!("{}{}", i18n.read().t("Delete failed: "), error));
                                                     stream_status_error.set(true);
                                                 }
                                             }
@@ -411,7 +413,7 @@ pub(super) fn StreamPanel(
                                     }
                                 },
 
-                                "删除"
+                                {i18n.read().t("Delete")}
                             }
                         }
                     }

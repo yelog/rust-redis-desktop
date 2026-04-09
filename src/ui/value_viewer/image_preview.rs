@@ -1,4 +1,5 @@
 use super::{base64_decode, image_preview_button_style, image_preview_info_chip_style};
+use crate::i18n::use_i18n;
 use crate::theme::COLOR_OVERLAY_BACKDROP;
 use dioxus::html::geometry::WheelDelta;
 use dioxus::prelude::*;
@@ -14,6 +15,7 @@ pub static PREVIEW_IMAGE: GlobalSignal<Option<PreviewImageData>> = Signal::globa
 
 #[component]
 pub fn ImagePreview() -> Element {
+    let i18n = use_i18n();
     let preview = PREVIEW_IMAGE();
 
     let Some(ref data) = preview else {
@@ -97,7 +99,7 @@ pub fn ImagePreview() -> Element {
                         });
                     },
 
-                    "保存图片"
+                    {i18n.read().t("Save image")}
                 }
 
                 button {
@@ -108,7 +110,7 @@ pub fn ImagePreview() -> Element {
                         zoom_level.set(1.0);
                     },
 
-                    "重置"
+                    {i18n.read().t("Reset")}
                 }
 
                 button {
@@ -120,7 +122,7 @@ pub fn ImagePreview() -> Element {
                         zoom_level.set(1.0);
                     },
 
-                    "关闭 (Esc)"
+                    {i18n.read().t("Close (Esc)")}
                 }
             }
 
@@ -181,7 +183,7 @@ pub fn ImagePreview() -> Element {
 
                 div {
                     style: "{image_preview_info_chip_style()}",
-                    "缩放: {(zoom_level() * 100.0) as i32}%"
+                    {format!("{} {}%", i18n.read().t("Zoom:"), (zoom_level() * 100.0) as i32)}
                 }
             }
         }

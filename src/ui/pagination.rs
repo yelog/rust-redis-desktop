@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use dioxus::prelude::*;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -45,6 +46,7 @@ impl PageInfo {
 
 #[component]
 pub fn Pagination(page_info: PageInfo, on_page_change: EventHandler<usize>) -> Element {
+    let _i18n = use_i18n();
     if page_info.total_pages() <= 1 {
         return rsx! {};
     }
@@ -169,6 +171,7 @@ pub fn Pagination(page_info: PageInfo, on_page_change: EventHandler<usize>) -> E
 
 #[component]
 pub fn LargeKeyWarning(key_type: String, size: usize, threshold: usize) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             display: "flex",
@@ -184,7 +187,15 @@ pub fn LargeKeyWarning(key_type: String, size: usize, threshold: usize) -> Eleme
                 color: "#f59e0b",
                 font_size: "13px",
 
-                "⚠️ 大 Key 警告: {key_type} 类型包含 {size} 个元素，已超过阈值 ({threshold})"
+                {format!(
+                    "{}: {} {} {}, {} ({})",
+                    i18n.read().t("Large key warning"),
+                    key_type,
+                    i18n.read().t("contains"),
+                    size,
+                    i18n.read().t("threshold exceeded"),
+                    threshold
+                )}
             }
         }
     }

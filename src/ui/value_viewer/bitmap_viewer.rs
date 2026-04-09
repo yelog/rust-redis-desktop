@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::theme::{
     COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_INFO, COLOR_INFO_BG, COLOR_PRIMARY,
     COLOR_SUCCESS, COLOR_SUCCESS_BG, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
@@ -13,6 +14,7 @@ pub fn BitmapViewer(
     redis_key: String,
     on_update: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut editing_offset = use_signal(String::new);
     let mut editing_value = use_signal(|| "1".to_string());
 
@@ -35,7 +37,7 @@ pub fn BitmapViewer(
                     span {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "12px",
-                        "总字节数: "
+                        {i18n.read().t("Total bytes: ")}
                     }
                     span {
                         color: COLOR_TEXT,
@@ -53,7 +55,7 @@ pub fn BitmapViewer(
                     span {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "12px",
-                        "总位数: "
+                        {i18n.read().t("Total bits: ")}
                     }
                     span {
                         color: COLOR_TEXT,
@@ -71,7 +73,7 @@ pub fn BitmapViewer(
                     span {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "12px",
-                        "已设置位: "
+                        {i18n.read().t("Set bits: ")}
                     }
                     span {
                         color: COLOR_SUCCESS,
@@ -89,7 +91,7 @@ pub fn BitmapViewer(
                     font_weight: "600",
                     margin_bottom: "8px",
                     display: "block",
-                    "已设置的位 (offset):"
+                    {i18n.read().t("Set bit offsets:")}
                 }
 
                 div {
@@ -118,7 +120,7 @@ pub fn BitmapViewer(
                             padding: "2px 8px",
                             color: COLOR_TEXT_SECONDARY,
                             font_size: "11px",
-                            "... 还有 {info.set_bits.len() - 200} 个"
+                            {format!("... {} {}", info.set_bits.len() - 200, i18n.read().t("more"))}
                         }
                     }
                 }
@@ -131,7 +133,7 @@ pub fn BitmapViewer(
                     font_weight: "600",
                     margin_bottom: "8px",
                     display: "block",
-                    "二进制视图:"
+                    {i18n.read().t("Binary view:")}
                 }
 
                 div {
@@ -180,7 +182,7 @@ pub fn BitmapViewer(
                         span {
                             color: COLOR_TEXT_SECONDARY,
                             font_size: "11px",
-                            "... 共 {info.raw_bytes.len()} 字节"
+                            {format!("... {} {}", info.raw_bytes.len(), i18n.read().t("bytes total"))}
                         }
                     }
                 }
@@ -193,7 +195,7 @@ pub fn BitmapViewer(
                     font_weight: "600",
                     margin_bottom: "8px",
                     display: "block",
-                    "设置/修改位:"
+                    {i18n.read().t("Set or update bit:")}
                 }
 
                 div {
@@ -224,8 +226,8 @@ pub fn BitmapViewer(
                         value: "{editing_value}",
                         onchange: move |e| editing_value.set(e.value()),
 
-                        option { value: "0", "设为 0" }
-                        option { value: "1", "设为 1" }
+                        option { value: "0", {i18n.read().t("Set to 0")} }
+                        option { value: "1", {i18n.read().t("Set to 1")} }
                     }
 
                     button {
@@ -254,7 +256,7 @@ pub fn BitmapViewer(
                                 }
                             }
                         },
-                        "应用"
+                        {i18n.read().t("Apply")}
                     }
                 }
             }

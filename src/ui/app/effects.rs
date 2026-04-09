@@ -1,5 +1,6 @@
 use super::state::FormMode;
 use crate::config::ConfigStorage;
+use crate::i18n::I18n;
 use crate::theme::ThemePreference;
 use crate::ui::ToastManager;
 use crate::updater::{
@@ -97,7 +98,10 @@ await new Promise(() => {});
     });
 }
 
-pub(super) fn use_manual_update_check(mut toast_for_update: Signal<ToastManager>) {
+pub(super) fn use_manual_update_check(
+    i18n: Signal<I18n>,
+    mut toast_for_update: Signal<ToastManager>,
+) {
     use_future(move || async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -111,17 +115,21 @@ pub(super) fn use_manual_update_check(mut toast_for_update: Signal<ToastManager>
                         }
                         Ok(None) => {
                             set_pending_update(None);
-                            toast_for_update.write().success("已是最新版本");
+                            toast_for_update
+                                .write()
+                                .success(&i18n.read().t("Already up to date"));
                         }
                         Err(e) => {
                             set_pending_update(None);
-                            let msg = format!("检查更新失败: {}", e);
+                            let msg = format!("{}{}", i18n.read().t("Failed to check for updates: "), e);
                             toast_for_update.write().error(&msg);
                         }
                     }
                 } else {
                     set_pending_update(None);
-                    toast_for_update.write().error("无法初始化更新检查器");
+                    toast_for_update
+                        .write()
+                        .error(&i18n.read().t("Unable to initialize update checker"));
                 }
                 set_checking(false);
             }

@@ -1,4 +1,6 @@
+use crate::config::ConfigStorage;
 use crate::error::Result;
+use crate::i18n::I18n;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tracing::error;
@@ -49,18 +51,28 @@ fn load_icon() -> std::result::Result<Icon, Box<dyn std::error::Error>> {
 
 #[cfg(not(target_os = "linux"))]
 pub fn init_tray(state: SharedTrayState) -> Result<()> {
+    let settings = ConfigStorage::new()
+        .ok()
+        .and_then(|storage| storage.load_settings().ok())
+        .unwrap_or_default();
+    let i18n = I18n::new(settings.language_preference.resolve());
     let icon = load_icon()
         .map_err(|e| crate::error::AppError::Other(format!("Failed to load tray icon: {}", e)))?;
 
     let menu = Menu::new();
 
-    let _ = menu.append(&MenuItem::with_id("show", "显示窗口", true, None));
+    let _ = menu.append(&MenuItem::with_id(
+        "show",
+        &i18n.t("Show window"),
+        true,
+        None,
+    ));
     let _ = menu.append(&PredefinedMenuItem::separator());
-    let _ = menu.append(&MenuItem::with_id("quit", "退出", true, None));
+    let _ = menu.append(&MenuItem::with_id("quit", &i18n.t("Quit"), true, None));
 
     let tray = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
-        .with_tooltip("Redis Desktop")
+        .with_tooltip(&i18n.t("Redis Desktop"))
         .with_icon(icon)
         .build();
 

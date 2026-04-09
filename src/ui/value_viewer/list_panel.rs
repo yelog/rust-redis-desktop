@@ -7,6 +7,7 @@ use super::styles::{
 };
 use super::{BinaryFormat, LARGE_KEY_THRESHOLD, ROW_EDIT_BG};
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::KeyInfo;
 use crate::serialization::SerializationFormat;
 use crate::theme::{
@@ -59,6 +60,7 @@ pub(super) fn ListPanel(
     mut editing_list_index: Signal<Option<usize>>,
     mut editing_list_value: Signal<String>,
 ) -> Element {
+    let i18n = use_i18n();
     let list_val = list_value();
 
     rsx! {
@@ -83,7 +85,7 @@ pub(super) fn ListPanel(
                         border_radius: "6px",
                         color: COLOR_TEXT,
                         value: "{new_list_value}",
-                        placeholder: "输入新元素值",
+                        placeholder: i18n.read().t("Enter new element value"),
                         oninput: move |event| new_list_value.set(event.value()),
                     }
 
@@ -99,7 +101,7 @@ pub(super) fn ListPanel(
                                 let value = new_list_value();
                                 spawn(async move {
                                     if value.trim().is_empty() {
-                                        list_status_message.set("值不能为空".to_string());
+                                        list_status_message.set(i18n.read().t("Value cannot be empty"));
                                         list_status_error.set(true);
                                         return;
                                     }
@@ -111,7 +113,7 @@ pub(super) fn ListPanel(
                                     match pool.list_push(&key, &value, true).await {
                                         Ok(_) => {
                                             new_list_value.set(String::new());
-                                            list_status_message.set("添加成功".to_string());
+                                            list_status_message.set(i18n.read().t("Added"));
                                             list_status_error.set(false);
                                             if let Err(error) = data_loader::load_key_data(
                                                 pool.clone(),
@@ -149,7 +151,7 @@ pub(super) fn ListPanel(
                                             }
                                         }
                                         Err(error) => {
-                                            list_status_message.set(format!("添加失败：{error}"));
+                                            list_status_message.set(format!("{}{}", i18n.read().t("Add failed: "), error));
                                             list_status_error.set(true);
                                         }
                                     }
@@ -158,7 +160,7 @@ pub(super) fn ListPanel(
                             }
                         },
 
-                        if list_action().as_deref() == Some("push") { "添加中..." } else { "LPUSH" }
+                        {if list_action().as_deref() == Some("push") { i18n.read().t("Adding...") } else { "LPUSH".to_string() }}
                     }
 
                     button {
@@ -173,7 +175,7 @@ pub(super) fn ListPanel(
                                 let value = new_list_value();
                                 spawn(async move {
                                     if value.trim().is_empty() {
-                                        list_status_message.set("值不能为空".to_string());
+                                        list_status_message.set(i18n.read().t("Value cannot be empty"));
                                         list_status_error.set(true);
                                         return;
                                     }
@@ -182,7 +184,7 @@ pub(super) fn ListPanel(
                                     match pool.list_push(&key, &value, false).await {
                                         Ok(_) => {
                                             new_list_value.set(String::new());
-                                            list_status_message.set("添加成功".to_string());
+                                            list_status_message.set(i18n.read().t("Added"));
                                             list_status_error.set(false);
                                             if let Err(error) = data_loader::load_key_data(
                                                 pool.clone(),
@@ -220,7 +222,7 @@ pub(super) fn ListPanel(
                                             }
                                         }
                                         Err(error) => {
-                                            list_status_message.set(format!("添加失败：{error}"));
+                                            list_status_message.set(format!("{}{}", i18n.read().t("Add failed: "), error));
                                             list_status_error.set(true);
                                         }
                                     }
@@ -242,24 +244,24 @@ pub(super) fn ListPanel(
                 button {
                     flex_shrink: "0",
                     style: "{secondary_action_button_style()}",
-                    title: "复制",
+                    title: i18n.read().t("Copy"),
                     onclick: {
                         let list = list_val.clone();
                         move |_| {
                             let json = serde_json::to_string_pretty(&list).unwrap_or_default();
                             match copy_value_to_clipboard(&json) {
                                 Ok(_) => {
-                                    toast_manager.write().success("复制成功");
+                                    toast_manager.write().success(&i18n.read().t("Copied"));
                                 }
                                 Err(error) => {
-                                    toast_manager.write().error(&format!("复制失败：{error}"));
+                                    toast_manager.write().error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                 }
                             }
                         }
                     },
 
                     IconCopy { size: Some(14) }
-                    "复制"
+                    {i18n.read().t("Copy")}
                 }
             }
 
@@ -353,7 +355,7 @@ pub(super) fn ListPanel(
                                     color: COLOR_TEXT_SUBTLE,
                                     text_align: "center",
 
-                                    "当前列表没有元素"
+                                    {i18n.read().t("This list has no elements")}
                                 }
                             }
                         } else {
@@ -408,7 +410,7 @@ pub(super) fn ListPanel(
                                                                 match pool.list_set(&key, idx, &new_val).await {
                                                                     Ok(_) => {
                                                                         editing_list_index.set(None);
-                                                                        list_status_message.set("修改成功".to_string());
+                                                                        list_status_message.set(i18n.read().t("Updated"));
                                                                         list_status_error.set(false);
                                                                         if let Err(error) = data_loader::load_key_data(
                                                                             pool.clone(),
@@ -447,7 +449,7 @@ pub(super) fn ListPanel(
                                                                     }
                                                                     Err(error) => {
                                                                         list_status_message
-                                                                            .set(format!("修改失败：{error}"));
+                                                                            .set(format!("{}{}", i18n.read().t("Update failed: "), error));
                                                                         list_status_error.set(true);
                                                                     }
                                                                 }
@@ -456,7 +458,7 @@ pub(super) fn ListPanel(
                                                         }
                                                     },
 
-                                                    "保存"
+                                                    {i18n.read().t("Save")}
                                                 }
 
                                                 button {
@@ -470,7 +472,7 @@ pub(super) fn ListPanel(
                                                         editing_list_index.set(None);
                                                     },
 
-                                                    "取消"
+                                                    {i18n.read().t("Cancel")}
                                                 }
                                             }
                                         }
@@ -507,18 +509,18 @@ pub(super) fn ListPanel(
 
                                                 button {
                                                     style: "{compact_icon_action_button_style(false, false)}",
-                                                    title: "复制",
+                                                    title: i18n.read().t("Copy"),
                                                     onclick: {
                                                         let value = value.clone();
                                                         move |_| {
                                                             match copy_value_to_clipboard(&value) {
                                                                 Ok(_) => {
-                                                                    toast_manager.write().success("复制成功");
+                                                                    toast_manager.write().success(&i18n.read().t("Copied"));
                                                                 }
                                                                 Err(error) => {
                                                                     toast_manager
                                                                         .write()
-                                                                        .error(&format!("复制失败：{error}"));
+                                                                        .error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                                                 }
                                                             }
                                                         }
@@ -529,7 +531,7 @@ pub(super) fn ListPanel(
 
                                                 button {
                                                     style: "{compact_icon_action_button_style(false, false)}",
-                                                    title: "编辑",
+                                                    title: i18n.read().t("Edit"),
                                                     onclick: {
                                                         let value = value.clone();
                                                         move |_| {
@@ -543,7 +545,7 @@ pub(super) fn ListPanel(
 
                                                 button {
                                                     style: "{compact_icon_action_button_style(true, false)}",
-                                                    title: "删除",
+                                                    title: i18n.read().t("Delete"),
                                                     onclick: {
                                                         let pool = connection_pool.clone();
                                                         let key = display_key.clone();
@@ -557,7 +559,7 @@ pub(super) fn ListPanel(
                                                                 match pool.list_remove(&key, 1, &value).await {
                                                                     Ok(_) => {
                                                                         list_status_message
-                                                                            .set("删除成功".to_string());
+                                                                            .set(i18n.read().t("Deleted"));
                                                                         list_status_error.set(false);
                                                                         if let Err(error) = data_loader::load_key_data(
                                                                             pool.clone(),
@@ -596,7 +598,7 @@ pub(super) fn ListPanel(
                                                                     }
                                                                     Err(error) => {
                                                                         list_status_message
-                                                                            .set(format!("删除失败：{error}"));
+                                                                            .set(format!("{}{}", i18n.read().t("Delete failed: "), error));
                                                                         list_status_error.set(true);
                                                                     }
                                                                 }

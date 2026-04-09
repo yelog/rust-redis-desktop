@@ -22,6 +22,7 @@ use self::render::{
 use self::theme::{build_theme_palette, load_initial_settings, system_theme_is_dark};
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
+use crate::i18n::I18n;
 use crate::theme::{
     preferred_window_theme, resolve_theme, theme_spec, ThemePreference, ThemeSpec, COLOR_ACCENT,
     COLOR_BG, COLOR_BG_SECONDARY, COLOR_BORDER, COLOR_ERROR, COLOR_PRIMARY, COLOR_SURFACE_LOW,
@@ -514,6 +515,10 @@ fn build_theme_bridge_script(preference: ThemePreference) -> String {
 
 #[component]
 pub fn App() -> Element {
+    let mut app_settings = use_signal(load_initial_settings);
+    let initial_theme_preference = app_settings.read().theme_preference;
+    let initial_language = app_settings.read().language_preference.resolve();
+    let i18n = use_context_provider(|| Signal::new(I18n::new(initial_language)));
     let mut connections = use_signal(Vec::new);
     let mut form_mode = use_signal(|| None::<FormMode>);
     let mut selected_connection = use_signal(|| None::<Uuid>);
@@ -527,7 +532,6 @@ pub fn App() -> Element {
     let mut connection_versions = use_signal(HashMap::<Uuid, u32>::new);
     let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
     let mut readonly_connections = use_signal(HashMap::<Uuid, bool>::new);
-    let mut app_settings = use_signal(load_initial_settings);
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
     let mut show_import_dialog = use_signal(|| None::<Uuid>);
@@ -535,7 +539,7 @@ pub fn App() -> Element {
     let mut show_export_connections_dialog = use_signal(|| false);
     let mut show_import_connections_dialog = use_signal(|| false);
     let mut current_db = use_signal(|| 0u8);
-    let theme_preference = use_signal(|| load_initial_settings().theme_preference);
+    let theme_preference = use_signal(|| initial_theme_preference);
     let mut system_theme_dark = use_signal(system_theme_is_dark);
     let left_rail_width = use_signal(|| 280.0);
     let toast_manager = use_context_provider(|| Signal::new(ToastManager::new()));
@@ -593,11 +597,11 @@ pub fn App() -> Element {
         });
     }
 
-    use_manual_update_check(toast_for_update);
+    use_manual_update_check(i18n, toast_for_update);
 
     use_system_theme_listener(system_theme_dark);
 
-    let save_settings = save_settings_action(config_storage, app_settings, theme_preference);
+    let save_settings = save_settings_action(config_storage, app_settings, theme_preference, i18n);
 
     let selected_conn_state = selected_connection()
         .and_then(|id| connection_states.read().get(&id).copied())
@@ -609,6 +613,14 @@ pub fn App() -> Element {
             .find(|(conn_id, _)| *conn_id == id)
             .map(|(_, name)| name.clone())
     });
+    let reconnecting_label = i18n.read().t("Connecting...");
+    let connection_failed_label = i18n
+        .read()
+        .t("Connection failed. Check the configuration and try again.");
+    let reconnect_label = i18n.read().t("Reconnect");
+    let loading_connection_label = i18n.read().t("Loading connection...");
+    let initializing_connection_label = i18n.read().t("Initializing connection...");
+    let connecting_to_server_label = i18n.read().t("Connecting to server...");
 
     rsx! {
                 style { {r#"
@@ -737,7 +749,7 @@ pub fn App() -> Element {
                                         color: "{COLOR_TEXT_SECONDARY}",
                                         font_size: "14px",
 
-                                        "正在重新连接..."
+                                        {reconnecting_label.clone()}
                                     }
                                 }
                             } else if selected_conn_state == ConnectionState::Error {
@@ -754,7 +766,7 @@ pub fn App() -> Element {
                                         color: "{COLOR_ERROR}",
                                         font_size: "14px",
 
-                                        "连接失败，请检查连接配置后重试"
+                                        {connection_failed_label.clone()}
                                     }
 
                                     button {
@@ -794,11 +806,11 @@ pub fn App() -> Element {
                                             });
                                         },
 
-                                        "重新连接"
+                                        {reconnect_label.clone()}
                                     }
                                 }
                             } else if selected_conn_state == ConnectionState::Connecting {
-                                { spinner_panel("正在加载连接...") }
+                                { spinner_panel(loading_connection_label.clone()) }
                             } else if selected_conn_state == ConnectionState::Connected {
                                 if let Some(pool) = connection_pools.read().get(&conn_id).cloned() {
                                     ConnectedTabShellSection {
@@ -814,10 +826,10 @@ pub fn App() -> Element {
                                         auto_refresh_interval: app_settings.read().auto_refresh_interval,
                                     }
                             } else {
-                                { spinner_panel("正在初始化连接...") }
+                                { spinner_panel(initializing_connection_label.clone()) }
                             }
                             } else {
-                                { spinner_panel("正在连接...") }
+                                { spinner_panel(connecting_to_server_label.clone()) }
                             }
                         } else {
                             { empty_connection_panel() }

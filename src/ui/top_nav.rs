@@ -1,9 +1,11 @@
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::icons::{IconBell, IconHelpCircle, IconSearch, IconSettings};
 use dioxus::prelude::*;
 
 #[component]
 pub fn TopNav(colors: ThemeColors, on_open_settings: EventHandler<()>) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             height: "56px",
@@ -78,7 +80,7 @@ pub fn TopNav(colors: ThemeColors, on_open_settings: EventHandler<()>) -> Elemen
                         color: "{colors.text}",
                         font_size: "13px",
                         value: "",
-                        placeholder: "全局搜索（开发中）",
+                        placeholder: i18n.read().t("Global search (coming soon)"),
                     }
 
                     span {

@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::connection::ConnectionPool;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
@@ -11,6 +12,7 @@ pub fn FlushConfirmDialog(
     on_confirm: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut processing = use_signal(|| false);
     let mut db_size = use_signal(|| None::<u64>);
     let mut loading = use_signal(|| true);
@@ -46,7 +48,7 @@ pub fn FlushConfirmDialog(
                 gap: "8px",
                 font_size: "18px",
 
-                "⚠️ 确认清空数据库"
+                {format!("⚠️ {}", i18n.read().t("Confirm flush database"))}
             }
 
             div {
@@ -61,7 +63,7 @@ pub fn FlushConfirmDialog(
                     font_size: "13px",
                     margin_bottom: "12px",
 
-                    "将要清空的数据库："
+                    {i18n.read().t("Database to flush:")}
                 }
 
                 div {
@@ -74,7 +76,7 @@ pub fn FlushConfirmDialog(
                         color: "{colors.text}",
                         font_size: "14px",
 
-                        "数据库"
+                        {i18n.read().t("Database")}
                     }
 
                     span {
@@ -96,7 +98,7 @@ pub fn FlushConfirmDialog(
                         color: "{colors.text}",
                         font_size: "14px",
 
-                        "Key 数量"
+                        {i18n.read().t("Key count")}
                     }
 
                     span {
@@ -111,7 +113,7 @@ pub fn FlushConfirmDialog(
                         font_weight: "bold",
 
                         if loading() {
-                            "加载中..."
+                            {i18n.read().t("Loading...")}
                         } else {
                             "{db_size().unwrap_or(0)}"
                         }
@@ -127,7 +129,7 @@ pub fn FlushConfirmDialog(
                 background: "{colors.error_bg}",
                 border_radius: "4px",
 
-                "⚠️ 此操作将清空 DB{current_db} 的所有 key，且不可恢复！"
+                {format!("⚠️ {}", i18n.read().t("This will permanently delete all keys in the selected database."))}
             }
 
             div {
@@ -165,9 +167,9 @@ pub fn FlushConfirmDialog(
                     },
 
                     if processing() {
-                        "清空中..."
+                        {i18n.read().t("Flushing...")}
                     } else {
-                        "确认清空"
+                        {i18n.read().t("Flush database")}
                     }
                 }
 
@@ -183,7 +185,7 @@ pub fn FlushConfirmDialog(
                     disabled: processing(),
                     onclick: move |_| on_cancel.call(()),
 
-                    "取消"
+                    {i18n.read().t("Cancel")}
                 }
             }
         }

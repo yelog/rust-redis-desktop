@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::ServerInfo;
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_INFO,
@@ -84,6 +85,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
     let loading = use_signal(|| false);
     let mut is_monitoring = use_signal(|| false);
     let mut monitoring_handle: Signal<Option<Arc<AtomicBool>>> = use_signal(|| None);
+    let i18n = use_i18n();
 
     let load_data = {
         let pool = connection_pool.clone();
@@ -201,6 +203,13 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
     let data = monitor_data();
     let max_memory = data.iter().map(|d| d.used_memory).max().unwrap_or(1);
     let max_ops = data.iter().map(|d| d.ops_per_sec).max().unwrap_or(1);
+    let monitor_title = format!("📊 {}", i18n.read().t("Monitor"));
+    let toggle_monitoring_label = if is_monitoring() {
+        format!("⏹ {}", i18n.read().t("Stop Monitoring"))
+    } else {
+        format!("▶ {}", i18n.read().t("Start Monitoring"))
+    };
+    let refresh_label = format!("🔄 {}", i18n.read().t("Refresh"));
 
     rsx! {
         style { {include_str!("monitor_panel.css")} }
@@ -224,7 +233,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                     font_size: "18px",
                     margin: "0",
 
-                    "📊 实时监控"
+                    {monitor_title}
                 }
 
                 div {
@@ -241,7 +250,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                         font_size: "12px",
                         onclick: start_monitoring,
 
-                        if is_monitoring() { "⏹ 停止监控" } else { "▶ 开始监控" }
+                        {toggle_monitoring_label}
                     }
 
                     button {
@@ -254,7 +263,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                         font_size: "12px",
                         onclick: refresh_data,
 
-                        "🔄 刷新"
+                        {refresh_label}
                     }
                 }
             }
@@ -268,7 +277,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                         text_align: "center",
                         padding: "40px",
 
-                        "加载中..."
+                        {i18n.read().t("Loading...")}
                     }
                 } else {
                     div {
@@ -288,7 +297,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                 font_size: "12px",
                                 margin_bottom: "4px",
 
-                                "内存使用"
+                                {i18n.read().t("Memory Usage")}
                             }
 
                             div {
@@ -308,7 +317,13 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                 font_size: "11px",
                                 margin_top: "4px",
 
-                                "峰值: {info.as_ref().and_then(|i| i.used_memory_peak_human.clone()).unwrap_or_default()}"
+                                {format!(
+                                    "{} {}",
+                                    i18n.read().t("Peak:"),
+                                    info.as_ref()
+                                        .and_then(|i| i.used_memory_peak_human.clone())
+                                        .unwrap_or_default()
+                                )}
                             }
                         }
 
@@ -323,7 +338,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                 font_size: "12px",
                                 margin_bottom: "4px",
 
-                                "每秒操作数"
+                                {i18n.read().t("Operations Per Second")}
                             }
 
                             div {
@@ -358,7 +373,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                 font_size: "12px",
                                 margin_bottom: "4px",
 
-                                "连接数"
+                                {i18n.read().t("Connections")}
                             }
 
                             div {
@@ -378,7 +393,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                 font_size: "11px",
                                 margin_top: "4px",
 
-                                "当前连接"
+                                {i18n.read().t("Current connections")}
                             }
                         }
 
@@ -393,7 +408,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                 font_size: "12px",
                                 margin_bottom: "4px",
 
-                                "Key 总数"
+                                {i18n.read().t("Total Keys")}
                             }
 
                             div {
@@ -426,7 +441,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                             font_size: "14px",
                             margin_bottom: "12px",
 
-                            "内存使用趋势"
+                            {i18n.read().t("Memory Usage Trend")}
                         }
 
                         div {
@@ -514,7 +529,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                             font_size: "14px",
                             margin_bottom: "12px",
 
-                            "OPS 趋势"
+                            {i18n.read().t("OPS Trend")}
                         }
 
                         div {
@@ -600,7 +615,7 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                             color: COLOR_TEXT_SUBTLE,
                             font_size: "11px",
 
-                            "最近 {data.len()} 个数据点"
+                            {format!("{} {}", i18n.read().t("Latest"), format!("{} {}", data.len(), i18n.read().t("data points")))}
                         }
                     }
                 }

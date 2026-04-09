@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::icons::IconX;
 use dioxus::prelude::*;
@@ -49,6 +50,7 @@ pub fn AnimatedDialog(
     scrollable_body: Option<bool>,
     children: Element,
 ) -> Element {
+    let i18n = use_i18n();
     let width_val = width.unwrap_or_else(|| "450px".to_string());
     let max_height_val = max_height.unwrap_or_else(|| "90vh".to_string());
     let title_text = title.unwrap_or_default();
@@ -284,6 +286,7 @@ pub fn AnimatedDialog(
                                 border_radius: "8px",
                                 box_shadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
                                 cursor: "pointer",
+                                title: i18n.read().t("Close"),
                                 onclick: {
                                     let mut visibility = visibility.clone();
                                     let on_close = on_close.clone();
@@ -323,6 +326,7 @@ pub fn AnimatedDialog(
                         border_radius: "8px",
                         box_shadow: "0 6px 18px rgba(0, 0, 0, 0.12)",
                         cursor: "pointer",
+                        title: i18n.read().t("Close"),
                         onclick: {
                             let mut visibility = visibility.clone();
                             let on_close = on_close.clone();
@@ -393,8 +397,9 @@ pub fn DialogFooter(
     is_processing: Option<bool>,
     confirm_style: Option<String>,
 ) -> Element {
-    let cancel = cancel_text.unwrap_or_else(|| "取消".to_string());
-    let confirm = confirm_text.unwrap_or_else(|| "确定".to_string());
+    let i18n = use_i18n();
+    let cancel = cancel_text.unwrap_or_else(|| i18n.read().t("Cancel"));
+    let confirm = confirm_text.unwrap_or_else(|| i18n.read().t("Confirm"));
     let disabled = confirm_disabled.unwrap_or(false);
     let processing = is_processing.unwrap_or(false);
     let style = confirm_style.unwrap_or_else(|| colors.primary.to_string());

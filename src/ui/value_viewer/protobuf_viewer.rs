@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::protobuf_schema::PROTO_REGISTRY;
 use crate::serialization::{parse_to_json, SerializationFormat};
 use crate::theme::{
@@ -10,6 +11,7 @@ use serde_json::Value as JsonValue;
 
 #[component]
 pub(super) fn ProtobufViewer(data: Vec<u8>) -> Element {
+    let i18n = use_i18n();
     let mut selected_message = use_signal(|| String::new());
     let mut import_error = use_signal(|| None::<String>);
 
@@ -66,7 +68,7 @@ pub(super) fn ProtobufViewer(data: Vec<u8>) -> Element {
                         });
                     },
 
-                    "导入 .proto 文件"
+                    {i18n.read().t("Import .proto file")}
                 }
 
                 if has_schema {
@@ -80,7 +82,7 @@ pub(super) fn ProtobufViewer(data: Vec<u8>) -> Element {
                         value: "{selected_message}",
                         onchange: move |e| selected_message.set(e.value()),
 
-                        option { value: "", "Raw 解析" }
+                        option { value: "", {i18n.read().t("Raw decode")} }
                         for message in messages.iter() {
                             option {
                                 value: message.full_name.clone(),
@@ -102,7 +104,7 @@ pub(super) fn ProtobufViewer(data: Vec<u8>) -> Element {
                             PROTO_REGISTRY.write().clear();
                             selected_message.set(String::new());
                         },
-                        "清除 Schema"
+                        {i18n.read().t("Clear schema")}
                     }
                 }
             }
@@ -114,7 +116,7 @@ pub(super) fn ProtobufViewer(data: Vec<u8>) -> Element {
                     border_radius: "8px",
                     color: COLOR_ERROR,
                     font_size: "12px",
-                    "Schema 导入失败：{error}"
+                    {format!("{}{}", i18n.read().t("Schema import failed: "), error)}
                 }
             }
 
@@ -125,7 +127,7 @@ pub(super) fn ProtobufViewer(data: Vec<u8>) -> Element {
                     border_radius: "4px",
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "11px",
-                    "已加载 {messages.len()} 个消息类型"
+                    {format!("{} {}", i18n.read().t("Loaded message types"), messages.len())}
                 }
             }
 
@@ -143,7 +145,7 @@ pub(super) fn ProtobufViewer(data: Vec<u8>) -> Element {
                     border_radius: "8px",
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "12px",
-                    "Protobuf 解析失败"
+                    {i18n.read().t("Failed to decode Protobuf")}
                 }
             }
         }

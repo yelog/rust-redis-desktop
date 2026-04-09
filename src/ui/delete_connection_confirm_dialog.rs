@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
 use dioxus::prelude::*;
@@ -11,6 +12,7 @@ pub fn DeleteConnectionConfirmDialog(
     on_confirm: EventHandler<Uuid>,
     on_cancel: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     rsx! {
         AnimatedDialog {
             is_open: true,
@@ -26,7 +28,7 @@ pub fn DeleteConnectionConfirmDialog(
                 gap: "8px",
                 font_size: "18px",
 
-                "⚠️ 确认删除连接"
+                {format!("⚠️ {}", i18n.read().t("Delete connection"))}
             }
 
             div {
@@ -41,7 +43,7 @@ pub fn DeleteConnectionConfirmDialog(
                     font_size: "13px",
                     margin_bottom: "12px",
 
-                    "将要删除的连接："
+                    {i18n.read().t("Connection to delete:")}
                 }
 
                 div {
@@ -54,7 +56,7 @@ pub fn DeleteConnectionConfirmDialog(
                         color: "{colors.text}",
                         font_size: "14px",
 
-                        "连接名称"
+                        {i18n.read().t("Connection name")}
                     }
 
                     span {
@@ -75,7 +77,7 @@ pub fn DeleteConnectionConfirmDialog(
                 background: "{colors.error_bg}",
                 border_radius: "4px",
 
-                "⚠️ 此操作将删除该连接配置，且不可恢复！"
+                {format!("⚠️ {}", i18n.read().t("This will delete the saved connection configuration permanently."))}
             }
 
             div {
@@ -98,7 +100,7 @@ pub fn DeleteConnectionConfirmDialog(
                         }
                     },
 
-                    "确认删除"
+                    {i18n.read().t("Delete")}
                 }
 
                 button {
@@ -112,7 +114,7 @@ pub fn DeleteConnectionConfirmDialog(
                     font_size: "13px",
                     onclick: move |_| on_cancel.call(()),
 
-                    "取消"
+                    {i18n.read().t("Cancel")}
                 }
             }
         }

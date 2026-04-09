@@ -7,6 +7,7 @@ use super::styles::{
 };
 use super::{BinaryFormat, LARGE_KEY_THRESHOLD, PAGE_SIZE, ROW_EDIT_BG};
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::KeyInfo;
 use crate::serialization::SerializationFormat;
 use crate::theme::{
@@ -62,6 +63,7 @@ pub(super) fn ZSetPanel(
     mut editing_zset_member: Signal<Option<String>>,
     mut editing_zset_score: Signal<String>,
 ) -> Element {
+    let i18n = use_i18n();
     let _ = deleting_zset_member;
     let zset_val = zset_value();
     let zset_search_val = zset_search();
@@ -99,7 +101,7 @@ pub(super) fn ZSetPanel(
                         border_radius: "6px",
                         color: COLOR_TEXT,
                         value: "{zset_search}",
-                        placeholder: "搜索成员",
+                        placeholder: i18n.read().t("Search members"),
                         oninput: {
                             let pool = connection_pool.clone();
                             let key = display_key.clone();
@@ -182,7 +184,7 @@ pub(super) fn ZSetPanel(
                                 }
                             },
 
-                            if zset_loading_more() { "搜索中..." } else { "服务端搜索" }
+                            {if zset_loading_more() { i18n.read().t("Searching...") } else { i18n.read().t("Search server") }}
                         }
                     }
 
@@ -206,7 +208,7 @@ pub(super) fn ZSetPanel(
                         border_radius: "6px",
                         color: COLOR_TEXT,
                         value: "{new_zset_member}",
-                        placeholder: "输入新成员",
+                        placeholder: i18n.read().t("Enter new member"),
                         oninput: move |event| new_zset_member.set(event.value()),
                     }
 
@@ -223,7 +225,7 @@ pub(super) fn ZSetPanel(
                                 let score_str = new_zset_score();
                                 spawn(async move {
                                     if member.trim().is_empty() {
-                                        zset_status_message.set("成员不能为空".to_string());
+                                        zset_status_message.set(i18n.read().t("Member cannot be empty"));
                                         zset_status_error.set(true);
                                         return;
                                     }
@@ -231,7 +233,7 @@ pub(super) fn ZSetPanel(
                                     let score: f64 = match score_str.parse() {
                                         Ok(s) => s,
                                         Err(_) => {
-                                            zset_status_message.set("Score 必须是有效数字".to_string());
+                                            zset_status_message.set(i18n.read().t("Score must be a valid number"));
                                             zset_status_error.set(true);
                                             return;
                                         }
@@ -245,7 +247,7 @@ pub(super) fn ZSetPanel(
                                         Ok(_) => {
                                             new_zset_member.set(String::new());
                                             new_zset_score.set(String::new());
-                                            zset_status_message.set("添加成功".to_string());
+                                            zset_status_message.set(i18n.read().t("Added"));
                                             zset_status_error.set(false);
                                             if let Err(error) = data_loader::load_key_data(
                                                 pool.clone(),
@@ -283,7 +285,7 @@ pub(super) fn ZSetPanel(
                                             }
                                         }
                                         Err(error) => {
-                                            zset_status_message.set(format!("添加失败：{error}"));
+                                            zset_status_message.set(format!("{}{}", i18n.read().t("Add failed: "), error));
                                             zset_status_error.set(true);
                                         }
                                     }
@@ -292,7 +294,7 @@ pub(super) fn ZSetPanel(
                             }
                         },
 
-                        if zset_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                        {if zset_action().as_deref() == Some("add") { i18n.read().t("Adding...") } else { i18n.read().t("Add member") }}
                     }
 
                     div {
@@ -306,24 +308,24 @@ pub(super) fn ZSetPanel(
                     margin_left: "auto",
                     flex_shrink: "0",
                     style: "{secondary_action_button_style()}",
-                    title: "复制",
+                    title: i18n.read().t("Copy"),
                     onclick: {
                         let zset = zset_val.clone();
                         move |_| {
                             let json = serde_json::to_string_pretty(&zset).unwrap_or_default();
                             match copy_value_to_clipboard(&json) {
                                 Ok(_) => {
-                                    toast_manager.write().success("复制成功");
+                                    toast_manager.write().success(&i18n.read().t("Copied"));
                                 }
                                 Err(error) => {
-                                    toast_manager.write().error(&format!("复制失败：{error}"));
+                                    toast_manager.write().error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                 }
                             }
                         }
                     },
 
                     IconCopy { size: Some(14) }
-                    "复制"
+                    {i18n.read().t("Copy")}
                 }
             }
 
@@ -476,7 +478,7 @@ pub(super) fn ZSetPanel(
                                                                 Ok(s) => s,
                                                                 Err(_) => {
                                                                     zset_status_message.set(
-                                                                        "Score 必须是有效数字".to_string(),
+                                                                        i18n.read().t("Score must be a valid number"),
                                                                     );
                                                                     zset_status_error.set(true);
                                                                     return;
@@ -487,7 +489,7 @@ pub(super) fn ZSetPanel(
                                                             match pool.zset_add(&key, &member, score).await {
                                                                 Ok(_) => {
                                                                     editing_zset_member.set(None);
-                                                                    zset_status_message.set("修改成功".to_string());
+                                                                    zset_status_message.set(i18n.read().t("Updated"));
                                                                     zset_status_error.set(false);
                                                                     if let Err(error) = data_loader::load_key_data(
                                                                         pool.clone(),
@@ -526,7 +528,7 @@ pub(super) fn ZSetPanel(
                                                                 }
                                                                 Err(error) => {
                                                                     zset_status_message
-                                                                        .set(format!("修改失败：{error}"));
+                                                                        .set(format!("{}{}", i18n.read().t("Update failed: "), error));
                                                                     zset_status_error.set(true);
                                                                 }
                                                             }
@@ -535,7 +537,7 @@ pub(super) fn ZSetPanel(
                                                     }
                                                 },
 
-                                                "保存"
+                                                {i18n.read().t("Save")}
                                             }
 
                                             button {
@@ -549,7 +551,7 @@ pub(super) fn ZSetPanel(
                                                     editing_zset_member.set(None);
                                                 },
 
-                                                "取消"
+                                                {i18n.read().t("Cancel")}
                                             }
                                         }
                                     }
@@ -595,18 +597,18 @@ pub(super) fn ZSetPanel(
 
                                             button {
                                                 style: "{compact_icon_action_button_style(false, false)}",
-                                                title: "复制",
+                                                title: i18n.read().t("Copy"),
                                                 onclick: {
                                                     let member = member.clone();
                                                     move |_| {
                                                         match copy_value_to_clipboard(&member) {
                                                             Ok(_) => {
-                                                                toast_manager.write().success("复制成功");
+                                                                toast_manager.write().success(&i18n.read().t("Copied"));
                                                             }
                                                             Err(error) => {
                                                                 toast_manager
                                                                     .write()
-                                                                    .error(&format!("复制失败：{error}"));
+                                                                    .error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                                             }
                                                         }
                                                     }
@@ -617,7 +619,7 @@ pub(super) fn ZSetPanel(
 
                                             button {
                                                 style: "{compact_icon_action_button_style(false, false)}",
-                                                title: "修改 Score",
+                                                title: i18n.read().t("Edit score"),
                                                 onclick: {
                                                     let member = member.clone();
                                                     let score = *score;
@@ -633,7 +635,7 @@ pub(super) fn ZSetPanel(
                                             button {
                                                 style: "{compact_icon_action_button_style(true, zset_action().is_some())}",
                                                 disabled: zset_action().is_some(),
-                                                title: "删除",
+                                                title: i18n.read().t("Delete"),
                                                 onclick: {
                                                     let pool = connection_pool.clone();
                                                     let key = display_key.clone();
@@ -648,7 +650,7 @@ pub(super) fn ZSetPanel(
                                                             match pool.zset_remove(&key, &member).await {
                                                                 Ok(_) => {
                                                                     zset_status_message
-                                                                        .set("删除成功".to_string());
+                                                                        .set(i18n.read().t("Deleted"));
                                                                     zset_status_error.set(false);
                                                                     if let Err(error) = data_loader::load_key_data(
                                                                         pool.clone(),
@@ -687,7 +689,7 @@ pub(super) fn ZSetPanel(
                                                                 }
                                                                 Err(error) => {
                                                                     zset_status_message
-                                                                        .set(format!("删除失败：{error}"));
+                                                                        .set(format!("{}{}", i18n.read().t("Delete failed: "), error));
                                                                     zset_status_error.set(true);
                                                                 }
                                                             }
@@ -714,7 +716,7 @@ pub(super) fn ZSetPanel(
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "13px",
 
-                    "加载中..."
+                    {i18n.read().t("Loading...")}
                 }
             }
 
@@ -725,7 +727,7 @@ pub(super) fn ZSetPanel(
                     color: COLOR_TEXT_SUBTLE,
                     font_size: "12px",
 
-                    "向下滚动加载更多..."
+                    {i18n.read().t("Scroll down to load more...")}
                 }
             }
         }

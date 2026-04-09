@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::connection::ConnectionPool;
 use crate::redis::ExportFormat;
 use crate::theme::ThemeColors;
@@ -18,6 +19,7 @@ pub fn ExportDialog(
     colors: ThemeColors,
     on_close: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut export_format = use_signal(|| ExportFormat::Json);
     let mut processing = use_signal(|| false);
     let mut exported_content = use_signal(String::new);
@@ -72,7 +74,7 @@ pub fn ExportDialog(
                         export_done.set(true);
                     }
                     Err(e) => {
-                        error_msg.set(format!("导出失败: {}", e));
+                        error_msg.set(format!("{}{}", i18n.read().t("Export failed: "), e));
                     }
                 }
 
@@ -98,7 +100,7 @@ pub fn ExportDialog(
                 color: "{colors.text}",
                 margin_bottom: "20px",
                 font_size: "18px",
-                "导出数据"
+                {i18n.read().t("Export data")}
             }
 
             if !loaded() {
@@ -106,7 +108,7 @@ pub fn ExportDialog(
                     padding: "40px",
                     text_align: "center",
                     color: "{colors.text_secondary}",
-                    "正在扫描键..."
+                    {i18n.read().t("Scanning keys...")}
                 }
             } else if export_done() {
                 div {
@@ -118,7 +120,7 @@ pub fn ExportDialog(
                             color: "{colors.text_secondary}",
                             font_size: "13px",
                             margin_bottom: "8px",
-                            "导出格式"
+                            {i18n.read().t("Export format")}
                         }
 
                         div {
@@ -156,7 +158,7 @@ pub fn ExportDialog(
                                     checked: matches!(*export_format.read(), ExportFormat::Commands),
                                     onchange: move |_| export_format.set(ExportFormat::Commands),
                                 }
-                                "Redis Commands"
+                                {i18n.read().t("Redis commands")}
                             }
                         }
                     }
@@ -165,7 +167,7 @@ pub fn ExportDialog(
                         margin_bottom: "12px",
                         color: "{colors.text_secondary}",
                         font_size: "12px",
-                        "共 {keys_to_export.read().len()} 个键"
+                        {format!("{} {}", i18n.read().t("Total keys:"), keys_to_export.read().len())}
                     }
 
                     textarea {
@@ -212,7 +214,7 @@ pub fn ExportDialog(
                             cursor: "pointer",
                             font_size: "13px",
                             onclick: copy_to_clipboard,
-                            "复制到剪贴板"
+                            {i18n.read().t("Copy to clipboard")}
                         }
 
                         button {
@@ -225,7 +227,7 @@ pub fn ExportDialog(
                             cursor: "pointer",
                             font_size: "13px",
                             onclick: move |_| on_close.call(()),
-                            "关闭"
+                            {i18n.read().t("Close")}
                         }
                     }
                 }
@@ -239,7 +241,7 @@ pub fn ExportDialog(
                             color: "{colors.text_secondary}",
                             font_size: "13px",
                             margin_bottom: "8px",
-                            "导出格式"
+                            {i18n.read().t("Export format")}
                         }
 
                         div {
@@ -277,7 +279,7 @@ pub fn ExportDialog(
                                     checked: matches!(*export_format.read(), ExportFormat::Commands),
                                     onchange: move |_| export_format.set(ExportFormat::Commands),
                                 }
-                                "Redis Commands"
+                                {i18n.read().t("Redis commands")}
                             }
                         }
                     }
@@ -292,7 +294,7 @@ pub fn ExportDialog(
                             color: "{colors.text_secondary}",
                             font_size: "12px",
                             margin_bottom: "8px",
-                            "将要导出的键:"
+                            {i18n.read().t("Keys to export:")}
                         }
 
                         div {
@@ -313,7 +315,7 @@ pub fn ExportDialog(
                                     color: "{colors.text_secondary}",
                                     font_size: "12px",
                                     padding_top: "8px",
-                                    "... 还有 {keys_to_export.read().len() - 20} 个键"
+                                    {format!("... {} {} key(s)", i18n.read().t("and"), keys_to_export.read().len() - 20)}
                                 }
                             }
                         }
@@ -323,7 +325,7 @@ pub fn ExportDialog(
                         color: "{colors.text_secondary}",
                         font_size: "12px",
                         margin_bottom: "16px",
-                        "共 {keys_to_export.read().len()} 个键将被导出"
+                        {format!("{} {}", i18n.read().t("Total keys to export:"), keys_to_export.read().len())}
                     }
 
                     div {
@@ -340,7 +342,7 @@ pub fn ExportDialog(
                             cursor: "pointer",
                             font_size: "13px",
                             onclick: move |_| on_close.call(()),
-                            "取消"
+                            {i18n.read().t("Cancel")}
                         }
 
                         button {
@@ -355,7 +357,7 @@ pub fn ExportDialog(
                             disabled: processing(),
                             onclick: do_export,
 
-                            if processing() { "导出中..." } else { "导出" }
+                            {if processing() { i18n.read().t("Exporting...") } else { i18n.read().t("Export") }}
                         }
                     }
                 }

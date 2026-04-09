@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::redis::TreeNode;
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_SUCCESS, COLOR_TEXT,
@@ -48,6 +49,7 @@ pub fn LazyTreeNode(
     on_expand: EventHandler<String>,
     context_menu: Signal<Option<ContextMenuState<(String, bool)>>>,
 ) -> Element {
+    let i18n = use_i18n();
     let is_expanded = tree_state.read().expanded_nodes.contains(&node.node_id);
     let is_selected = node.is_leaf && selected_key == node.path;
     let selection_mode = tree_state.read().selection_mode;
@@ -72,9 +74,9 @@ pub fn LazyTreeNode(
     let is_partial = !node.is_leaf && selected_leaves > 0 && selected_leaves < total_leaves;
 
     let display_name = if node.name.is_empty() {
-        "[空]"
+        i18n.read().t("[Empty]")
     } else {
-        &node.name
+        node.name.clone()
     };
 
     rsx! {

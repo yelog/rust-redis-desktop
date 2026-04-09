@@ -1,5 +1,6 @@
 use crate::autostart::AutostartManager;
 use crate::config::AppSettings;
+use crate::i18n::{use_i18n, LanguagePreference};
 use crate::theme::{ThemeColors, ThemeId, ThemeMode, ThemePreference};
 use crate::ui::animated_dialog::{AnimatedDialog, EXIT_ANIMATION_DURATION_MS};
 use crate::ui::icons::{IconCheck, IconGitHub, IconRefresh, IconStar, IconX};
@@ -29,9 +30,9 @@ enum SettingsTab {
 impl SettingsTab {
     fn label(self) -> &'static str {
         match self {
-            Self::General => "通用",
-            Self::Appearance => "外观",
-            Self::About => "关于",
+            Self::General => "General",
+            Self::Appearance => "Appearance",
+            Self::About => "About",
         }
     }
 }
@@ -44,12 +45,14 @@ pub fn SettingsDialog(
     on_change: EventHandler<AppSettings>,
     on_close: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let _ = resolved_theme_id;
     let mut current_tab = use_signal(SettingsTab::default);
     let mut auto_refresh_interval = use_signal(|| settings.auto_refresh_interval);
     let mut theme_mode = use_signal(|| settings.theme_preference.mode());
     let mut light_theme = use_signal(|| settings.theme_preference.light_theme());
     let mut dark_theme = use_signal(|| settings.theme_preference.dark_theme());
+    let mut language_preference = use_signal(|| settings.language_preference);
     let mut auto_check_updates = use_signal(|| settings.auto_check_updates);
     let launch_at_startup = use_signal(|| settings.launch_at_startup);
     let launch_at_startup_error = use_signal(|| None::<String>);
@@ -69,6 +72,7 @@ pub fn SettingsDialog(
             on_change.call(AppSettings {
                 auto_refresh_interval: auto_refresh_interval(),
                 theme_preference: preference,
+                language_preference: language_preference(),
                 auto_check_updates: auto_check_updates(),
                 launch_at_startup: launch_at_startup(),
             });
@@ -114,7 +118,7 @@ pub fn SettingsDialog(
                                     line_height: "1",
                                     white_space: "nowrap",
 
-                                    "设置"
+                                    {i18n.read().t("Settings")}
                                 }
 
                                 div {
@@ -150,7 +154,7 @@ pub fn SettingsDialog(
                                 border: "1px solid {colors.border}",
                                 border_radius: "8px",
                                 cursor: "pointer",
-                                title: "关闭",
+                                title: i18n.read().t("Close"),
                                 onclick: {
                                     let mut dialog_open = dialog_open.clone();
                                     let on_close = on_close.clone();
@@ -195,7 +199,7 @@ pub fn SettingsDialog(
                                     gap: "16px",
 
                                     SettingsGroup {
-                                        label: "服务器信息自动刷新",
+                                        label: "Server info auto refresh",
                                         colors,
 
                                         div {
@@ -203,7 +207,7 @@ pub fn SettingsDialog(
                                             flex_wrap: "wrap",
                                             gap: "8px",
 
-                                            for (value, label) in [(0, "关闭"), (5, "5秒"), (10, "10秒"), (30, "30秒"), (60, "60秒")] {
+                                            for (value, label) in [(0, "Off"), (5, "5s"), (10, "10s"), (30, "30s"), (60, "60s")] {
                                                 ChoiceChip {
                                                     label,
                                                     selected: auto_refresh_interval() == value,
@@ -221,7 +225,7 @@ pub fn SettingsDialog(
                                     }
 
                                     SettingsGroup {
-                                        label: "自动检查更新",
+                                        label: "Auto check for updates",
                                         colors,
 
                                         div {
@@ -229,7 +233,7 @@ pub fn SettingsDialog(
                                             flex_wrap: "wrap",
                                             gap: "8px",
 
-                                            for (value, label) in [(true, "开启"), (false, "关闭")] {
+                                            for (value, label) in [(true, "Enabled"), (false, "Disabled")] {
                                                 ChoiceChip {
                                                     label,
                                                     selected: auto_check_updates() == value,
@@ -247,7 +251,7 @@ pub fn SettingsDialog(
                                     }
 
                                     SettingsGroup {
-                                        label: "开机启动",
+                                        label: "Launch at startup",
                                         colors,
 
                                         div {
@@ -260,7 +264,7 @@ pub fn SettingsDialog(
                                                 flex_wrap: "wrap",
                                                 gap: "8px",
 
-                                                for (value, label) in [(true, "开启"), (false, "关闭")] {
+                                                for (value, label) in [(true, "Enabled"), (false, "Disabled")] {
                                                     ChoiceChip {
                                                         label,
                                                         selected: launch_at_startup() == value,
@@ -283,7 +287,7 @@ pub fn SettingsDialog(
                                                                     }
                                                                     Err(err) => {
                                                                         tracing::error!("Failed to update autostart: {}", err);
-                                                                        launch_at_startup_error.set(Some(format!("开机启动设置失败: {}", err)));
+                                                                        launch_at_startup_error.set(Some(format!("{}{}", i18n.read().t("Failed to configure launch at startup: "), err)));
                                                                     }
                                                                 }
                                                             }
@@ -302,6 +306,46 @@ pub fn SettingsDialog(
                                             }
                                         }
                                     }
+
+                                    SettingsGroup {
+                                        label: "settings.language",
+                                        colors,
+
+                                        div {
+                                            display: "flex",
+                                            flex_direction: "column",
+                                            gap: "8px",
+
+                                            div {
+                                                display: "flex",
+                                                flex_wrap: "wrap",
+                                                gap: "8px",
+
+                                                for preference in LanguagePreference::all() {
+                                                    ChoiceChip {
+                                                        label: preference.label(),
+                                                        selected: language_preference() == preference,
+                                                        colors,
+                                                        on_click: {
+                                                            let apply = apply_settings.clone();
+                                                            move |_| {
+                                                                language_preference.set(preference);
+                                                                apply();
+                                                            }
+                                                        },
+                                                    }
+                                                }
+                                            }
+
+                                            div {
+                                                color: "{colors.text_secondary}",
+                                                font_size: "12px",
+                                                line_height: "1.5",
+
+                                                {i18n.read().t("Applies immediately to the app UI. Restart to update menu and tray text.")}
+                                            }
+                                        }
+                                    }
                                 }
                             },
                             SettingsTab::Appearance => rsx! {
@@ -311,7 +355,7 @@ pub fn SettingsDialog(
                                     gap: "16px",
 
                                     SettingsGroup {
-                                        label: "主题模式",
+                                        label: "Theme mode",
                                         colors,
 
                                         div {
@@ -320,9 +364,9 @@ pub fn SettingsDialog(
                                             gap: "8px",
 
                                             for (mode, label) in [
-                                                (ThemeMode::System, "跟随系统"),
-                                                (ThemeMode::Dark, "暗色"),
-                                                (ThemeMode::Light, "亮色"),
+                                                (ThemeMode::System, "System"),
+                                                (ThemeMode::Dark, "Dark"),
+                                                (ThemeMode::Light, "Light"),
                                             ] {
                                                 ChoiceChip {
                                                     label,
@@ -348,7 +392,7 @@ pub fn SettingsDialog(
                                         rsx! {
                                             if show_light {
                                                 ThemeSelector {
-                                                    label: "亮色主题",
+                                                    label: "Light theme",
                                                     options: ThemeId::LIGHT_OPTIONS,
                                                     selected: light_theme(),
                                                     colors,
@@ -364,7 +408,7 @@ pub fn SettingsDialog(
 
                                             if show_dark {
                                                 ThemeSelector {
-                                                    label: "暗色主题",
+                                                    label: "Dark theme",
                                                     options: ThemeId::DARK_OPTIONS,
                                                     selected: dark_theme(),
                                                     colors,
@@ -463,6 +507,7 @@ fn about_release_channel(version: &str) -> &'static str {
 
 #[component]
 fn AboutHero(version: String, channel_label: &'static str, colors: ThemeColors) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             padding: "22px",
@@ -516,7 +561,7 @@ fn AboutHero(version: String, channel_label: &'static str, colors: ThemeColors) 
                     font_size: "13px",
                     font_weight: "500",
 
-                    "连接、浏览、编辑和分析 Redis 数据的一体化桌面工具"
+                    {i18n.read().t("An all-in-one desktop tool for connecting, browsing, editing, and analyzing Redis data.")}
                 }
             }
 
@@ -533,13 +578,13 @@ fn AboutHero(version: String, channel_label: &'static str, colors: ThemeColors) 
                 }
 
                 AboutBadge {
-                    label: channel_label.to_string(),
+                    label: i18n.read().t(channel_label),
                     colors,
                     emphasized: false,
                 }
 
                 AboutBadge {
-                    label: "Open Source".to_string(),
+                    label: i18n.read().t("Open Source"),
                     colors,
                     emphasized: false,
                 }
@@ -552,7 +597,7 @@ fn AboutHero(version: String, channel_label: &'static str, colors: ThemeColors) 
                 line_height: "1.6",
                 text_align: "center",
 
-                "支持多连接管理、数据查看与编辑、命令执行、监控分析等 Redis 日常工作流。"
+                {i18n.read().t("Supports multi-connection management, data inspection and editing, command execution, and monitoring workflows for daily Redis work.")}
             }
         }
     }
@@ -560,6 +605,7 @@ fn AboutHero(version: String, channel_label: &'static str, colors: ThemeColors) 
 
 #[component]
 fn AboutStarCard(colors: ThemeColors) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             padding: "20px",
@@ -593,7 +639,7 @@ fn AboutStarCard(colors: ThemeColors) -> Element {
                     font_size: "12px",
                     font_weight: "600",
 
-                    "支持项目"
+                    {i18n.read().t("Support the project")}
                 }
             }
 
@@ -608,7 +654,7 @@ fn AboutStarCard(colors: ThemeColors) -> Element {
                     font_weight: "700",
                     line_height: "1.3",
 
-                    "这个项目对你有帮助？欢迎点个 Star"
+                    {i18n.read().t("Is this project helpful? Give it a Star")}
                 }
 
                 div {
@@ -616,12 +662,12 @@ fn AboutStarCard(colors: ThemeColors) -> Element {
                     font_size: "13px",
                     line_height: "1.6",
 
-                    "你的支持会直接帮助项目持续迭代，也能让更多开发者更快发现并使用它。"
+                    {i18n.read().t("Your support helps the project keep improving and makes it easier for more developers to discover it.")}
                 }
             }
 
             AboutActionButton {
-                label: "前往 GitHub 点 Star".to_string(),
+                label: i18n.read().t("Star on GitHub"),
                 colors,
                 icon: rsx! {
                     IconGitHub { size: Some(16), color: Some(colors.primary_text.to_string()) }
@@ -645,13 +691,14 @@ fn AboutUpdateCard(
     on_set_auto_check: EventHandler<bool>,
     on_manual_check: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let enable_auto_check = on_set_auto_check.clone();
     let disable_auto_check = on_set_auto_check.clone();
 
     rsx! {
         AboutSectionCard {
-            title: "版本更新",
-            description: "保留当前版本策略，按需检查新版本。",
+            title: "Version updates",
+            description: "Keep the current release channel and check for updates when needed.",
             colors,
 
             div {
@@ -676,7 +723,7 @@ fn AboutUpdateCard(
                             font_size: "14px",
                             font_weight: "600",
 
-                            "自动检查更新"
+                            {i18n.read().t("Auto check for updates")}
                         }
 
                         div {
@@ -684,7 +731,7 @@ fn AboutUpdateCard(
                             font_size: "12px",
                             line_height: "1.5",
 
-                            "应用启动后自动检查是否有新版本可用。"
+                            {i18n.read().t("Check automatically on startup")}
                         }
                     }
 
@@ -694,7 +741,7 @@ fn AboutUpdateCard(
                         gap: "8px",
 
                         ChoiceChip {
-                            label: "开启",
+                            label: "Enabled",
                             selected: auto_check_updates,
                             colors,
                             compact: true,
@@ -703,7 +750,7 @@ fn AboutUpdateCard(
                         }
 
                         ChoiceChip {
-                            label: "关闭",
+                            label: "Disabled",
                             selected: !auto_check_updates,
                             colors,
                             compact: true,
@@ -735,7 +782,7 @@ fn AboutUpdateCard(
                             font_size: "14px",
                             font_weight: "600",
 
-                            "手动检查更新"
+                            {i18n.read().t("Manual check for updates")}
                         }
 
                         div {
@@ -743,15 +790,15 @@ fn AboutUpdateCard(
                             font_size: "12px",
                             line_height: "1.5",
 
-                            "需要时立即拉取最新版本信息。"
+                            {i18n.read().t("Pull the latest release metadata on demand.")}
                         }
                     }
 
                     AboutActionButton {
                         label: if checking {
-                            "检查中...".to_string()
+                            i18n.read().t("Checking for updates...")
                         } else {
-                            "检查更新".to_string()
+                            i18n.read().t("Check now")
                         },
                         colors,
                         icon: rsx! {
@@ -787,7 +834,7 @@ fn AboutUpdateCard(
                             font_size: "13px",
                             font_weight: "600",
 
-                            "发现新版本 v{version}"
+                            {format!("{} v{version}", i18n.read().t("Update available"))}
                         }
                     }
                 }
@@ -803,6 +850,7 @@ fn AboutSectionCard(
     colors: ThemeColors,
     children: Element,
 ) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             padding: "18px",
@@ -823,7 +871,7 @@ fn AboutSectionCard(
                     font_size: "16px",
                     font_weight: "700",
 
-                    "{title}"
+                    {i18n.read().t(title)}
                 }
 
                 div {
@@ -831,7 +879,7 @@ fn AboutSectionCard(
                     font_size: "12px",
                     line_height: "1.5",
 
-                    "{description}"
+                    {i18n.read().t(description)}
                 }
             }
 
@@ -955,6 +1003,7 @@ fn SettingsTabButton(
     colors: ThemeColors,
     on_click: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let background = if active {
         colors.background_tertiary
     } else {
@@ -987,13 +1036,14 @@ fn SettingsTabButton(
             white_space: "nowrap",
             onclick: move |_| on_click.call(()),
 
-            "{label}"
+            {i18n.read().t(label)}
         }
     }
 }
 
 #[component]
 fn SettingsGroup(label: &'static str, colors: ThemeColors, children: Element) -> Element {
+    let i18n = use_i18n();
     rsx! {
         div {
             display: "flex",
@@ -1007,7 +1057,7 @@ fn SettingsGroup(label: &'static str, colors: ThemeColors, children: Element) ->
                 font_weight: "500",
                 line_height: "1.4",
 
-                "{label}"
+                {i18n.read().t(label)}
             }
 
             {children}
@@ -1024,6 +1074,7 @@ fn ChoiceChip(
     compact: Option<bool>,
     inactive_bg: Option<&'static str>,
 ) -> Element {
+    let i18n = use_i18n();
     let compact = compact.unwrap_or(false);
     let background = if selected {
         colors.primary
@@ -1060,7 +1111,7 @@ fn ChoiceChip(
             white_space: "nowrap",
             onclick: move |_| on_click.call(()),
 
-            "{label}"
+            {i18n.read().t(label)}
         }
     }
 }

@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::serialization::java_converters::{
     get_collection_display_name, is_collection_type, is_map_type, is_set_type,
 };
@@ -32,6 +33,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
     let mut expand_all = use_signal(|| true);
     let mut search_query = use_signal(String::new);
     let mut show_raw_json = use_signal(|| false);
+    let i18n = use_i18n();
 
     rsx! {
         div {
@@ -80,7 +82,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                         font_size: "14px",
                         font_weight: "600",
 
-                        "Java 序列化对象"
+                        {i18n.read().t("Java Serialized Object")}
                     }
                 }
             }
@@ -93,7 +95,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
 
                 input {
                     r#type: "text",
-                    placeholder: "搜索字段名...",
+                    placeholder: i18n.read().t("Search field names..."),
                     value: "{search_query}",
                     oninput: move |e| search_query.set(e.value()),
                     font_size: "12px",
@@ -117,7 +119,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
 
                     onclick: move |_| expand_all.set(true),
 
-                    "全部展开"
+                    {i18n.read().t("Expand All")}
                 }
 
                 button {
@@ -131,7 +133,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
 
                     onclick: move |_| expand_all.set(false),
 
-                    "全部折叠"
+                    {i18n.read().t("Collapse All")}
                 }
 
                 button {
@@ -159,7 +161,8 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                                     Ok(json) => {
                                         let json = extract_inner_value(json);
                                         if *show_raw_json.read() {
-                                            let json_str = serde_json::to_string_pretty(&json).unwrap_or_else(|_| "序列化失败".to_string());
+                                            let json_str = serde_json::to_string_pretty(&json)
+                                                .unwrap_or_else(|_| i18n.read().t("Serialization failed"));
                                             rsx! {
                                                 JsonViewer {
                                                     value: json_str,
@@ -181,7 +184,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                                     Err(_) => rsx! {
                                         div {
                                             color: COLOR_TEXT_SECONDARY,
-                                            "序列化失败"
+                                            {i18n.read().t("Serialization failed")}
                                         }
                                     },
                                 }
@@ -189,7 +192,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                             Content::Block(bytes) => rsx! {
                                 div {
                                     color: COLOR_TEXT_SECONDARY,
-                                    "原始数据块 ({bytes.len()} 字节)"
+                                    {format!("{} ({} {})", i18n.read().t("Raw data block"), bytes.len(), i18n.read().t("bytes"))}
                                 }
                             },
                         }
@@ -201,7 +204,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                             background: COLOR_ERROR_BG,
                             border_radius: "4px",
 
-                            "解析错误: {e}"
+                            {format!("{}: {e}", i18n.read().t("Parse error"))}
                         }
                     },
                     None => rsx! {
@@ -210,7 +213,7 @@ pub fn JavaSerializedViewer(data: Vec<u8>) -> Element {
                             text_align: "center",
                             padding: "20px",
 
-                            "解析中..."
+                            {i18n.read().t("Parsing...")}
                         }
                     },
                 }
@@ -598,6 +601,12 @@ fn JsonPrimitiveNode(value: JsonValue, depth: usize) -> Element {
 #[component]
 fn CopyButton(text: String) -> Element {
     let mut copied = use_signal(|| false);
+    let i18n = use_i18n();
+    let copy_button_label = if *copied.read() {
+        "✓".to_string()
+    } else {
+        i18n.read().t("Copy")
+    };
 
     rsx! {
         button {
@@ -615,7 +624,7 @@ fn CopyButton(text: String) -> Element {
                 }
             },
 
-            if *copied.read() { "✓" } else { "复制" }
+            {copy_button_label}
         }
     }
 }

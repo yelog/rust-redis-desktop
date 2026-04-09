@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
 use dioxus::prelude::*;
@@ -12,6 +13,7 @@ pub fn BatchTtlDialog(
     on_confirm: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let default_ttl = current_ttl.unwrap_or(-1);
     let mut ttl_value = use_signal(|| default_ttl.to_string());
     let mut processing = use_signal(|| false);
@@ -30,9 +32,9 @@ pub fn BatchTtlDialog(
             colors,
             width: "500px".to_string(),
             title: if is_single {
-                "设置 TTL".to_string()
+                i18n.read().t("Set TTL")
             } else {
-                "批量设置 TTL".to_string()
+                i18n.read().t("Batch set TTL")
             },
 
             div {
@@ -133,7 +135,7 @@ pub fn BatchTtlDialog(
                     disabled: processing(),
                     onclick: move |_| on_cancel.call(()),
 
-                    "取消"
+                    {i18n.read().t("Cancel")}
                 }
 
                 button {
@@ -154,7 +156,7 @@ pub fn BatchTtlDialog(
                             let keys = keys.clone();
                             spawn(async move {
                                 if ttl < -2 {
-                                    status_message.set("TTL 必须大于等于 -2".to_string());
+                                     status_message.set(i18n.read().t("TTL must be greater than or equal to -2"));
                                     status_error.set(true);
                                     return;
                                 }
@@ -183,14 +185,14 @@ pub fn BatchTtlDialog(
                                 processing.set(false);
 
                                 if fail_count == 0 {
-                                    status_message.set(format!("成功设置 {} 个 key 的 TTL", success_count));
+                                     status_message.set(format!("{} {}", i18n.read().t("TTL updated for keys:"), success_count));
                                     status_error.set(false);
                                     spawn(async move {
                                         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                                         on_confirm.call(());
                                     });
                                 } else {
-                                    status_message.set(format!("成功: {}, 失败: {}", success_count, fail_count));
+                                     status_message.set(format!("{} {}, {} {}", i18n.read().t("Success:"), success_count, i18n.read().t("Failed:"), fail_count));
                                     status_error.set(true);
                                 }
                             });
@@ -198,9 +200,9 @@ pub fn BatchTtlDialog(
                     },
 
                     if processing() {
-                        "设置中..."
+                        {i18n.read().t("Applying TTL...")}
                     } else {
-                        "✓ 确认设置"
+                        {format!("✓ {}", i18n.read().t("Apply TTL"))}
                     }
                 }
             }

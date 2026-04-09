@@ -50,44 +50,44 @@ pub(super) fn format_bytes(data: &[u8], format: super::BinaryFormat) -> String {
         super::BinaryFormat::JavaSerialized => {
             if is_java_serialization(data) {
                 format!(
-                    "Java 序列化对象 ({} 字节)\n\n请切换到 Java 视图查看解析结果",
+                    "Java serialized object ({} bytes)\n\nSwitch to the Java view to inspect the decoded result",
                     data.len()
                 )
             } else {
-                "非 Java 序列化数据".to_string()
+                "Not Java serialized data".to_string()
             }
         }
         super::BinaryFormat::Php => {
             let detected = detect_serialization_format(data);
             if detected == SerializationFormat::Php {
                 format!(
-                    "PHP 序列化数据 ({} 字节)\n\n请切换到 PHP 视图查看解析结果",
+                    "PHP serialized data ({} bytes)\n\nSwitch to the PHP view to inspect the decoded result",
                     data.len()
                 )
             } else {
-                "非 PHP 序列化数据".to_string()
+                "Not PHP serialized data".to_string()
             }
         }
         super::BinaryFormat::MsgPack => {
             let detected = detect_serialization_format(data);
             if detected == SerializationFormat::MsgPack {
                 format!(
-                    "MessagePack 数据 ({} 字节)\n\n请切换到 MsgPack 视图查看解析结果",
+                    "MessagePack data ({} bytes)\n\nSwitch to the MsgPack view to inspect the decoded result",
                     data.len()
                 )
             } else {
-                "非 MessagePack 数据".to_string()
+                "Not MessagePack data".to_string()
             }
         }
         super::BinaryFormat::Pickle => {
             let detected = detect_serialization_format(data);
             if detected == SerializationFormat::Pickle {
                 format!(
-                    "Python Pickle 数据 ({} 字节)\n\n请切换到 Pickle 视图查看解析结果",
+                    "Python Pickle data ({} bytes)\n\nSwitch to the Pickle view to inspect the decoded result",
                     data.len()
                 )
             } else {
-                "非 Pickle 数据".to_string()
+                "Not Pickle data".to_string()
             }
         }
         super::BinaryFormat::Kryo => {
@@ -102,57 +102,57 @@ pub(super) fn format_bytes(data: &[u8], format: super::BinaryFormat) -> String {
                     "Kryo"
                 };
                 format!(
-                    "{} 数据 ({} 字节)\n\n请切换到 Kryo 视图查看解析结果",
+                    "{} data ({} bytes)\n\nSwitch to the Kryo view to inspect the decoded result",
                     format_name,
                     data.len()
                 )
             } else {
-                "非 Kryo/FST 数据".to_string()
+                "Not Kryo/FST data".to_string()
             }
         }
         super::BinaryFormat::Bitmap => {
             format!(
-                "Bitmap 数据 ({} 字节)\n\n请点击 Bitmap 按钮查看可视化",
+                "Bitmap data ({} bytes)\n\nClick the Bitmap button to view the visualization",
                 data.len()
             )
         }
         super::BinaryFormat::Image => {
             if let Some(format) = detect_image_format(data) {
-                format!("{} 图片 ({} 字节)", format, data.len())
+                format!("{} image ({} bytes)", format, data.len())
             } else {
-                "非图片数据".to_string()
+                "Not image data".to_string()
             }
         }
         super::BinaryFormat::Protobuf => {
             if is_protobuf_data(data) {
                 format!(
-                    "Protobuf 数据 ({} 字节)\n\n请切换到 Protobuf 视图查看解析结果",
+                    "Protobuf data ({} bytes)\n\nSwitch to the Protobuf view to inspect the decoded result",
                     data.len()
                 )
             } else {
-                "非 Protobuf 数据".to_string()
+                "Not Protobuf data".to_string()
             }
         }
         super::BinaryFormat::Bson => {
             let detected = detect_serialization_format(data);
             if detected == SerializationFormat::Bson {
                 format!(
-                    "BSON 数据 ({} 字节)\n\n请切换到 BSON 视图查看解析结果",
+                    "BSON data ({} bytes)\n\nSwitch to the BSON view to inspect the decoded result",
                     data.len()
                 )
             } else {
-                "非 BSON 数据".to_string()
+                "Not BSON data".to_string()
             }
         }
         super::BinaryFormat::Cbor => {
             let detected = detect_serialization_format(data);
             if detected == SerializationFormat::Cbor {
                 format!(
-                    "CBOR 数据 ({} 字节)\n\n请切换到 CBOR 视图查看解析结果",
+                    "CBOR data ({} bytes)\n\nSwitch to the CBOR view to inspect the decoded result",
                     data.len()
                 )
             } else {
-                "非 CBOR 数据".to_string()
+                "Not CBOR data".to_string()
             }
         }
     }
@@ -226,7 +226,7 @@ pub(super) fn format_memory_usage(bytes: Option<u64>) -> String {
 pub(super) fn format_ttl_label(ttl: Option<i64>) -> String {
     match ttl {
         Some(ttl) => format!("{ttl}s"),
-        None => "永久".to_string(),
+        None => "Permanent".to_string(),
     }
 }
 
@@ -240,13 +240,13 @@ pub(super) fn value_metric_label(
     stream_value: &[(String, Vec<(String, String)>)],
 ) -> String {
     match key_type {
-        KeyType::String => format!("长度: {}", string_value.chars().count()),
-        KeyType::Hash => format!("字段: {}", hash_value.len()),
-        KeyType::List => format!("元素: {}", list_value.len()),
-        KeyType::Set => format!("成员: {}", set_value.len()),
-        KeyType::ZSet => format!("成员: {}", zset_value.len()),
-        KeyType::Stream => format!("条目: {}", stream_value.len()),
-        KeyType::JSON => format!("JSON: {} 字符", string_value.chars().count()),
+        KeyType::String => format!("Length: {}", string_value.chars().count()),
+        KeyType::Hash => format!("Fields: {}", hash_value.len()),
+        KeyType::List => format!("Items: {}", list_value.len()),
+        KeyType::Set => format!("Members: {}", set_value.len()),
+        KeyType::ZSet => format!("Members: {}", zset_value.len()),
+        KeyType::Stream => format!("Entries: {}", stream_value.len()),
+        KeyType::JSON => format!("JSON: {} chars", string_value.chars().count()),
         KeyType::None => "--".to_string(),
     }
 }

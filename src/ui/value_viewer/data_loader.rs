@@ -56,7 +56,7 @@ pub(super) async fn load_key_data(
         let info = pool
             .get_key_info(&key)
             .await
-            .map_err(|e| format!("读取 key 信息失败: {e}"))?;
+            .map_err(|e| format!("Failed to load key info: {e}"))?;
 
         tracing::info!("Key info loaded: {:?}", info.key_type);
         key_info.set(Some(info.clone()));
@@ -66,7 +66,7 @@ pub(super) async fn load_key_data(
                 let bytes = pool
                     .get_string_bytes(&key)
                     .await
-                    .map_err(|e| format!("读取字符串值失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load string value: {e}"))?;
 
                 tracing::info!("String value loaded: {} bytes", bytes.len());
 
@@ -175,11 +175,11 @@ pub(super) async fn load_key_data(
                 let total = pool
                     .hash_len(&key)
                     .await
-                    .map_err(|e| format!("获取 hash 长度失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load hash length: {e}"))?;
                 let (cursor, items) = pool
                     .get_hash_page(&key, 0, super::PAGE_SIZE)
                     .await
-                    .map_err(|e| format!("读取 hash 数据失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load hash data: {e}"))?;
                 let fields: HashMap<String, String> = items.into_iter().collect();
                 tracing::info!("Hash loaded: {} fields (total: {})", fields.len(), total);
                 hash_value.set(fields);
@@ -205,14 +205,14 @@ pub(super) async fn load_key_data(
                 let total = pool
                     .list_len(&key)
                     .await
-                    .map_err(|e| format!("获取 list 长度失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load list length: {e}"))?;
                 let count = super::PAGE_SIZE.min(total as usize);
                 let items = if count == 0 {
                     Vec::new()
                 } else {
                     pool.get_list_range(&key, 0, (count - 1) as i64)
                         .await
-                        .map_err(|e| format!("读取 list 数据失败: {e}"))?
+                        .map_err(|e| format!("Failed to load list data: {e}"))?
                 };
                 tracing::info!("List loaded: {} items (total: {})", items.len(), total);
                 list_value.set(items.clone());
@@ -239,11 +239,11 @@ pub(super) async fn load_key_data(
                 let total = pool
                     .set_len(&key)
                     .await
-                    .map_err(|e| format!("获取 set 长度失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load set length: {e}"))?;
                 let (cursor, items) = pool
                     .get_set_page(&key, 0, super::PAGE_SIZE)
                     .await
-                    .map_err(|e| format!("读取 set 数据失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load set data: {e}"))?;
                 tracing::info!("Set loaded: {} members (total: {})", items.len(), total);
                 set_value.set(items);
                 set_cursor.set(cursor);
@@ -269,11 +269,11 @@ pub(super) async fn load_key_data(
                 let total = pool
                     .zset_card(&key)
                     .await
-                    .map_err(|e| format!("获取 zset 长度失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load zset length: {e}"))?;
                 let (cursor, items) = pool
                     .get_zset_page(&key, 0, super::PAGE_SIZE)
                     .await
-                    .map_err(|e| format!("读取 zset 数据失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load zset data: {e}"))?;
                 tracing::info!("ZSet loaded: {} members (total: {})", items.len(), total);
                 zset_value.set(items);
                 zset_cursor.set(cursor);
@@ -299,7 +299,7 @@ pub(super) async fn load_key_data(
                 let entries = pool
                     .stream_range(&key, "-", "+")
                     .await
-                    .map_err(|e| format!("读取 stream 数据失败: {e}"))?;
+                    .map_err(|e| format!("Failed to load stream data: {e}"))?;
                 tracing::info!("Stream loaded: {} entries", entries.len());
                 stream_value.set(entries);
                 string_value.set(String::new());

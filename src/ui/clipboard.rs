@@ -10,7 +10,7 @@ fn clipboard_slot() -> &'static Mutex<Option<Clipboard>> {
 pub fn copy_text_to_clipboard(value: &str) -> Result<(), String> {
     let mut clipboard = clipboard_slot()
         .lock()
-        .map_err(|_| "剪贴板当前不可用".to_string())?;
+        .map_err(|_| "Clipboard is currently unavailable".to_string())?;
 
     if clipboard.is_none() {
         *clipboard = Some(Clipboard::new().map_err(|e| e.to_string())?);
@@ -18,7 +18,7 @@ pub fn copy_text_to_clipboard(value: &str) -> Result<(), String> {
 
     clipboard
         .as_mut()
-        .ok_or_else(|| "剪贴板初始化失败".to_string())?
+        .ok_or_else(|| "Failed to initialize clipboard".to_string())?
         .set_text(value.to_string())
         .map_err(|e| e.to_string())
 }

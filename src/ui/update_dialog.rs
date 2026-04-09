@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
 use crate::updater::UpdateInfo;
@@ -20,6 +21,7 @@ pub fn UpdateDialog(
     on_skip: EventHandler<String>,
     on_close: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut state = use_signal(UpdateDialogState::default);
     let mut progress = use_signal(|| (0u64, 0u64));
     let mut error_msg = use_signal(|| String::new());
@@ -49,7 +51,7 @@ pub fn UpdateDialog(
             on_close: on_close.clone(),
             colors,
             width: "420px".to_string(),
-            title: "发现新版本".to_string(),
+            title: i18n.read().t("Update available"),
 
             div {
                 div {
@@ -103,7 +105,7 @@ pub fn UpdateDialog(
                         font_size: "11px",
                         margin_bottom: "8px",
 
-                        "更新内容"
+                        {i18n.read().t("Release notes")}
                     }
 
                     div {
@@ -130,7 +132,7 @@ pub fn UpdateDialog(
                                 color: "{colors.text_secondary}",
                                 font_size: "13px",
 
-                                "正在下载..."
+                                {i18n.read().t("Downloading...")}
                             }
 
                             span {
@@ -169,7 +171,7 @@ pub fn UpdateDialog(
                         color: "{colors.error}",
                         font_size: "13px",
 
-                        "下载失败: {error_msg()}"
+                        {format!("{}{}", i18n.read().t("Download failed: "), error_msg())}
                     }
                 }
 
@@ -182,7 +184,7 @@ pub fn UpdateDialog(
                         color: "{colors.success}",
                         font_size: "13px",
 
-                        "下载完成，即将开始安装..."
+                        {i18n.read().t("Download complete. Starting installation...")}
                     }
                 }
 
@@ -205,7 +207,7 @@ pub fn UpdateDialog(
                                 move |_| on_close.call(())
                             },
 
-                            "稍后提醒"
+                            {i18n.read().t("Remind me later")}
                         }
 
                         button {
@@ -226,7 +228,7 @@ pub fn UpdateDialog(
                                 }
                             },
 
-                            "跳过此版本"
+                            {i18n.read().t("Skip this version")}
                         }
 
                         button {
@@ -245,7 +247,7 @@ pub fn UpdateDialog(
                                 }
                             },
 
-                            "立即更新"
+                            {i18n.read().t("Update now")}
                         }
                     } else if state() == UpdateDialogState::Downloading {
                         button {
@@ -259,7 +261,7 @@ pub fn UpdateDialog(
                             opacity: "0.6",
                             disabled: true,
 
-                            "下载中..."
+                            {i18n.read().t("Downloading...")}
                         }
                     } else if state() == UpdateDialogState::Error {
                         button {
@@ -275,7 +277,7 @@ pub fn UpdateDialog(
                                 error_msg.set(String::new());
                             },
 
-                            "重试"
+                            {i18n.read().t("Retry")}
                         }
                     }
                 }

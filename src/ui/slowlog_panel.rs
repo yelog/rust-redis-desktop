@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::theme::{
     COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_TEXT,
     COLOR_TEXT_SECONDARY, COLOR_TEXT_SOFT, COLOR_TEXT_SUBTLE, COLOR_WARNING,
@@ -57,6 +58,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
     let slowlog_entries = use_signal(Vec::<SlowLogEntry>::new);
     let loading = use_signal(|| false);
     let mut refresh_trigger = use_signal(|| 0u32);
+    let i18n = use_i18n();
 
     use_effect({
         let pool = connection_pool.clone();
@@ -102,7 +104,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
                     font_size: "18px",
                     margin: "0",
 
-                    "🐌 慢查询日志"
+                    {format!("🐌 {}", i18n.read().t("Slow Log"))}
                 }
 
                 button {
@@ -115,7 +117,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
                     font_size: "12px",
                     onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
 
-                    "🔄 刷新"
+                    {format!("🔄 {}", i18n.read().t("Refresh"))}
                 }
             }
 
@@ -128,7 +130,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
                         text_align: "center",
                         padding: "40px",
 
-                        "加载中..."
+                        {i18n.read().t("Loading...")}
                     }
                 } else if entries.is_empty() {
                     div {
@@ -136,7 +138,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
                         text_align: "center",
                         padding: "40px",
 
-                        "暂无慢查询记录"
+                        {i18n.read().t("No slow log entries")}
                     }
                 } else {
                     div {
@@ -173,7 +175,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "时间"
+                                        {i18n.read().t("Time")}
                                     }
 
                                     th {
@@ -184,7 +186,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "耗时"
+                                        {i18n.read().t("Duration")}
                                     }
 
                                     th {
@@ -194,7 +196,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
                                         font_weight: "600",
                                         text_align: "left",
 
-                                        "命令"
+                                        {i18n.read().t("Command")}
                                     }
                                 }
                             }
@@ -250,7 +252,7 @@ pub fn SlowLogPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SUBTLE,
                         font_size: "12px",
 
-                        "共 {entries.len()} 条记录"
+                        {format!("{} {}", entries.len(), i18n.read().t("entries total"))}
                     }
                 }
             }

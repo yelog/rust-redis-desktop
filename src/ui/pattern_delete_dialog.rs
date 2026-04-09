@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::connection::{ConnectionError, ConnectionPool};
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
@@ -13,6 +14,7 @@ pub fn PatternDeleteDialog(
     on_confirm: EventHandler<usize>,
     on_cancel: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut pattern = use_signal(|| initial_pattern);
     let mut preview_keys = use_signal(Vec::<String>::new);
     let mut scanning = use_signal(|| false);
@@ -103,7 +105,7 @@ pub fn PatternDeleteDialog(
             colors,
             width: "550px".to_string(),
             max_height: "85vh".to_string(),
-            title: "按模式批量删除".to_string(),
+            title: i18n.read().t("Delete by pattern"),
 
             div {
                 margin_bottom: "16px",
@@ -150,7 +152,7 @@ pub fn PatternDeleteDialog(
                         disabled: scanning() || pattern().is_empty(),
                         onclick: scan_handler.clone(),
 
-                        if scanning() { "扫描中..." } else { "预览" }
+                        {if scanning() { i18n.read().t("Scanning...") } else { i18n.read().t("Preview") }}
                     }
                 }
             }
@@ -170,7 +172,7 @@ pub fn PatternDeleteDialog(
                         text_align: "center",
                         color: "{colors.text_secondary}",
 
-                        "没有找到匹配的 key"
+                        {i18n.read().t("No matching keys found")}
                     }
                 } else {
                     div {
@@ -229,7 +231,7 @@ pub fn PatternDeleteDialog(
                             color: "{colors.error}",
                             font_size: "12px",
 
-                            "⚠️ 警告：此操作将删除所有匹配的 key，且不可恢复！"
+                            {format!("⚠️ {}", i18n.read().t("This will permanently delete all matching keys."))}
                         }
                     }
 

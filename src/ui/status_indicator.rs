@@ -1,4 +1,5 @@
 use crate::connection::ConnectionState;
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use dioxus::prelude::*;
 
@@ -43,11 +44,12 @@ pub fn StatusIndicatorWithLabel(
     size: Option<f32>,
 ) -> Element {
     let show_label = show_label.unwrap_or(true);
+    let i18n = use_i18n();
     let label = match state {
-        ConnectionState::Connected => "已连接",
-        ConnectionState::Connecting => "连接中",
-        ConnectionState::Disconnected => "未连接",
-        ConnectionState::Error => "连接异常",
+        ConnectionState::Connected => i18n.read().t("Connected"),
+        ConnectionState::Connecting => i18n.read().t("Connecting"),
+        ConnectionState::Disconnected => i18n.read().t("Disconnected"),
+        ConnectionState::Error => i18n.read().t("Connection error"),
     };
 
     let label_color = match state {
@@ -77,7 +79,7 @@ pub fn StatusIndicatorWithLabel(
                     letter_spacing: "0.12em",
                     transition: "color 300ms ease-in-out",
 
-                    "{label}"
+                    {label}
                 }
             }
         }

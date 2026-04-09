@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::{KeyType, TreeBuilder, TreeNode};
 use crate::theme::{
     ThemeColors, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
@@ -62,10 +63,6 @@ fn key_match_pattern(search_pattern: &str) -> String {
     } else {
         format!("*{}*", search_pattern.trim())
     }
-}
-
-fn format_db_count_label(keys: u64) -> String {
-    format!("{keys} 个 Key")
 }
 
 fn selection_toolbar_style() -> String {
@@ -138,6 +135,7 @@ pub fn KeyBrowser(
     colors: ThemeColors,
     on_key_select: EventHandler<String>,
 ) -> Element {
+    let i18n = use_i18n();
     let tree_nodes = use_signal(Vec::<TreeNode>::new);
     let mut search_pattern = use_signal(String::new);
     let loading = use_signal(|| false);
@@ -407,7 +405,7 @@ pub fn KeyBrowser(
                             color: COLOR_TEXT,
                             box_sizing: "border-box",
                             flex_shrink: "0",
-                            title: "选择数据库",
+                            title: i18n.read().t("Select database"),
                             onclick: move |e| {
                                 let coords = e.client_coordinates();
                                 toolbar_menu.set(None);
@@ -458,7 +456,7 @@ pub fn KeyBrowser(
                                 border: "none",
                                 color: COLOR_TEXT,
                                 font_size: "12px",
-                                placeholder: "搜索",
+                                placeholder: i18n.read().t("Search"),
                                 value: "{search_pattern}",
                                 autocapitalize: "off",
                                 autocorrect: "off",
@@ -489,8 +487,8 @@ pub fn KeyBrowser(
                                 align_items: "center",
                                 justify_content: "center",
                                 flex_shrink: "0",
-                                title: "刷新 Key",
-                                aria_label: "刷新 Key",
+                                title: i18n.read().t("Refresh keys"),
+                                aria_label: i18n.read().t("Refresh keys"),
                                 onclick: move |_| refresh_trigger.set(refresh_trigger() + 1),
 
                                 IconRefresh { size: Some(14) }
@@ -508,8 +506,8 @@ pub fn KeyBrowser(
                                 align_items: "center",
                                 justify_content: "center",
                                 flex_shrink: "0",
-                                title: "更多操作",
-                                aria_label: "更多操作",
+                                title: i18n.read().t("More actions"),
+                                aria_label: i18n.read().t("More actions"),
                                 onclick: move |e| {
                                     let coords = e.client_coordinates();
                                     db_menu.set(None);
@@ -536,8 +534,8 @@ pub fn KeyBrowser(
                             align_items: "center",
                             justify_content: "center",
                             flex_shrink: "0",
-                            title: "新增 Key",
-                            aria_label: "新增 Key",
+                            title: i18n.read().t("Add key"),
+                            aria_label: i18n.read().t("Add key"),
                             onclick: move |_| show_add_key_dialog.set(true),
 
                             IconPlus { size: Some(14) }
@@ -550,7 +548,7 @@ pub fn KeyBrowser(
                             color: COLOR_TEXT_SECONDARY,
                             font_size: "11px",
 
-                            "已扫描 {scan_progress.read().scanned} 个 key"
+                            {format!("{} {}", scan_progress.read().scanned, i18n.read().t("keys scanned"))}
                         }
                     }
 
@@ -561,7 +559,7 @@ pub fn KeyBrowser(
                             span {
                                 style: "{selection_count_style()}",
 
-                                "已选 {selected_count} 项"
+                                {format!("{} {}", i18n.read().t("Selected"), selected_count)}
                             }
 
                             div {
@@ -576,14 +574,14 @@ pub fn KeyBrowser(
                                         tree_state.write().selected_keys.extend(all_keys);
                                     },
 
-                                    "全选"
+                                    {i18n.read().t("Select all")}
                                 }
 
                                 button {
                                     style: "{compact_secondary_button_style(false)}",
                                     onclick: move |_| tree_state.write().selected_keys.clear(),
 
-                                    "清空"
+                                    {i18n.read().t("Clear")}
                                 }
 
                                 button {
@@ -614,7 +612,7 @@ pub fn KeyBrowser(
                                         }
                                     },
 
-                                    "删除"
+                                    {i18n.read().t("Delete")}
                                 }
                             }
                         }
@@ -635,9 +633,9 @@ pub fn KeyBrowser(
                             font_size: "13px",
 
                             if loading() {
-                                "正在加载..."
+                                {i18n.read().t("Loading...")}
                             } else {
-                                "没有找到 key"
+                                {i18n.read().t("No keys found")}
                             }
                         }
                     } else if use_virtual_scroll() && !tree_state.read().selection_mode {
@@ -696,7 +694,7 @@ pub fn KeyBrowser(
                     color: COLOR_TEXT_SUBTLE,
                     font_size: "11px",
 
-                    "共 {keys_count()} 个 Key"
+                    {format!("{} {}", keys_count(), i18n.read().t("Keys"))}
                 }
             }
 
@@ -751,7 +749,7 @@ pub fn KeyBrowser(
 
                         ContextMenuItem {
                             icon: Some(rsx! { IconCopy { size: Some(14) } }),
-                            label: "复制路径".to_string(),
+                            label: i18n.read().t("Copy path"),
                             danger: false,
                             disabled: false,
                             onclick: {
@@ -759,7 +757,7 @@ pub fn KeyBrowser(
                                 move |_| {
                                     context_menu.set(None);
                                     if copy_text_to_clipboard(&node_path).is_ok() {
-                                        toast_manager.write().success("路径已复制");
+                                        toast_manager.write().success(&i18n.read().t("Path copied"));
                                     }
                                 }
                             },
@@ -767,7 +765,7 @@ pub fn KeyBrowser(
 
                         ContextMenuItem {
                             icon: Some(rsx! { IconDownload { size: Some(14) } }),
-                            label: "导出".to_string(),
+                            label: i18n.read().t("Export"),
                             danger: false,
                             disabled: false,
                             onclick: {
@@ -785,7 +783,7 @@ pub fn KeyBrowser(
 
                         ContextMenuItem {
                             icon: Some(rsx! { IconClock { size: Some(14) } }),
-                            label: "设置TTL".to_string(),
+                            label: i18n.read().t("Set TTL"),
                             danger: false,
                             disabled: !is_leaf,
                             onclick: {
@@ -805,21 +803,21 @@ pub fn KeyBrowser(
 
                         ContextMenuItem {
                             icon: Some(rsx! { IconRefresh { size: Some(14) } }),
-                            label: "重命名".to_string(),
+                            label: i18n.read().t("Rename"),
                             danger: false,
                             disabled: !is_leaf,
                             onclick: {
                                 let _node_path = node_path.clone();
                                 move |_| {
                                     context_menu.set(None);
-                                    toast_manager.write().success("重命名功能开发中");
+                                    toast_manager.write().success(&i18n.read().t("Rename is not implemented yet"));
                                 }
                             },
                         }
 
                         ContextMenuItem {
                             icon: Some(rsx! { IconTrash { size: Some(14) } }),
-                            label: "删除".to_string(),
+                            label: i18n.read().t("Delete"),
                             danger: true,
                             disabled: false,
                             onclick: {
@@ -865,7 +863,7 @@ pub fn KeyBrowser(
                             for i in 0..16u8 {
                                 {
                                     let keys = db_keys_count.read().get(&i).copied().unwrap_or(0);
-                                    let label = format!("DB {} · {}", i, format_db_count_label(keys));
+                                    let label = format!("DB {} · {} {}", i, keys, i18n.read().t("Keys"));
                                     let pool = connection_pool.clone();
                                     let mut current_db_signal = current_db.clone();
                                     let mut refresh_trigger_signal = refresh_trigger.clone();
@@ -926,7 +924,7 @@ pub fn KeyBrowser(
 
                         ContextMenuItem {
                             icon: Some(rsx! { IconSearch { size: Some(14) } }),
-                            label: "内存分析".to_string(),
+                            label: i18n.read().t("Memory analysis"),
                             danger: false,
                             disabled: false,
                             onclick: move |_| {
@@ -937,7 +935,7 @@ pub fn KeyBrowser(
 
                         ContextMenuItem {
                             icon: Some(rsx! { IconTrash { size: Some(14) } }),
-                            label: "模式删除".to_string(),
+                            label: i18n.read().t("Delete by pattern"),
                             danger: true,
                             disabled: false,
                             onclick: move |_| {
@@ -955,9 +953,9 @@ pub fn KeyBrowser(
                                 }
                             }),
                             label: if current_selection_mode {
-                                "退出多选".to_string()
+                                i18n.read().t("Exit multi-select")
                             } else {
-                                "进入多选".to_string()
+                                i18n.read().t("Enter multi-select")
                             },
                             danger: false,
                             disabled: false,
@@ -973,7 +971,7 @@ pub fn KeyBrowser(
                         if scan_progress.read().is_scanning {
                             ContextMenuItem {
                                 icon: Some(rsx! { IconX { size: Some(14) } }),
-                                label: "取消扫描".to_string(),
+                                label: i18n.read().t("Cancel scan"),
                                 danger: true,
                                 disabled: false,
                                 onclick: {
@@ -1057,7 +1055,9 @@ pub fn KeyBrowser(
                     move |deleted_count: usize| {
                         show_pattern_delete_dialog.set(false);
                         refresh_trigger.set(refresh_trigger() + 1);
-                        toast_manager.write().success(&format!("已删除 {} 个 key", deleted_count));
+                        toast_manager
+                            .write()
+                            .success(&format!("{} {}", i18n.read().t("Deleted"), deleted_count));
                     }
                 },
                 on_cancel: move |_| show_pattern_delete_dialog.set(false),

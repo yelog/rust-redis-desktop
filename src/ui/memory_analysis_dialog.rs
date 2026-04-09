@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::connection::ConnectionPool;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
@@ -87,6 +88,7 @@ pub fn MemoryAnalysisDialog(
     on_select_key: EventHandler<String>,
     on_close: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut entries = use_signal(Vec::<MemoryEntry>::new);
     let mut prefix_stats = use_signal(Vec::<PrefixStats>::new);
     let mut state = use_signal(|| ScanState::Idle);
@@ -255,7 +257,7 @@ pub fn MemoryAnalysisDialog(
             colors,
             width: "900px".to_string(),
             max_height: "90vh".to_string(),
-            title: "内存分析".to_string(),
+            title: i18n.read().t("Memory analysis"),
 
             div {
                 display: "flex",
@@ -407,7 +409,7 @@ pub fn MemoryAnalysisDialog(
                                 onclick: stop_scan,
 
                                 IconX { size: Some(14), color: Some(colors.primary_text.to_string()) }
-                                "停止"
+                                 {i18n.read().t("Stop")}
                             }
                         } else {
                             button {
@@ -425,7 +427,7 @@ pub fn MemoryAnalysisDialog(
                                 onclick: start_scan.clone(),
 
                                 IconSearch { size: Some(14), color: Some(colors.primary_text.to_string()) }
-                                "扫描"
+                                 {i18n.read().t("Scan")}
                             }
                         }
                     }
@@ -456,7 +458,7 @@ pub fn MemoryAnalysisDialog(
                             color: "{colors.error}",
                             font_size: "13px",
 
-                            "扫描失败: {e}"
+                            {format!("{}{}", i18n.read().t("Scan failed: "), e)}
                         }
                     },
                     ScanState::Completed { checked, found } if found > 0 => rsx! {
@@ -641,7 +643,7 @@ pub fn MemoryAnalysisDialog(
                                 font_size: "14px",
                                 font_weight: "600",
 
-                                "未找到匹配的 key"
+                                {i18n.read().t("No matching keys found")}
                             }
 
                             div {
@@ -666,7 +668,7 @@ pub fn MemoryAnalysisDialog(
                                 font_size: "14px",
                                 font_weight: "600",
 
-                                "准备扫描"
+                                {i18n.read().t("Ready to scan")}
                             }
 
                             div {

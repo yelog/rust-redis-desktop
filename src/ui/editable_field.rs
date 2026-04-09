@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::theme::{
     COLOR_BG, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST,
     COLOR_TEXT_SECONDARY,
@@ -27,6 +28,7 @@ pub fn EditableField(
     let mut is_editing = use_signal(|| false);
     let mut temp_value = use_signal(String::new);
     let mut toast_manager = use_context::<Signal<ToastManager>>();
+    let i18n = use_i18n();
 
     rsx! {
         div {
@@ -129,21 +131,28 @@ pub fn EditableField(
                             display: "flex",
                             align_items: "center",
                             gap: "4px",
-                            title: "复制",
+                            title: i18n.read().t("Copy"),
                             onclick: {
                                 let val = value.clone();
+                                let i18n = i18n.clone();
                                 move |_| match copy_to_clipboard(&val) {
                                     Ok(_) => {
-                                        toast_manager.write().success("已复制到剪贴板");
+                                        toast_manager
+                                            .write()
+                                            .success(&i18n.read().t("Copied to clipboard"));
                                     }
                                     Err(e) => {
-                                        toast_manager.write().error(&format!("复制失败：{}", e));
+                                        toast_manager.write().error(&format!(
+                                            "{}: {}",
+                                            i18n.read().t("Copy failed"),
+                                            i18n.read().t(&e)
+                                        ));
                                     }
                                 }
                             },
 
                             IconCopy { size: Some(14) }
-                            "复制"
+                            {i18n.read().t("Copy")}
                         }
 
                         if editable {

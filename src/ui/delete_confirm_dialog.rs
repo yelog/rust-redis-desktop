@@ -1,3 +1,4 @@
+use crate::i18n::use_i18n;
 use crate::connection::ConnectionPool;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
@@ -17,6 +18,7 @@ pub fn DeleteConfirmDialog(
     on_confirm: EventHandler<()>,
     on_cancel: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut processing = use_signal(|| false);
     let mut keys_to_delete = use_signal(Vec::<String>::new);
     let mut loaded = use_signal(|| false);
@@ -70,7 +72,7 @@ pub fn DeleteConfirmDialog(
                 gap: "8px",
                 font_size: "18px",
 
-                "⚠️ 确认删除"
+                {format!("⚠️ {}", i18n.read().t("Confirm delete"))}
             }
 
             if !loaded() {
@@ -79,7 +81,7 @@ pub fn DeleteConfirmDialog(
                     padding: "20px",
                     text_align: "center",
 
-                    "正在加载 key 列表..."
+                    {i18n.read().t("Loading key list...")}
                 }
             } else {
                 div {
@@ -88,9 +90,9 @@ pub fn DeleteConfirmDialog(
                     font_size: "13px",
 
                     if total_count == 1 && !targets[0].is_folder {
-                        "确定要删除这个 key 吗？"
+                        {i18n.read().t("Delete key?")}
                     } else {
-                        "确定要删除这些 key 吗？"
+                        {i18n.read().t("Delete these keys?")}
                     }
                 }
 
@@ -109,7 +111,7 @@ pub fn DeleteConfirmDialog(
                         font_size: "12px",
                         margin_bottom: "8px",
 
-                        "即将删除 {keys_to_delete.read().len()} 个 key："
+                        {format!("{} {}", i18n.read().t("Keys to delete:"), keys_to_delete.read().len())}
                     }
 
                     for key in display_keys.iter() {
@@ -129,7 +131,7 @@ pub fn DeleteConfirmDialog(
                             font_size: "12px",
                             margin_top: "8px",
 
-                            "... 还有 {remaining} 个 key"
+                            {format!("... {} {} key(s)", i18n.read().t("and"), remaining)}
                         }
                     }
                 }
@@ -174,9 +176,9 @@ pub fn DeleteConfirmDialog(
                         },
 
                         if processing() {
-                            "删除中..."
+                            {i18n.read().t("Deleting...")}
                         } else {
-                            "确认删除 ({keys_to_delete.read().len()})"
+                            {format!("{} ({})", i18n.read().t("Delete"), keys_to_delete.read().len())}
                         }
                     }
 
@@ -192,7 +194,7 @@ pub fn DeleteConfirmDialog(
                         disabled: processing(),
                         onclick: move |_| on_cancel.call(()),
 
-                        "取消"
+                        {i18n.read().t("Cancel")}
                     }
                 }
             }

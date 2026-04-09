@@ -1,6 +1,7 @@
 use crate::connection::{
     ClusterConfig, ConnectionConfig, ConnectionMode, ConnectionPool, SSHConfig, SSLConfig,
 };
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
 use dioxus::prelude::*;
@@ -21,6 +22,7 @@ pub fn ConnectionForm(
     on_save: EventHandler<ConnectionConfig>,
     on_cancel: EventHandler<()>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut name = use_signal(|| {
         editing_config
             .as_ref()
@@ -129,9 +131,9 @@ pub fn ConnectionForm(
 
     let is_editing = editing_config.is_some();
     let title = if is_editing {
-        "编辑连接"
+        i18n.read().t("Edit connection")
     } else {
-        "新建连接"
+        i18n.read().t("New connection")
     };
 
     let editing_config_id = editing_config.as_ref().map(|c| c.id);
@@ -239,7 +241,7 @@ pub fn ConnectionForm(
             on_close: on_cancel.clone(),
             colors,
             width: "450px".to_string(),
-            title: title.to_string(),
+            title,
 
             div {
                 div {
@@ -251,7 +253,7 @@ pub fn ConnectionForm(
                         font_size: "13px",
                         margin_bottom: "8px",
 
-                        "名称"
+                        {i18n.read().t("Name")}
                     }
 
                     input {
@@ -342,7 +344,7 @@ pub fn ConnectionForm(
                         font_size: "13px",
                         margin_bottom: "8px",
 
-                        "密码"
+                        {i18n.read().t("Password")}
                     }
 
                     input {
@@ -369,7 +371,7 @@ pub fn ConnectionForm(
                         font_size: "12px",
                         margin_bottom: "8px",
 
-                        "连接模式"
+                        {i18n.read().t("Connection mode")}
                     }
 
                     div {
@@ -855,13 +857,13 @@ pub fn ConnectionForm(
                                     }
                                     Err(_) => {
                                         tracing::error!("Test timeout");
-                                        test_result.set(TestResult::Failed("连接超时 (15秒)".to_string()));
+                                         test_result.set(TestResult::Failed(i18n.read().t("Connection timed out (15 seconds)")));
                                     }
                                 }
                             });
                         },
 
-                        if matches!(test_result(), TestResult::Testing) { "测试中..." } else { "测试连接" }
+                        {if matches!(test_result(), TestResult::Testing) { i18n.read().t("Testing...") } else { i18n.read().t("Test connection") }}
                     }
 
                     button {
@@ -898,7 +900,7 @@ pub fn ConnectionForm(
                             on_save.call(config);
                         },
 
-                        if is_editing { "更新" } else { "保存" }
+                        {if is_editing { i18n.read().t("Update") } else { i18n.read().t("Save") }}
                     }
                 }
             }

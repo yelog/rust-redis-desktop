@@ -1,4 +1,5 @@
 use crate::connection::ConnectionState;
+use crate::i18n::use_i18n;
 use crate::theme::{
     ThemeColors, COLOR_ACCENT, COLOR_BG, COLOR_BG_LOWEST, COLOR_BORDER, COLOR_PRIMARY,
     COLOR_SURFACE_HIGH, COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
@@ -16,18 +17,18 @@ use uuid::Uuid;
 
 fn state_label(state: ConnectionState) -> &'static str {
     match state {
-        ConnectionState::Connected => "已连接",
-        ConnectionState::Connecting => "连接中",
-        ConnectionState::Disconnected => "未连接",
-        ConnectionState::Error => "连接异常",
+        ConnectionState::Connected => "Connected",
+        ConnectionState::Connecting => "Connecting",
+        ConnectionState::Disconnected => "Disconnected",
+        ConnectionState::Error => "Connection error",
     }
 }
 
 fn primary_connection_action_label(state: ConnectionState) -> &'static str {
     match state {
-        ConnectionState::Connecting => "连接中",
-        ConnectionState::Connected => "重连",
-        ConnectionState::Disconnected | ConnectionState::Error => "连接",
+        ConnectionState::Connecting => "Connecting",
+        ConnectionState::Connected => "Reconnect",
+        ConnectionState::Disconnected | ConnectionState::Error => "Connect",
     }
 }
 
@@ -199,6 +200,7 @@ pub fn LeftRail(
     on_open_settings: EventHandler<()>,
     on_reorder_connection: EventHandler<(usize, usize)>,
 ) -> Element {
+    let i18n = use_i18n();
     let mut context_menu = use_signal(|| None::<ContextMenuState<Uuid>>);
     let mut dragging_index = use_signal(|| None::<usize>);
     let mut drag_over_index = use_signal(|| None::<usize>);
@@ -295,7 +297,7 @@ pub fn LeftRail(
                                 if let Some(name) = selected_name.as_ref() {
                                     "{name}"
                                 } else {
-                                    "未选择连接"
+                                    {i18n.read().t("No connection selected")}
                                 }
                             }
 
@@ -310,7 +312,7 @@ pub fn LeftRail(
                                     text_transform: "uppercase",
                                     letter_spacing: "0.12em",
 
-                                    "{state_label(selected_state)}"
+                                    {i18n.read().t(state_label(selected_state))}
                                 }
 
                                 if is_readonly {
@@ -323,7 +325,7 @@ pub fn LeftRail(
                                         border_radius: "4px",
                                         text_transform: "uppercase",
 
-                                        "只读"
+                                        {i18n.read().t("Read-only")}
                                     }
                                 }
                             }
@@ -355,7 +357,7 @@ pub fn LeftRail(
                                 onclick: move |_| on_reconnect_connection.call(id),
 
                                 IconRefresh { size: Some(13) }
-                                "{primary_connection_action_label(selected_state)}"
+                                {i18n.read().t(primary_connection_action_label(selected_state))}
                             }
 
                             button {
@@ -404,7 +406,7 @@ pub fn LeftRail(
                     onclick: move |_| on_add_connection.call(()),
 
                     IconPlus { size: Some(14) }
-                    "新建连接"
+                    {i18n.read().t("New connection")}
                 }
             }
 
@@ -421,7 +423,7 @@ pub fn LeftRail(
                     text_transform: "uppercase",
                     letter_spacing: "0.16em",
 
-                    "Connections"
+                    {i18n.read().t("Connections")}
                 }
 
                 div {
@@ -439,7 +441,7 @@ pub fn LeftRail(
                         display: "flex",
                         align_items: "center",
                         justify_content: "center",
-                        title: "导出连接",
+                        title: i18n.read().t("Export connections"),
                         onclick: move |_| on_export_connections.call(()),
 
                         IconDownload { size: Some(12) }
@@ -456,7 +458,7 @@ pub fn LeftRail(
                         display: "flex",
                         align_items: "center",
                         justify_content: "center",
-                        title: "导入连接",
+                        title: i18n.read().t("Import connections"),
                         onclick: move |_| on_import_connections.call(()),
 
                         IconUpload { size: Some(12) }
@@ -555,7 +557,7 @@ pub fn LeftRail(
 
                                         div {
                                             class: "dot-tooltip",
-                                            "{state_label(state)}"
+                                            {i18n.read().t(state_label(state))}
                                         }
                                     }
 
@@ -688,7 +690,7 @@ pub fn LeftRail(
                         background: COLOR_SURFACE_LOW,
                         border_radius: "8px",
 
-                        "还没有连接，先创建一个 Redis 连接。"
+                        {i18n.read().t("No connections yet. Create a Redis connection first.")}
                     }
                 }
             }
@@ -714,7 +716,7 @@ pub fn LeftRail(
                     onclick: move |_| on_open_settings.call(()),
 
                     IconSettings { size: Some(14) }
-                    "设置"
+                    {i18n.read().t("Settings")}
                 }
             }
 
@@ -750,7 +752,7 @@ pub fn LeftRail(
 
                             ContextMenuItem {
                                 icon: Some(rsx! { IconEdit { size: Some(14) } }),
-                                label: "编辑".to_string(),
+                                label: i18n.read().t("Edit"),
                                 danger: false,
                                 disabled: false,
                                 onclick: {
@@ -764,7 +766,7 @@ pub fn LeftRail(
 
                             ContextMenuItem {
                                 icon: Some(rsx! { IconRefresh { size: Some(14) } }),
-                                label: "重连".to_string(),
+                                label: i18n.read().t("Reconnect"),
                                 danger: false,
                                 disabled: is_connecting,
                                 onclick: {
@@ -778,7 +780,7 @@ pub fn LeftRail(
 
                             ContextMenuItem {
                                 icon: Some(rsx! { IconX { size: Some(14) } }),
-                                label: "断开".to_string(),
+                                label: i18n.read().t("Disconnect"),
                                 danger: false,
                                 disabled: !is_connected,
                                 onclick: {
@@ -792,7 +794,7 @@ pub fn LeftRail(
 
                             ContextMenuItem {
                                 icon: Some(rsx! { IconUpload { size: Some(14) } }),
-                                label: "导入数据".to_string(),
+                                label: i18n.read().t("Import data"),
                                 danger: false,
                                 disabled: false,
                                 onclick: {
@@ -806,7 +808,7 @@ pub fn LeftRail(
 
                             ContextMenuItem {
                                 icon: Some(rsx! { IconTrash { size: Some(14) } }),
-                                label: "删除".to_string(),
+                                label: i18n.read().t("Delete"),
                                 danger: true,
                                 disabled: is_connecting || is_connected,
                                 onclick: {
@@ -820,7 +822,7 @@ pub fn LeftRail(
 
                             ContextMenuItem {
                                 icon: Some(rsx! { IconAlert { size: Some(14) } }),
-                                label: "清空数据".to_string(),
+                                label: i18n.read().t("Flush data"),
                                 danger: true,
                                 disabled: !is_connected,
                                 onclick: {

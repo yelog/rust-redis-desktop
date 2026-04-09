@@ -1,5 +1,6 @@
 use crate::connection::ConnectionConfig;
 use crate::error::{ConfigError, Result};
+use crate::i18n::LanguagePreference;
 use crate::theme::ThemePreference;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -63,6 +64,8 @@ pub struct AppSettings {
     pub auto_refresh_interval: u32,
     #[serde(default, alias = "theme_mode")]
     pub theme_preference: ThemePreference,
+    #[serde(default)]
+    pub language_preference: LanguagePreference,
     #[serde(default = "default_auto_check_updates")]
     pub auto_check_updates: bool,
     #[serde(default)]
@@ -78,6 +81,7 @@ impl Default for AppSettings {
         Self {
             auto_refresh_interval: 0,
             theme_preference: ThemePreference::default(),
+            language_preference: LanguagePreference::default(),
             auto_check_updates: true,
             launch_at_startup: false,
         }

@@ -1,4 +1,5 @@
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::theme::{
     COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_TEXT,
     COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
@@ -25,6 +26,12 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
     let mut is_subscribing = use_signal(|| false);
     let mut status_message = use_signal(|| None::<String>);
     let mut subscribe_handle: Signal<Option<Arc<AtomicBool>>> = use_signal(|| None);
+    let i18n = use_i18n();
+    let subscribe_button_label = if is_subscribing() {
+        i18n.read().t("Subscribing...")
+    } else {
+        i18n.read().t("Subscribe")
+    };
 
     let _stop_subscription = move || {
         if let Some(handle) = subscribe_handle() {
@@ -58,6 +65,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
             let channel_clone = channel.clone();
             let mut messages = messages.clone();
 
+            let i18n = i18n.clone();
             spawn(async move {
                 let mut connection = pool.connection.lock().await;
                 if let Some(ref mut conn) = *connection {
@@ -67,7 +75,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                     if let Err(e) = conn.execute_cmd::<redis::Value>(&mut subscribe_cmd).await {
                         messages.write().push(PubSubMessage {
                             channel: "_system".to_string(),
-                            payload: format!("订阅失败: {}", e),
+                            payload: format!("{}: {}", i18n.read().t("Subscribe failed"), e),
                             timestamp: SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap_or_default()
@@ -90,7 +98,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
             let message = message_input();
 
             if channel.is_empty() || message.is_empty() {
-                status_message.set(Some("请输入频道和消息".to_string()));
+                status_message.set(Some(i18n.read().t("Enter a channel and message")));
                 return;
             }
 
@@ -98,6 +106,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
             let channel = channel.clone();
             let message = message.clone();
             let mut status_message = status_message.clone();
+            let i18n = i18n.clone();
 
             spawn(async move {
                 let mut connection = pool.connection.lock().await;
@@ -107,10 +116,14 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                         .await
                     {
                         Ok(_) => {
-                            status_message.set(Some("消息已发布".to_string()));
+                            status_message.set(Some(i18n.read().t("Message published")));
                         }
                         Err(e) => {
-                            status_message.set(Some(format!("发布失败: {}", e)));
+                            status_message.set(Some(format!(
+                                "{}: {}",
+                                i18n.read().t("Publish failed"),
+                                e
+                            )));
                         }
                     }
                 }
@@ -147,7 +160,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "13px",
                         font_weight: "500",
-                        "订阅频道"
+                        {i18n.read().t("Subscribe Channel")}
                     }
 
                     div {
@@ -162,7 +175,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                             border_radius: "4px",
                             color: COLOR_TEXT,
                             font_size: "13px",
-                            placeholder: "输入频道名称",
+                            placeholder: i18n.read().t("Enter channel name"),
                             value: "{channel_input}",
                             oninput: move |e| channel_input.set(e.value()),
                         }
@@ -177,7 +190,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                             font_size: "13px",
                             onclick: add_subscription,
                             disabled: is_subscribing(),
-                            if is_subscribing() { "订阅中..." } else { "订阅" }
+                            {subscribe_button_label}
                         }
                     }
                 }
@@ -197,7 +210,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "13px",
                         font_weight: "500",
-                        "发布消息"
+                        {i18n.read().t("Publish Message")}
                     }
 
                     div {
@@ -212,7 +225,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                             border_radius: "4px",
                             color: COLOR_TEXT,
                             font_size: "13px",
-                            placeholder: "频道名称",
+                            placeholder: i18n.read().t("Channel name"),
                             value: "{publish_channel}",
                             oninput: move |e| publish_channel.set(e.value()),
                         }
@@ -225,7 +238,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                             border_radius: "4px",
                             color: COLOR_TEXT,
                             font_size: "13px",
-                            placeholder: "消息内容",
+                            placeholder: i18n.read().t("Message content"),
                             value: "{message_input}",
                             oninput: move |e| message_input.set(e.value()),
                         }
@@ -239,7 +252,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                             cursor: "pointer",
                             font_size: "13px",
                             onclick: publish_message,
-                            "发布"
+                            {i18n.read().t("Publish")}
                         }
                     }
                 }
@@ -265,7 +278,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "13px",
                     font_weight: "500",
-                    "已订阅频道:"
+                    {i18n.read().t("Subscribed Channels:")}
                 }
 
                 for channel in subscribed_channels() {
@@ -326,7 +339,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                         color: COLOR_TEXT_SECONDARY,
                         font_size: "13px",
                         font_weight: "500",
-                        "消息列表"
+                        {i18n.read().t("Messages")}
                     }
 
                     button {
@@ -338,7 +351,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                         cursor: "pointer",
                         font_size: "12px",
                         onclick: clear_messages,
-                        "清空"
+                        {i18n.read().t("Clear")}
                     }
                 }
 
@@ -355,7 +368,7 @@ pub fn PubSubPanel(connection_pool: ConnectionPool) -> Element {
                             font_size: "13px",
                             text_align: "center",
                             padding: "20px",
-                            "暂无消息"
+                            {i18n.read().t("No messages")}
                         }
                     } else {
                         for msg in messages() {

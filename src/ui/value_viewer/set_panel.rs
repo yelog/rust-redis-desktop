@@ -7,6 +7,7 @@ use super::styles::{
 };
 use super::{BinaryFormat, LARGE_KEY_THRESHOLD, PAGE_SIZE, ROW_EDIT_BG};
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::KeyInfo;
 use crate::serialization::SerializationFormat;
 use crate::theme::{
@@ -60,6 +61,7 @@ pub(super) fn SetPanel(
     mut editing_set_member: Signal<Option<String>>,
     mut editing_set_member_value: Signal<String>,
 ) -> Element {
+    let i18n = use_i18n();
     let set_val = set_value();
     let set_search_val = set_search();
     let normalized_set_search = set_search_val.trim().to_lowercase();
@@ -97,7 +99,7 @@ pub(super) fn SetPanel(
                         border_radius: "6px",
                         color: COLOR_TEXT,
                         value: "{set_search}",
-                        placeholder: "搜索成员",
+                        placeholder: i18n.read().t("Search members"),
                         oninput: {
                             let pool = connection_pool.clone();
                             let key = display_key.clone();
@@ -180,7 +182,7 @@ pub(super) fn SetPanel(
                                 }
                             },
 
-                            if set_loading_more() { "搜索中..." } else { "服务端搜索" }
+                            {if set_loading_more() { i18n.read().t("Searching...") } else { i18n.read().t("Search server") }}
                         }
                     }
 
@@ -193,7 +195,7 @@ pub(super) fn SetPanel(
                         border_radius: "6px",
                         color: COLOR_TEXT,
                         value: "{new_set_member}",
-                        placeholder: "输入新成员",
+                        placeholder: i18n.read().t("Enter new member"),
                         oninput: move |event| new_set_member.set(event.value()),
                     }
 
@@ -209,7 +211,7 @@ pub(super) fn SetPanel(
                                 let member = new_set_member();
                                 spawn(async move {
                                     if member.trim().is_empty() {
-                                        set_status_message.set("成员不能为空".to_string());
+                                        set_status_message.set(i18n.read().t("Member cannot be empty"));
                                         set_status_error.set(true);
                                         return;
                                     }
@@ -221,7 +223,7 @@ pub(super) fn SetPanel(
                                     match pool.set_add(&key, &member).await {
                                         Ok(true) => {
                                             new_set_member.set(String::new());
-                                            set_status_message.set("添加成功".to_string());
+                                            set_status_message.set(i18n.read().t("Added"));
                                             set_status_error.set(false);
                                             if let Err(error) = data_loader::load_key_data(
                                                 pool.clone(),
@@ -259,11 +261,11 @@ pub(super) fn SetPanel(
                                             }
                                         }
                                         Ok(false) => {
-                                            set_status_message.set("成员已存在".to_string());
+                                            set_status_message.set(i18n.read().t("Member already exists"));
                                             set_status_error.set(true);
                                         }
                                         Err(error) => {
-                                            set_status_message.set(format!("添加失败：{error}"));
+                                            set_status_message.set(format!("{}{}", i18n.read().t("Add failed: "), error));
                                             set_status_error.set(true);
                                         }
                                     }
@@ -272,7 +274,7 @@ pub(super) fn SetPanel(
                             }
                         },
 
-                        if set_action().as_deref() == Some("add") { "添加中..." } else { "添加成员" }
+                        {if set_action().as_deref() == Some("add") { i18n.read().t("Adding...") } else { i18n.read().t("Add member") }}
                     }
 
                     div {
@@ -286,24 +288,24 @@ pub(super) fn SetPanel(
                     margin_left: "auto",
                     flex_shrink: "0",
                     style: "{secondary_action_button_style()}",
-                    title: "复制",
+                    title: i18n.read().t("Copy"),
                     onclick: {
                         let set = set_val.clone();
                         move |_| {
                             let json = serde_json::to_string_pretty(&set).unwrap_or_default();
                             match copy_value_to_clipboard(&json) {
                                 Ok(_) => {
-                                    toast_manager.write().success("复制成功");
+                                    toast_manager.write().success(&i18n.read().t("Copied"));
                                 }
                                 Err(error) => {
-                                    toast_manager.write().error(&format!("复制失败：{error}"));
+                                    toast_manager.write().error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                 }
                             }
                         }
                     },
 
                     IconCopy { size: Some(14) }
-                    "复制"
+                    {i18n.read().t("Copy")}
                 }
             }
 
@@ -402,9 +404,9 @@ pub(super) fn SetPanel(
                                     text_align: "center",
 
                                     if set_search().trim().is_empty() {
-                                        "当前集合没有成员"
+                                        {i18n.read().t("This set has no members")}
                                     } else {
-                                        "未找到匹配的成员"
+                                        {i18n.read().t("No matching members")}
                                     }
                                 }
                             }
@@ -461,7 +463,7 @@ pub(super) fn SetPanel(
                                                             let new_member = editing_set_member_value();
                                                             spawn(async move {
                                                                 if new_member.trim().is_empty() {
-                                                                    set_status_message.set("成员不能为空".to_string());
+                                                                    set_status_message.set(i18n.read().t("Member cannot be empty"));
                                                                     set_status_error.set(true);
                                                                     return;
                                                                 }
@@ -487,7 +489,7 @@ pub(super) fn SetPanel(
                                                                     Ok(_) => {
                                                                         editing_set_member.set(None);
                                                                         editing_set_member_value.set(String::new());
-                                                                        set_status_message.set("修改成功".to_string());
+                                                                        set_status_message.set(i18n.read().t("Updated"));
                                                                         set_status_error.set(false);
                                                                         if let Err(error) = data_loader::load_key_data(
                                                                             pool.clone(),
@@ -525,7 +527,7 @@ pub(super) fn SetPanel(
                                                                         }
                                                                     }
                                                                     Err(error) => {
-                                                                        set_status_message.set(format!("修改失败：{error}"));
+                                                                        set_status_message.set(format!("{}{}", i18n.read().t("Update failed: "), error));
                                                                         set_status_error.set(true);
                                                                     }
                                                                 }
@@ -535,7 +537,7 @@ pub(super) fn SetPanel(
                                                         }
                                                     },
 
-                                                    "保存"
+                                                    {i18n.read().t("Save")}
                                                 }
 
                                                 button {
@@ -545,7 +547,7 @@ pub(super) fn SetPanel(
                                                         editing_set_member_value.set(String::new());
                                                     },
 
-                                                    "取消"
+                                                    {i18n.read().t("Cancel")}
                                                 }
                                             }
                                         }
@@ -582,18 +584,18 @@ pub(super) fn SetPanel(
 
                                                 button {
                                                     style: "{compact_icon_action_button_style(false, false)}",
-                                                    title: "复制",
+                                                    title: i18n.read().t("Copy"),
                                                     onclick: {
                                                         let member = member.clone();
                                                         move |_| {
                                                             match copy_value_to_clipboard(&member) {
                                                                 Ok(_) => {
-                                                                    toast_manager.write().success("复制成功");
+                                                                    toast_manager.write().success(&i18n.read().t("Copied"));
                                                                 }
                                                                 Err(error) => {
                                                                     toast_manager
                                                                         .write()
-                                                                        .error(&format!("复制失败：{error}"));
+                                                                        .error(&format!("{}{}", i18n.read().t("Copy failed: "), error));
                                                                 }
                                                             }
                                                         }
@@ -605,7 +607,7 @@ pub(super) fn SetPanel(
                                                 button {
                                                     style: "{compact_icon_action_button_style(false, set_action().is_some())}",
                                                     disabled: set_action().is_some(),
-                                                    title: "编辑",
+                                                    title: i18n.read().t("Edit"),
                                                     onclick: {
                                                         let member = member.clone();
                                                         move |_| {
@@ -620,7 +622,7 @@ pub(super) fn SetPanel(
                                                 button {
                                                     style: "{compact_icon_action_button_style(true, set_action().is_some())}",
                                                     disabled: set_action().is_some(),
-                                                    title: "删除",
+                                                    title: i18n.read().t("Delete"),
                                                     onclick: {
                                                         let pool = connection_pool.clone();
                                                         let key = display_key.clone();
@@ -633,7 +635,7 @@ pub(super) fn SetPanel(
                                                                 set_action.set(Some(format!("delete:{member}")));
                                                                 match pool.set_remove(&key, &member).await {
                                                                     Ok(_) => {
-                                                                        set_status_message.set("删除成功".to_string());
+                                                                        set_status_message.set(i18n.read().t("Deleted"));
                                                                         set_status_error.set(false);
                                                                         if let Err(error) = data_loader::load_key_data(
                                                                             pool.clone(),
@@ -671,7 +673,7 @@ pub(super) fn SetPanel(
                                                                         }
                                                                     }
                                                                     Err(error) => {
-                                                                        set_status_message.set(format!("删除失败：{error}"));
+                                                                        set_status_message.set(format!("{}{}", i18n.read().t("Delete failed: "), error));
                                                                         set_status_error.set(true);
                                                                     }
                                                                 }
@@ -699,7 +701,7 @@ pub(super) fn SetPanel(
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "13px",
 
-                    "加载中..."
+                    {i18n.read().t("Loading...")}
                 }
             }
 
@@ -710,7 +712,7 @@ pub(super) fn SetPanel(
                     color: COLOR_TEXT_SUBTLE,
                     font_size: "12px",
 
-                    "向下滚动加载更多..."
+                    {i18n.read().t("Scroll down to load more...")}
                 }
             }
         }

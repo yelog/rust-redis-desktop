@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use super::phrases;
+
 pub fn load() -> HashMap<String, String> {
     let mut m = HashMap::new();
 
@@ -103,6 +105,8 @@ pub fn load() -> HashMap<String, String> {
         "readonly.warning".into(),
         "当前连接为只读模式，写操作已被阻止".into(),
     );
+
+    phrases::insert_all_zh_cn(&mut m);
 
     m
 }
