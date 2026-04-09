@@ -1,4 +1,5 @@
 !include "MUI2.nsh"
+!include "LogicLib.nsh"
 
 !define APP_NAME "Rust Redis Desktop"
 !define APP_VERSION "${VERSION}"
@@ -6,6 +7,8 @@
 !define APP_URL "https://github.com/yelog/rust-redis-desktop"
 !define APP_EXE "rust-redis-desktop.exe"
 !define APP_GUID "D5A5B5C5-1234-5678-9ABC-DEF012345678"
+!define WEBVIEW2_GUID "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+!define WEBVIEW2_DOWNLOAD_URL "https://developer.microsoft.com/en-us/microsoft-edge/webview2/"
 
 Name "${APP_NAME} ${APP_VERSION}"
 OutFile "rust-redis-desktop-setup-${APP_VERSION}.exe"
@@ -48,11 +51,40 @@ Section "Main Section" SecMain
     
     File /r "app\*.*"
     File "icon.ico"
+    File "MicrosoftEdgeWebview2Setup.exe"
     
     StrCpy $0 "${APP_EXE}"
     nsExec::ExecToStack 'taskkill /IM "$0" /F'
     Pop $1
     Pop $2
+
+    ReadRegStr $3 HKLM "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\${WEBVIEW2_GUID}" "pv"
+    ${If} $3 == ""
+        ReadRegStr $3 HKCU "Software\Microsoft\EdgeUpdate\Clients\${WEBVIEW2_GUID}" "pv"
+    ${EndIf}
+
+    ${If} $3 == ""
+    ${OrIf} $3 == "0.0.0.0"
+        DetailPrint "Installing Microsoft Edge WebView2 Runtime..."
+        nsExec::ExecToStack '"$INSTDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install'
+        Pop $4
+        Pop $5
+
+        ReadRegStr $3 HKLM "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\${WEBVIEW2_GUID}" "pv"
+        ${If} $3 == ""
+            ReadRegStr $3 HKCU "Software\Microsoft\EdgeUpdate\Clients\${WEBVIEW2_GUID}" "pv"
+        ${EndIf}
+
+        ${If} $4 != "0"
+        ${OrIf} $3 == ""
+        ${OrIf} $3 == "0.0.0.0"
+            Delete "$INSTDIR\MicrosoftEdgeWebview2Setup.exe"
+            MessageBox MB_ICONSTOP|MB_OK "Failed to install Microsoft Edge WebView2 Runtime.$\r$\nExit code: $4$\r$\n$\r$\nPlease install it manually from:$\r$\n${WEBVIEW2_DOWNLOAD_URL}"
+            Abort
+        ${EndIf}
+    ${EndIf}
+
+    Delete "$INSTDIR\MicrosoftEdgeWebview2Setup.exe"
     
     WriteRegStr HKLM "Software\${APP_NAME}" "Install_Dir" "$INSTDIR"
     WriteRegStr HKLM "Software\${APP_NAME}" "Version" "${APP_VERSION}"

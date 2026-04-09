@@ -1,6 +1,7 @@
 use crate::config::ConfigStorage;
 use crate::error::AppError;
 use crate::i18n::I18n;
+use std::panic::{self, PanicHookInfo};
 use std::path::PathBuf;
 use tracing::error;
 
@@ -43,6 +44,31 @@ impl ErrorReporter {
         eprintln!("[WARN] {} failed: {}", context, error);
     }
 
+    pub fn install_panic_hook() {
+        let default_hook = panic::take_hook();
+
+        panic::set_hook(Box::new(move |panic_info| {
+            default_hook(panic_info);
+            Self::report_panic(panic_info);
+        }));
+    }
+
+    pub fn report_panic(panic_info: &PanicHookInfo<'_>) {
+        let details = Self::format_panic_details(panic_info);
+        let summary = "Unexpected panic during application startup or runtime";
+
+        eprintln!("\n========================================");
+        eprintln!("PANIC: {}", summary);
+        eprintln!("========================================\n");
+        eprintln!("Details:\n{}\n", details);
+
+        if let Some(log_path) = Self::write_error_log(summary, &details) {
+            eprintln!("Error log saved to: {:?}\n", log_path);
+        }
+
+        Self::show_error_dialog(&format!("{summary}\n\n{details}"));
+    }
+
     fn write_error_log(summary: &str, details: &str) -> Option<PathBuf> {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
         let log_file = dirs::config_dir()?
@@ -67,6 +93,30 @@ impl ErrorReporter {
 
         std::fs::write(&log_file, content).ok()?;
         Some(log_file)
+    }
+
+    fn format_panic_details(panic_info: &PanicHookInfo<'_>) -> String {
+        let payload = if let Some(message) = panic_info.payload().downcast_ref::<&str>() {
+            (*message).to_string()
+        } else if let Some(message) = panic_info.payload().downcast_ref::<String>() {
+            message.clone()
+        } else {
+            "Unknown panic payload".to_string()
+        };
+
+        let location = panic_info
+            .location()
+            .map(|location| {
+                format!(
+                    "{}:{}:{}",
+                    location.file(),
+                    location.line(),
+                    location.column()
+                )
+            })
+            .unwrap_or_else(|| "unknown location".to_string());
+
+        format!("Message: {payload}\nLocation: {location}")
     }
 
     fn show_error_dialog(message: &str) {

@@ -14,6 +14,7 @@ mod i18n;
 mod protobuf_schema;
 mod redis;
 mod serialization;
+mod startup;
 mod theme;
 mod tray;
 mod ui;
@@ -29,6 +30,7 @@ use dioxus::desktop::{
 use error::{AppError, Result, StartupError};
 use error_reporting::ErrorReporter;
 use i18n::I18n;
+use startup::ensure_windows_webview_runtime;
 use theme::preferred_window_theme;
 use tray::{create_shared_state, init_tray};
 use ui::App;
@@ -111,6 +113,7 @@ fn create_menu(i18n: &I18n) -> std::result::Result<Menu, Box<dyn std::error::Err
 
 fn main() {
     let _reporter = ErrorReporter::init();
+    ErrorReporter::install_panic_hook();
 
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -127,6 +130,8 @@ fn main() {
 }
 
 fn run_app() -> Result<()> {
+    ensure_windows_webview_runtime()?;
+
     let settings = ConfigStorage::new()
         .ok()
         .and_then(|s| s.load_settings().ok())

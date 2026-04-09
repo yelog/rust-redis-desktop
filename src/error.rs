@@ -39,6 +39,9 @@ pub enum StartupError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
+
+    #[error("{0}")]
+    WebViewRuntimeUnavailable(String),
 }
 
 /// 配置错误

@@ -9,6 +9,7 @@ pub mod i18n;
 pub mod protobuf_schema;
 pub mod redis;
 pub mod serialization;
+pub mod startup;
 pub mod theme;
 pub mod tray;
 pub mod ui;
