@@ -120,7 +120,8 @@ impl ConfigStorage {
     }
 
     pub fn new_temp() -> io::Result<Self> {
-        let temp_dir = std::env::temp_dir().join("rust-redis-desktop-test");
+        let temp_dir =
+            std::env::temp_dir().join(format!("rust-redis-desktop-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&temp_dir)?;
 
         let config_path = temp_dir.join("config.json");
@@ -246,5 +247,10 @@ impl ConfigStorage {
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
 
         fs::write(&self.config_path, content)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn config_path(&self) -> &PathBuf {
+        &self.config_path
     }
 }

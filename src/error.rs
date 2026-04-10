@@ -42,6 +42,9 @@ pub enum StartupError {
 
     #[error("{0}")]
     WebViewRuntimeUnavailable(String),
+
+    #[error("{0}")]
+    WebViewDataDirectoryUnavailable(String),
 }
 
 /// 配置错误

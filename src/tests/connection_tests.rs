@@ -359,9 +359,6 @@ mod tests {
 
     #[test]
     fn test_config_storage_round_trip_encrypts_on_disk() {
-        let temp_dir = std::env::temp_dir().join("rust-redis-desktop-test");
-        let _ = std::fs::remove_dir_all(&temp_dir);
-
         let storage = ConfigStorage::new_temp().unwrap();
         let config = ConnectionConfig {
             password: Some("secret123".to_string()),
@@ -370,7 +367,8 @@ mod tests {
 
         storage.save_connection(config).unwrap();
 
-        let raw = std::fs::read_to_string(temp_dir.join("config.json")).unwrap();
+        let config_path = storage.config_path().to_path_buf();
+        let raw = std::fs::read_to_string(&config_path).unwrap();
         assert!(!raw.contains("secret123"));
         assert!(raw.contains("encrypted_password"));
 
@@ -378,6 +376,6 @@ mod tests {
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].password.as_deref(), Some("secret123"));
 
-        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::remove_dir_all(config_path.parent().unwrap());
     }
 }

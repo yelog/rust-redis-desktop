@@ -38,6 +38,8 @@ use updater::{set_pending_update, UpdateManager};
 
 #[cfg(target_os = "macos")]
 use dioxus::desktop::tao::platform::macos::WindowBuilderExtMacOS;
+#[cfg(target_os = "windows")]
+use startup::prepare_windows_webview_data_directory;
 
 #[cfg(target_os = "macos")]
 fn configure_window_builder(window_builder: WindowBuilder) -> WindowBuilder {
@@ -170,6 +172,18 @@ fn run_app() -> Result<()> {
             .with_visible(true),
     );
 
+    #[cfg(target_os = "windows")]
+    let launch_config = {
+        let webview_data_dir = prepare_windows_webview_data_directory()?;
+        Config::new()
+            .with_menu(menu)
+            .with_window(window_builder)
+            .with_data_directory(webview_data_dir)
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let launch_config = Config::new().with_menu(menu).with_window(window_builder);
+
     #[cfg(not(target_os = "linux"))]
     {
         let tray_state = create_shared_state();
@@ -179,7 +193,7 @@ fn run_app() -> Result<()> {
     }
 
     dioxus::LaunchBuilder::new()
-        .with_cfg(Config::new().with_menu(menu).with_window(window_builder))
+        .with_cfg(launch_config)
         .launch(App);
 
     Ok(())
