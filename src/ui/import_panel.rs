@@ -1,5 +1,5 @@
-use crate::i18n::use_i18n;
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::theme::{
     COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_PRIMARY, COLOR_SUCCESS,
     COLOR_TEXT, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
@@ -36,11 +36,19 @@ pub fn ImportPanel(connection_pool: ConnectionPool, on_close: EventHandler<()>) 
                 match pool.import_json_data(&data).await {
                     Ok(count) => {
                         imported_count.set(count);
-                        status_message.set(Some(format!("{} {}", i18n.read().t("Imported keys:"), count)));
+                        status_message.set(Some(format!(
+                            "{} {}",
+                            i18n.read().t("Imported keys:"),
+                            count
+                        )));
                         import_data.set(String::new());
                     }
                     Err(e) => {
-                        status_message.set(Some(format!("{}{}", i18n.read().t("Import failed: "), e)));
+                        status_message.set(Some(format!(
+                            "{}{}",
+                            i18n.read().t("Import failed: "),
+                            e
+                        )));
                     }
                 }
                 is_importing.set(false);

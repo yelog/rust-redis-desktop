@@ -1,5 +1,5 @@
-use crate::i18n::use_i18n;
 use crate::connection::{ConnectionError, ConnectionPool};
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
 use dioxus::prelude::*;

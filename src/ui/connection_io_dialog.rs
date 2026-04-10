@@ -1,6 +1,6 @@
-use crate::i18n::use_i18n;
 use crate::config::ConfigStorage;
 use crate::connection::ConnectionConfig;
+use crate::i18n::use_i18n;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
 use crate::ui::clipboard::copy_text_to_clipboard;
@@ -52,8 +52,9 @@ pub fn ConnectionExportDialog(
                             connections,
                         };
 
-                        serde_json::to_string_pretty(&exported)
-                            .map_err(|e| format!("{}{}", i18n.read().t("Serialization failed: "), e))
+                        serde_json::to_string_pretty(&exported).map_err(|e| {
+                            format!("{}{}", i18n.read().t("Serialization failed: "), e)
+                        })
                     }
                     .await;
 
@@ -130,7 +131,9 @@ fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<(
         let json = json.clone();
         move |_| {
             if copy_text_to_clipboard(&json).is_ok() {
-                toast_manager.write().success(&i18n.read().t("Copied to clipboard"));
+                toast_manager
+                    .write()
+                    .success(&i18n.read().t("Copied to clipboard"));
             }
         }
     };
@@ -149,12 +152,16 @@ fn ExportSuccessView(json: String, colors: ThemeColors, on_close: EventHandler<(
                 if let Some(path) = file_path {
                     match std::fs::write(path.path(), &json) {
                         Ok(_) => {
-                            toast_manager.write().success(&i18n.read().t("Exported to file"));
-                        }
-                        Err(e) => {
                             toast_manager
                                 .write()
-                                .error(&format!("{}{}", i18n.read().t("Failed to save: "), e));
+                                .success(&i18n.read().t("Exported to file"));
+                        }
+                        Err(e) => {
+                            toast_manager.write().error(&format!(
+                                "{}{}",
+                                i18n.read().t("Failed to save: "),
+                                e
+                            ));
                         }
                     }
                 }

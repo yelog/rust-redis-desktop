@@ -121,7 +121,8 @@ pub(super) fn use_manual_update_check(
                         }
                         Err(e) => {
                             set_pending_update(None);
-                            let msg = format!("{}{}", i18n.read().t("Failed to check for updates: "), e);
+                            let msg =
+                                format!("{}{}", i18n.read().t("Failed to check for updates: "), e);
                             toast_for_update.write().error(&msg);
                         }
                     }

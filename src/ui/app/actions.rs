@@ -1,6 +1,6 @@
-use crate::i18n::{use_i18n, I18n};
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
+use crate::i18n::{use_i18n, I18n};
 use crate::theme::ThemePreference;
 use crate::ui::ToastManager;
 use dioxus::prelude::*;
@@ -17,9 +17,7 @@ pub(super) fn save_settings_action(
     Callback::new(move |settings: AppSettings| {
         app_settings.set(settings.clone());
         theme_preference.set(settings.theme_preference);
-        i18n
-            .write()
-            .switch(settings.language_preference.resolve());
+        i18n.write().switch(settings.language_preference.resolve());
         if let Some(storage) = config_storage.read().as_ref() {
             let _ = storage.save_settings(&settings);
         }
@@ -42,7 +40,9 @@ pub(super) fn import_connections_action(
             connections.set(conns);
             readonly_connections.set(readonly);
         }
-        toast_manager.write().success(&i18n.read().t("Connections imported"));
+        toast_manager
+            .write()
+            .success(&i18n.read().t("Connections imported"));
     })
 }
 

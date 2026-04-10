@@ -133,13 +133,21 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
             spawn(async move {
                 match pool.script_load(&script).await {
                     Ok(sha) => {
-                        result_output.set(format!("{}: {}", i18n.read().t("Script loaded, SHA"), sha));
+                        result_output.set(format!(
+                            "{}: {}",
+                            i18n.read().t("Script loaded, SHA"),
+                            sha
+                        ));
                         status_is_success.set(true);
                         status_message.set(Some(i18n.read().t("Script loaded successfully")));
                     }
                     Err(e) => {
                         status_is_success.set(false);
-                        status_message.set(Some(format!("{}: {}", i18n.read().t("Load failed"), e)));
+                        status_message.set(Some(format!(
+                            "{}: {}",
+                            i18n.read().t("Load failed"),
+                            e
+                        )));
                     }
                 }
             });
@@ -162,7 +170,11 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
                     }
                     Err(e) => {
                         status_is_success.set(false);
-                        status_message.set(Some(format!("{}: {}", i18n.read().t("Clear failed"), e)));
+                        status_message.set(Some(format!(
+                            "{}: {}",
+                            i18n.read().t("Clear failed"),
+                            e
+                        )));
                     }
                 }
             });
@@ -188,7 +200,11 @@ pub fn ScriptPanel(connection_pool: ConnectionPool) -> Element {
         );
         script_name.set(String::new());
         status_is_success.set(true);
-        status_message.set(Some(format!("{} '{}'", i18n.read().t("Saved script"), name)));
+        status_message.set(Some(format!(
+            "{} '{}'",
+            i18n.read().t("Saved script"),
+            name
+        )));
     };
 
     let mut load_saved_script = move |name: String| {

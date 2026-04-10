@@ -1,5 +1,5 @@
-use crate::i18n::use_i18n;
 use crate::connection::ConnectionPool;
+use crate::i18n::use_i18n;
 use crate::redis::ExportFormat;
 use crate::theme::ThemeColors;
 use crate::ui::animated_dialog::AnimatedDialog;
