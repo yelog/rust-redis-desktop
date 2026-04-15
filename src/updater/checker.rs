@@ -103,7 +103,7 @@ impl UpdateChecker {
     }
 
     pub fn clean_version(&self, version: &str) -> String {
-        version.split('-').next().unwrap_or(version).to_string()
+        version.trim_start_matches('v').to_string()
     }
 
     fn channel_name(&self) -> &'static str {

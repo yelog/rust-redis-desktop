@@ -49,8 +49,9 @@ mod tests {
     #[test]
     fn test_version_cleaning() {
         let checker = UpdateChecker::new("0.1.0");
-        assert_eq!(checker.clean_version("0.1.0-beta.1"), "0.1.0");
+        assert_eq!(checker.clean_version("0.1.0-beta.1"), "0.1.0-beta.1");
         assert_eq!(checker.clean_version("0.2.0"), "0.2.0");
+        assert_eq!(checker.clean_version("v0.2.1-beta.3"), "0.2.1-beta.3");
     }
 
     #[test]
@@ -80,6 +81,30 @@ mod tests {
         assert_eq!(info.version, "0.1.3-beta.2");
         assert!(info.is_beta);
         assert_eq!(info.release_notes, "beta release notes");
+    }
+
+    #[test]
+    fn test_beta_channel_detects_newer_prerelease_with_same_base_version() {
+        let checker = UpdateChecker::new("0.1.1-beta.6");
+        let manifest = same_base_beta_manifest("0.1.1-beta.7");
+        let info = checker
+            .parse_manifest_json(&manifest)
+            .expect("manifest should parse")
+            .expect("should find newer beta update");
+
+        assert_eq!(info.version, "0.1.1-beta.7");
+        assert!(info.is_beta);
+    }
+
+    #[test]
+    fn test_beta_channel_returns_none_for_same_prerelease_version() {
+        let checker = UpdateChecker::new("0.1.1-beta.7");
+        let manifest = same_base_beta_manifest("0.1.1-beta.7");
+        let info = checker
+            .parse_manifest_json(&manifest)
+            .expect("manifest should parse");
+
+        assert!(info.is_none());
     }
 
     #[test]
@@ -167,6 +192,10 @@ mod tests {
             Platform::Windows => sample_manifest().replace("\"windows-x86_64\": {\n                  \"url\": \"https://example.com/rust-redis-desktop-x86_64-setup.exe\",\n                  \"asset_name\": \"rust-redis-desktop-x86_64-setup.exe\"\n                },\n", ""),
             Platform::Linux => sample_manifest().replace("\"linux-x86_64\": {\n                  \"url\": \"https://example.com/rust-redis-desktop-x86_64.AppImage\",\n                  \"asset_name\": \"rust-redis-desktop-x86_64.AppImage\"\n                }\n", ""),
         }
+    }
+
+    fn same_base_beta_manifest(version: &str) -> String {
+        sample_manifest().replace("0.1.3-beta.2", version)
     }
 
     fn expected_asset_name() -> &'static str {
