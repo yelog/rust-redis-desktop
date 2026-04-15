@@ -78,6 +78,7 @@ pub fn ValueViewer(
     connection_pool: ConnectionPool,
     connection_version: u32,
     selected_key: Signal<String>,
+    on_connection_error: EventHandler<()>,
     on_refresh: EventHandler<()>,
 ) -> Element {
     let i18n = use_i18n();
@@ -271,8 +272,10 @@ pub fn ValueViewer(
             .await
             {
                 tracing::error!("{error}");
+                toast_manager.write().error(&error);
                 hash_status_message.set(error);
                 hash_status_error.set(true);
+                on_connection_error.call(());
             }
         });
     });
@@ -601,6 +604,8 @@ pub fn ValueViewer(
                                                                                             zset_has_more,
                                                                                         ).await {
                                                                                             tracing::error!("{error}");
+                                                                                            toast_manager.write().error(&error);
+                                                                                            on_connection_error.call(());
                                                                                         } else {
                                                                                             on_refresh.call(());
                                                                                         }
@@ -643,6 +648,8 @@ pub fn ValueViewer(
                                                                                             zset_has_more,
                                                                                         ).await {
                                                                                             tracing::error!("{error}");
+                                                                                            toast_manager.write().error(&error);
+                                                                                            on_connection_error.call(());
                                                                                         } else {
                                                                                             on_refresh.call(());
                                                                                         }

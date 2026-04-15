@@ -169,6 +169,7 @@ pub(super) fn ConnectedTabShellSection(
     colors: ThemeColors,
     resolved_theme_key: String,
     auto_refresh_interval: u32,
+    on_connection_error: EventHandler<()>,
 ) -> Element {
     let i18n = use_i18n();
     rsx! {
@@ -245,6 +246,7 @@ pub(super) fn ConnectedTabShellSection(
                             current_db,
                             refresh_trigger,
                             colors,
+                            on_connection_error,
                             on_key_select: move |key: String| {
                                 selected_key.set(key);
                                 current_tab.set(Tab::Data);

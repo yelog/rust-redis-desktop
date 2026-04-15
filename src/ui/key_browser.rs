@@ -124,6 +124,44 @@ pub struct ScanProgress {
     pub is_scanning: bool,
 }
 
+async fn scan_all_keys(
+    pool: ConnectionPool,
+    match_pattern: String,
+    cancel_flag: Arc<AtomicBool>,
+    mut scan_progress: Signal<ScanProgress>,
+) -> Result<Vec<String>, String> {
+    let mut all_keys = Vec::new();
+    let mut cursor: u64 = 0;
+
+    loop {
+        if cancel_flag.load(Ordering::Relaxed) {
+            tracing::info!("Scan cancelled by user");
+            break;
+        }
+
+        match pool
+            .scan_keys_with_cursor(&match_pattern, cursor, SCAN_BATCH_SIZE)
+            .await
+        {
+            Ok((next_cursor, keys)) => {
+                let batch_len = keys.len();
+                all_keys.extend(keys);
+
+                scan_progress.write().scanned = all_keys.len();
+                scan_progress.write().current_batch = batch_len;
+                cursor = next_cursor;
+
+                if cursor == 0 {
+                    break;
+                }
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+
+    Ok(all_keys)
+}
+
 #[component]
 pub fn KeyBrowser(
     connection_id: Uuid,
@@ -133,6 +171,7 @@ pub fn KeyBrowser(
     current_db: Signal<u8>,
     refresh_trigger: Signal<u32>,
     colors: ThemeColors,
+    on_connection_error: EventHandler<()>,
     on_key_select: EventHandler<String>,
 ) -> Element {
     let i18n = use_i18n();
@@ -241,6 +280,8 @@ pub fn KeyBrowser(
         let tree_state = tree_state.clone();
         let key_type_cache = key_type_cache.clone();
         let expanded_paths = expanded_paths.clone();
+        let toast_manager = toast_manager.clone();
+        let on_connection_error = on_connection_error.clone();
         move || {
             let pool = pool.clone();
             let is_searching = !search_pattern.read().trim().is_empty();
@@ -255,49 +296,99 @@ pub fn KeyBrowser(
             cancel_scan.set(cancel_flag.clone());
             let mut key_type_cache = key_type_cache.clone();
             let mut expanded_paths = expanded_paths.clone();
+            let mut toast_manager = toast_manager.clone();
+            let on_connection_error = on_connection_error.clone();
 
             spawn(async move {
                 loading.set(true);
                 let preserved_expanded = tree_state.read().expanded_nodes.clone();
-                tree_nodes.set(Vec::new());
-                key_type_cache.set(HashMap::new());
                 scan_progress.write().is_scanning = true;
                 scan_progress.write().scanned = 0;
                 scan_progress.write().current_batch = 0;
 
-                let mut all_keys = Vec::new();
-                let mut cursor: u64 = 0;
-
-                loop {
-                    if cancel_flag.load(Ordering::Relaxed) {
-                        tracing::info!("Scan cancelled by user");
-                        break;
-                    }
-
-                    match pool
-                        .scan_keys_with_cursor(&match_pattern, cursor, SCAN_BATCH_SIZE)
-                        .await
+                let all_keys = match pool.ensure_connection().await {
+                    Ok(_) => match scan_all_keys(
+                        pool.clone(),
+                        match_pattern.clone(),
+                        cancel_flag.clone(),
+                        scan_progress,
+                    )
+                    .await
                     {
-                        Ok((next_cursor, keys)) => {
-                            let batch_len = keys.len();
-                            all_keys.extend(keys);
+                        Ok(keys) => keys,
+                        Err(first_error) => {
+                            tracing::warn!(
+                                "Initial key scan failed for connection {}: {}",
+                                connection_id,
+                                first_error
+                            );
+                            scan_progress.write().scanned = 0;
+                            scan_progress.write().current_batch = 0;
 
-                            scan_progress.write().scanned = all_keys.len();
-                            scan_progress.write().current_batch = batch_len;
-                            cursor = next_cursor;
-
-                            if cursor == 0 {
-                                break;
+                            match pool.ensure_connection().await {
+                                Ok(_) => match scan_all_keys(
+                                    pool.clone(),
+                                    match_pattern.clone(),
+                                    cancel_flag.clone(),
+                                    scan_progress,
+                                )
+                                .await
+                                {
+                                    Ok(keys) => keys,
+                                    Err(retry_error) => {
+                                        let message = format!(
+                                            "Failed to refresh keys after reconnect: {}",
+                                            retry_error
+                                        );
+                                        tracing::error!(
+                                            "Key refresh failed after reconnect for connection {}: {}",
+                                            connection_id,
+                                            retry_error
+                                        );
+                                        toast_manager.write().error(&message);
+                                        on_connection_error.call(());
+                                        loading.set(false);
+                                        scan_progress.write().is_scanning = false;
+                                        return;
+                                    }
+                                },
+                                Err(reconnect_error) => {
+                                    let message = format!(
+                                        "Failed to reconnect before refreshing keys: {}",
+                                        reconnect_error
+                                    );
+                                    tracing::error!(
+                                        "Reconnect failed before retrying key refresh for connection {}: {}",
+                                        connection_id,
+                                        reconnect_error
+                                    );
+                                    toast_manager.write().error(&message);
+                                    on_connection_error.call(());
+                                    loading.set(false);
+                                    scan_progress.write().is_scanning = false;
+                                    return;
+                                }
                             }
                         }
-                        Err(e) => {
-                            tracing::error!("Failed to load keys: {}", e);
-                            break;
-                        }
+                    },
+                    Err(error) => {
+                        let message =
+                            format!("Failed to reconnect before refreshing keys: {}", error);
+                        tracing::error!(
+                            "Reconnect failed before key refresh for connection {}: {}",
+                            connection_id,
+                            error
+                        );
+                        toast_manager.write().error(&message);
+                        on_connection_error.call(());
+                        loading.set(false);
+                        scan_progress.write().is_scanning = false;
+                        return;
                     }
-                }
+                };
 
                 keys_count.set(all_keys.len());
+                key_type_cache.set(HashMap::new());
 
                 let builder = TreeBuilder::new(":");
                 let new_nodes = builder.build(all_keys);
@@ -717,6 +808,7 @@ pub fn KeyBrowser(
                     connection_pool: connection_pool.clone(),
                     connection_version: connection_version,
                     selected_key: selected_key,
+                    on_connection_error: move |_| on_connection_error.call(()),
                     on_refresh: move |_| {
                         refresh_trigger.set(refresh_trigger() + 1);
                     },

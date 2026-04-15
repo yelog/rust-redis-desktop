@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn load_key_data(
+async fn load_key_data_once(
     pool: ConnectionPool,
     key: String,
     mut key_info: Signal<Option<KeyInfo>>,
@@ -341,6 +341,149 @@ pub(super) async fn load_key_data(
 
     loading.set(false);
     load_result
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn load_key_data(
+    pool: ConnectionPool,
+    key: String,
+    key_info: Signal<Option<KeyInfo>>,
+    string_value: Signal<String>,
+    hash_value: Signal<HashMap<String, String>>,
+    list_value: Signal<Vec<String>>,
+    set_value: Signal<Vec<String>>,
+    zset_value: Signal<Vec<(String, f64)>>,
+    stream_value: Signal<Vec<(String, Vec<(String, String)>)>>,
+    is_binary: Signal<bool>,
+    binary_format: Signal<BinaryFormat>,
+    serialization_data: Signal<Option<(SerializationFormat, Vec<u8>)>>,
+    binary_bytes: Signal<Vec<u8>>,
+    bitmap_info: Signal<Option<crate::redis::BitmapInfo>>,
+    loading: Signal<bool>,
+    hash_cursor: Signal<u64>,
+    hash_total: Signal<usize>,
+    hash_has_more: Signal<bool>,
+    list_has_more: Signal<bool>,
+    list_total: Signal<usize>,
+    set_cursor: Signal<u64>,
+    set_total: Signal<usize>,
+    set_has_more: Signal<bool>,
+    zset_cursor: Signal<u64>,
+    zset_total: Signal<usize>,
+    zset_has_more: Signal<bool>,
+) -> Result<(), String> {
+    if key.is_empty() {
+        return load_key_data_once(
+            pool,
+            key,
+            key_info,
+            string_value,
+            hash_value,
+            list_value,
+            set_value,
+            zset_value,
+            stream_value,
+            is_binary,
+            binary_format,
+            serialization_data,
+            binary_bytes,
+            bitmap_info,
+            loading,
+            hash_cursor,
+            hash_total,
+            hash_has_more,
+            list_has_more,
+            list_total,
+            set_cursor,
+            set_total,
+            set_has_more,
+            zset_cursor,
+            zset_total,
+            zset_has_more,
+        )
+        .await;
+    }
+
+    if let Err(error) = pool.ensure_connection().await {
+        return Err(format!(
+            "Failed to reconnect before loading key data: {error}"
+        ));
+    }
+
+    match load_key_data_once(
+        pool.clone(),
+        key.clone(),
+        key_info,
+        string_value,
+        hash_value,
+        list_value,
+        set_value,
+        zset_value,
+        stream_value,
+        is_binary,
+        binary_format,
+        serialization_data,
+        binary_bytes,
+        bitmap_info,
+        loading,
+        hash_cursor,
+        hash_total,
+        hash_has_more,
+        list_has_more,
+        list_total,
+        set_cursor,
+        set_total,
+        set_has_more,
+        zset_cursor,
+        zset_total,
+        zset_has_more,
+    )
+    .await
+    {
+        Ok(()) => Ok(()),
+        Err(first_error) => {
+            tracing::warn!("Initial key data load failed, retrying after reconnect: {first_error}");
+
+            if let Err(error) = pool.ensure_connection().await {
+                return Err(format!(
+                    "{first_error}; reconnect failed before retry: {error}"
+                ));
+            }
+
+            load_key_data_once(
+                pool,
+                key,
+                key_info,
+                string_value,
+                hash_value,
+                list_value,
+                set_value,
+                zset_value,
+                stream_value,
+                is_binary,
+                binary_format,
+                serialization_data,
+                binary_bytes,
+                bitmap_info,
+                loading,
+                hash_cursor,
+                hash_total,
+                hash_has_more,
+                list_has_more,
+                list_total,
+                set_cursor,
+                set_total,
+                set_has_more,
+                zset_cursor,
+                zset_total,
+                zset_has_more,
+            )
+            .await
+            .map_err(|retry_error| {
+                format!("{first_error}; retry failed after reconnect: {retry_error}")
+            })
+        }
+    }
 }
 
 pub(super) async fn load_more_hash(

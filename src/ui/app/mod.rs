@@ -824,6 +824,11 @@ pub fn App() -> Element {
                                         colors,
                                         resolved_theme_key: resolved_theme_key.to_string(),
                                         auto_refresh_interval: app_settings.read().auto_refresh_interval,
+                                        on_connection_error: move |_| {
+                                            connection_states
+                                                .write()
+                                                .insert(conn_id, ConnectionState::Error);
+                                        },
                                     }
                             } else {
                                 { spinner_panel(initializing_connection_label.clone()) }
