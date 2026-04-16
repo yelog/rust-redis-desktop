@@ -1,0 +1,50 @@
+{
+  "channels": {
+    "beta": {
+      "version": "0.1.1-beta.7",
+      "published_at": "2026-04-15T08:34:14Z",
+      "release_notes": "### Fixed\n- recover stale redis connections during reads",
+      "platforms": {
+        "macos-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1-beta.7/rust-redis-desktop-x86_64.dmg",
+          "asset_name": "rust-redis-desktop-x86_64.dmg"
+        },
+        "macos-aarch64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1-beta.7/rust-redis-desktop-aarch64.dmg",
+          "asset_name": "rust-redis-desktop-aarch64.dmg"
+        },
+        "windows-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1-beta.7/rust-redis-desktop-x86_64-setup.exe",
+          "asset_name": "rust-redis-desktop-x86_64-setup.exe"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1-beta.7/rust-redis-desktop-x86_64.AppImage",
+          "asset_name": "rust-redis-desktop-x86_64.AppImage"
+        }
+      }
+    },
+    "stable": {
+      "version": "0.1.1",
+      "published_at": "2026-04-16T03:22:05Z",
+      "release_notes": "### Added\n- add bilingual UI and language preference\n- add launch at startup toggle\n- redesign about page\n- improve settings dialog and search expansion\n- export error_reporting module\n- add error reporting infrastructure (dialog + log + terminal)\n- export error module in lib.rs\n- add unified error types (AppError, StartupError, ConfigError)\n- configure EdDSA public key for auto updates\n- implement macOS installer with Autoupdate.app bridge\n- add appcast generation and release workflow integration\n- integrate Sparkle framework into app bundle\n- add EdDSA key generation and signing scripts\n- integrate complete update flow with UI\n- add update notification dialog UI\n- add manual update check menu item\n- integrate startup update check\n- implement unified update manager\n- add unified installer interface\n- implement platform installers (Windows complete)\n- implement update config management\n- implement download manager with progress\n- implement version checker with GitHub API\n- add module structure and error types\n- enhance drag-and-drop interaction with preview card and smooth animations\n- add lazy loading for large dataset pagination\n- add scale fade animation to context menu\n- add drag-and-drop reordering for connections\n- add enter/exit animations to all dialogs and modals\n- add VirtualTreeList component with virtual scrolling\n- add prefix grouping, TTL analysis and sample ratio support\n- add RedisJSON support with JSON.MERGE command\n- add Protobuf detection and raw parsing support\n- add BSON, CBOR formats and YAML, TOML formatters\n- add system tray support for macOS and Windows\n- add comprehensive Redis command completion with JSON and more\n- add Zstd decompression support\n- add image preview support for PNG/JPEG/GIF/WEBP formats\n- add memory analysis tool for scanning large keys\n- add pattern delete dialog for batch key deletion\n- add import/export connection configurations\n- add readonly mode for connections\n- add consumer group management UI\n- add Stream consumer group command support\n- add multi-language support framework\n- add custom formatter support\n- implement HELP command for Redis command docs\n- redesign theme preference with separate light/dark themes\n- add SSL/TLS support\n- add Stream type visualization support\n- add Bitmap visualization support\n- add Redis Cluster support\n- add SSH tunnel support for Redis connections\n- add Pub/Sub panel for Redis pub/sub operations\n- add Lua script management panel\n- add data import functionality\n- add animation system with theme-aware transitions\n- add Tokyo Night theme support\n- add 5 new themes (Tokyo Night Light, Atom One Light, GitHub Light, One Dark Pro, Dracula)\n- add MessagePack serialization support\n- add Python Pickle serialization support\n- add PHP serialization support\n- add Kryo/FST serialization support\n- add resizable panels for connection and key list areas\n- add copy buttons for all value types\n- add launch at startup toggle\n### Changed\n- sync lockfile and format ui modules\n- format remaining source files\n- remove about resources card\n- align docs with current app state\n- sync package version\n- clean up value_viewer module imports\n- integrate set, zset, and stream value panels\n- extract set, zset, and stream value panels\n- extract hash and list value viewer panels\n- remove duplicated value_viewer implementations\n- split value_viewer into modular directory\n- format extracted app actions module\n- extract app select and reconnect workflows\n- extract app save and delete workflows\n- extract app titlebar and connected tab shell\n- extract app list actions into action builders\n- extract app dialog wrappers and simple actions\n- extract app effects and common status panels\n- convert app.rs to modular app/ structure\n- replace unsafe unwraps in UI panels and protobuf parser\n- add fallbacks to guarded unwraps, clean main.rs\n- main.rs with unified error handling\n- clean up ConfigStorage::new() error handling\n- add NSIS installer for Windows release\n- unify button styles and refactor key browser toolbar\n### Fixed\n- compare prerelease versions correctly\n- recover stale redis connections during reads\n- use writable webview2 data dir\n- handle missing webview2 runtime\n- preserve dialog close animation\n- keep settings header fixed while scrolling\n- embed app icon in release builds\n- package desktop installer assets correctly\n- default to tokyo night themes\n- use pages update manifest\n- correct dialog header alignment\n- encrypt stored connection credentials with AES\n- handle mutex poisoning in tray.rs, return Result\n- remove unsafe Default impl from UpdateDownloader\n- remove unsafe Default impl from UpdateManager\n- add error and error_reporting modules to main.rs\n- resolve JSON preview overflow without scrollbar\n- improve connection drag sorting\n- add context menu support to VirtualTreeList and fix menu item click",
+      "platforms": {
+        "macos-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1/rust-redis-desktop-x86_64.dmg",
+          "asset_name": "rust-redis-desktop-x86_64.dmg"
+        },
+        "macos-aarch64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1/rust-redis-desktop-aarch64.dmg",
+          "asset_name": "rust-redis-desktop-aarch64.dmg"
+        },
+        "windows-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1/rust-redis-desktop-x86_64-setup.exe",
+          "asset_name": "rust-redis-desktop-x86_64-setup.exe"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1/rust-redis-desktop-x86_64.AppImage",
+          "asset_name": "rust-redis-desktop-x86_64.AppImage"
+        }
+      }
+    }
+  }
+}
