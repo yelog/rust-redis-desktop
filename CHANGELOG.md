@@ -5,6 +5,124 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-04-16
+
+### Added
+- add bilingual UI and language preference
+- add launch at startup toggle
+- redesign about page
+- improve settings dialog and search expansion
+- export error_reporting module
+- add error reporting infrastructure (dialog + log + terminal)
+- export error module in lib.rs
+- add unified error types (AppError, StartupError, ConfigError)
+- configure EdDSA public key for auto updates
+- implement macOS installer with Autoupdate.app bridge
+- add appcast generation and release workflow integration
+- integrate Sparkle framework into app bundle
+- add EdDSA key generation and signing scripts
+- integrate complete update flow with UI
+- add update notification dialog UI
+- add manual update check menu item
+- integrate startup update check
+- implement unified update manager
+- add unified installer interface
+- implement platform installers (Windows complete)
+- implement update config management
+- implement download manager with progress
+- implement version checker with GitHub API
+- add module structure and error types
+- enhance drag-and-drop interaction with preview card and smooth animations
+- add lazy loading for large dataset pagination
+- add scale fade animation to context menu
+- add drag-and-drop reordering for connections
+- add enter/exit animations to all dialogs and modals
+- add VirtualTreeList component with virtual scrolling
+- add prefix grouping, TTL analysis and sample ratio support
+- add RedisJSON support with JSON.MERGE command
+- add Protobuf detection and raw parsing support
+- add BSON, CBOR formats and YAML, TOML formatters
+- add system tray support for macOS and Windows
+- add comprehensive Redis command completion with JSON and more
+- add Zstd decompression support
+- add image preview support for PNG/JPEG/GIF/WEBP formats
+- add memory analysis tool for scanning large keys
+- add pattern delete dialog for batch key deletion
+- add import/export connection configurations
+- add readonly mode for connections
+- add consumer group management UI
+- add Stream consumer group command support
+- add multi-language support framework
+- add custom formatter support
+- implement HELP command for Redis command docs
+- redesign theme preference with separate light/dark themes
+- add SSL/TLS support
+- add Stream type visualization support
+- add Bitmap visualization support
+- add Redis Cluster support
+- add SSH tunnel support for Redis connections
+- add Pub/Sub panel for Redis pub/sub operations
+- add Lua script management panel
+- add data import functionality
+- add animation system with theme-aware transitions
+- add Tokyo Night theme support
+- add 5 new themes (Tokyo Night Light, Atom One Light, GitHub Light, One Dark Pro, Dracula)
+- add MessagePack serialization support
+- add Python Pickle serialization support
+- add PHP serialization support
+- add Kryo/FST serialization support
+- add resizable panels for connection and key list areas
+- add copy buttons for all value types
+- add launch at startup toggle
+
+### Changed
+- sync lockfile and format ui modules
+- format remaining source files
+- remove about resources card
+- align docs with current app state
+- sync package version
+- clean up value_viewer module imports
+- integrate set, zset, and stream value panels
+- extract set, zset, and stream value panels
+- extract hash and list value viewer panels
+- remove duplicated value_viewer implementations
+- split value_viewer into modular directory
+- format extracted app actions module
+- extract app select and reconnect workflows
+- extract app save and delete workflows
+- extract app titlebar and connected tab shell
+- extract app list actions into action builders
+- extract app dialog wrappers and simple actions
+- extract app effects and common status panels
+- convert app.rs to modular app/ structure
+- replace unsafe unwraps in UI panels and protobuf parser
+- add fallbacks to guarded unwraps, clean main.rs
+- main.rs with unified error handling
+- clean up ConfigStorage::new() error handling
+- add NSIS installer for Windows release
+- unify button styles and refactor key browser toolbar
+
+### Fixed
+- compare prerelease versions correctly
+- recover stale redis connections during reads
+- use writable webview2 data dir
+- handle missing webview2 runtime
+- preserve dialog close animation
+- keep settings header fixed while scrolling
+- embed app icon in release builds
+- package desktop installer assets correctly
+- default to tokyo night themes
+- use pages update manifest
+- correct dialog header alignment
+- encrypt stored connection credentials with AES
+- handle mutex poisoning in tray.rs, return Result
+- remove unsafe Default impl from UpdateDownloader
+- remove unsafe Default impl from UpdateManager
+- add error and error_reporting modules to main.rs
+- resolve JSON preview overflow without scrollbar
+- improve connection drag sorting
+- add context menu support to VirtualTreeList and fix menu item click
+
 ## [0.1.1-beta.7] - 2026-04-15
 
 ### Fixed

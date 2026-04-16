@@ -1,6 +1,6 @@
 [package]
 name = "rust-redis-desktop"
-version = "0.1.1-beta.7"
+version = "0.1.1"
 edition = "2021"
 
 [dependencies]
