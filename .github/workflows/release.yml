@@ -221,6 +221,9 @@ jobs:
           
           # Convert version for NSIS (X.X.X.X format)
           nsis_version=$(echo "$version" | sed 's/-beta\././' | sed 's/-alpha\././')
+          if [[ ! "$nsis_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            nsis_version="${nsis_version}.0"
+          fi
           
           mkdir -p installer/app
           cp target/release/rust-redis-desktop.exe installer/app/
