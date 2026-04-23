@@ -3,7 +3,7 @@ use crate::theme::{COLOR_ACCENT, COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_TEXT, C
 use crate::ui::context_menu::ContextMenuState;
 use crate::ui::{FlatNode, FlatTreeAdapter};
 use dioxus::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const DEFAULT_ITEM_HEIGHT: f32 = 28.0;
 const DEFAULT_OVERSCAN: usize = 5;
@@ -101,21 +101,23 @@ pub fn VirtualTreeList(
     selected_key: String,
     expanded_paths: Signal<HashSet<String>>,
     search_keyword: String,
+    key_type_cache: Signal<HashMap<String, KeyType>>,
     on_select: EventHandler<String>,
     on_toggle: EventHandler<String>,
+    on_visible_keys_change: EventHandler<Vec<String>>,
     context_menu: Signal<Option<ContextMenuState<(String, bool)>>>,
 ) -> Element {
     let mut scroll_top = use_signal(|| 0.0f32);
     let viewport_height = use_signal(|| 600.0f32);
     let mut adapter = use_signal(|| FlatTreeAdapter::new(DEFAULT_ITEM_HEIGHT));
     let mut last_nodes = use_signal(Vec::<TreeNode>::new);
+    let mut last_reported_keys = use_signal(Vec::<String>::new);
 
     use_effect(move || {
         let expanded = expanded_paths.read().clone();
         let nodes_changed = last_nodes.read().as_slice() != nodes.as_slice();
         let expanded_changed = adapter.read().expanded_paths() != &expanded;
 
-        // Rebuild when tree content changes, even if the root node count stays the same.
         if nodes_changed || expanded_changed {
             adapter.write().set_expanded_paths(expanded);
             adapter.write().build_from_tree(&nodes);
@@ -128,6 +130,32 @@ pub fn VirtualTreeList(
     let (start, end) =
         adapter_read.get_visible_range(scroll_top(), viewport_height(), DEFAULT_OVERSCAN);
     let item_height = adapter_read.item_height();
+
+    {
+        let mut visible_keys: Vec<String> = Vec::new();
+        for idx in start..end {
+            if let Some(node) = adapter_read.get_node_at_index(idx) {
+                if !node.is_folder {
+                    visible_keys.push(node.path.clone());
+                }
+            }
+        }
+        let cache = key_type_cache.read();
+        let keys_to_fetch: Vec<String> = visible_keys
+            .iter()
+            .filter(|k| !cache.contains_key(k.as_str()))
+            .cloned()
+            .collect();
+        drop(cache);
+
+        if !keys_to_fetch.is_empty() {
+            let prev = last_reported_keys.peek().clone();
+            if keys_to_fetch != prev {
+                last_reported_keys.set(keys_to_fetch.clone());
+                on_visible_keys_change.call(keys_to_fetch);
+            }
+        }
+    }
 
     rsx! {
         div {
@@ -148,6 +176,11 @@ pub fn VirtualTreeList(
                             let top = idx as f32 * item_height;
                             let is_selected = !node.is_folder && selected_key == node.path;
                             let indent = node.depth * 16 + 8;
+                            let resolved_key_type = if node.is_folder {
+                                None
+                            } else {
+                                key_type_cache.read().get(&node.path).cloned()
+                            };
 
                             rsx! {
                                 VirtualTreeItem {
@@ -157,6 +190,7 @@ pub fn VirtualTreeList(
                                     indent: indent,
                                     is_selected: is_selected,
                                     search_keyword: search_keyword.clone(),
+                                    resolved_key_type: resolved_key_type,
                                     on_select: {
                                         let on_select = on_select.clone();
                                         let path = node.path.clone();
@@ -189,6 +223,7 @@ fn VirtualTreeItem(
     indent: usize,
     is_selected: bool,
     search_keyword: String,
+    resolved_key_type: Option<KeyType>,
     on_select: EventHandler<()>,
     on_toggle: EventHandler<()>,
     context_menu: Signal<Option<ContextMenuState<(String, bool)>>>,
@@ -199,7 +234,7 @@ fn VirtualTreeItem(
         "transparent"
     };
     let text_color = if is_selected { COLOR_TEXT } else { COLOR_TEXT };
-    let key_type_icon: KeyTypeIcon = node.key_type.clone().into();
+    let key_type_icon: KeyTypeIcon = resolved_key_type.into();
     let folder_icon = if node.is_folder {
         "📁"
     } else {

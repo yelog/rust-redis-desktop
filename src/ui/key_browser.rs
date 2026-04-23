@@ -189,6 +189,7 @@ pub fn KeyBrowser(
     let scan_progress = use_signal(ScanProgress::default);
     let cancel_scan = use_signal(|| Arc::new(AtomicBool::new(false)));
     let key_type_cache = use_signal(HashMap::<String, KeyType>::new);
+    let pending_type_keys = use_signal(Vec::<String>::new);
     let mut tree_state = use_signal(TreeState::default);
     let mut context_menu = use_signal(|| None::<ContextMenuState<(String, bool)>>);
     let key_list_width = use_signal(|| 320.0);
@@ -198,6 +199,47 @@ pub fn KeyBrowser(
     let use_virtual_scroll = use_signal(|| true);
     let mut db_menu = use_signal(|| None::<ContextMenuState<()>>);
     let mut toolbar_menu = use_signal(|| None::<ContextMenuState<()>>);
+
+    {
+        let pool = connection_pool.clone();
+        let key_type_cache = key_type_cache.clone();
+        let pending_type_keys = pending_type_keys.clone();
+
+        use_future(move || {
+            let pool = pool.clone();
+            let mut key_type_cache = key_type_cache.clone();
+            let mut pending_type_keys = pending_type_keys.clone();
+            async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                    let keys: Vec<String> = std::mem::take(&mut *pending_type_keys.write());
+                    if keys.is_empty() {
+                        continue;
+                    }
+                    let cache = key_type_cache.read();
+                    let uncached: Vec<String> = keys
+                        .into_iter()
+                        .filter(|k| !cache.contains_key(k.as_str()))
+                        .collect();
+                    drop(cache);
+                    if uncached.is_empty() {
+                        continue;
+                    }
+                    match pool.get_key_types(&uncached).await {
+                        Ok(types) => {
+                            let mut cache = key_type_cache.write();
+                            for (key, key_type) in types {
+                                cache.insert(key, key_type);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to batch fetch key types: {}", e);
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     {
         let show_delete_dialog = show_delete_dialog.clone();
@@ -754,6 +796,7 @@ pub fn KeyBrowser(
                             selected_key: selected_key(),
                             expanded_paths: expanded_paths,
                             search_keyword: search_input(),
+                            key_type_cache: key_type_cache,
                             on_select: {
                                 let on_key_select = on_key_select.clone();
                                 move |key: String| {
@@ -768,6 +811,14 @@ pub fn KeyBrowser(
                                         expanded.remove(&path);
                                     } else {
                                         expanded.insert(path);
+                                    }
+                                }
+                            },
+                            on_visible_keys_change: {
+                                let mut pending_type_keys = pending_type_keys.clone();
+                                move |keys: Vec<String>| {
+                                    if !keys.is_empty() {
+                                        pending_type_keys.set(keys);
                                     }
                                 }
                             },
