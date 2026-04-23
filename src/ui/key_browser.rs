@@ -563,18 +563,12 @@ pub fn KeyBrowser(
                                 border: "none",
                                 color: COLOR_TEXT,
                                 font_size: "12px",
-                                placeholder: i18n.read().t("Search"),
+                                placeholder: i18n.read().t("Enter to search"),
                                 value: "{search_input}",
                                 autocapitalize: "off",
                                 autocorrect: "off",
                                 oninput: move |e| {
-                                    let value = e.value();
-                                    let was_empty = search_input().trim().is_empty();
-                                    search_input.set(value.clone());
-                                    if value.trim().is_empty() && !was_empty {
-                                        search_pattern.set(String::new());
-                                        refresh_trigger.set(refresh_trigger() + 1);
-                                    }
+                                    search_input.set(e.value());
                                 },
                                 onkeydown: move |e| {
                                     if e.data().key() == Key::Enter {

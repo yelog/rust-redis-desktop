@@ -3,6 +3,7 @@ use std::collections::HashMap;
 pub fn extend_zh_cn(m: &mut HashMap<String, String>) {
     for (key, value) in [
         ("Search", "搜索"),
+        ("Enter to search", "回车搜索"),
         ("Search keys or values", "搜索 key 或 value"),
         ("No matching keys found", "未找到匹配的 key"),
         ("No key found", "没有找到 key"),
