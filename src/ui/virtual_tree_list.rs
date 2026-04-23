@@ -1,5 +1,5 @@
 use crate::redis::{KeyType, TreeNode};
-use crate::theme::{COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_TEXT, COLOR_TEXT_SECONDARY};
+use crate::theme::{COLOR_ACCENT, COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_TEXT, COLOR_TEXT_SECONDARY};
 use crate::ui::context_menu::ContextMenuState;
 use crate::ui::{FlatNode, FlatTreeAdapter};
 use dioxus::prelude::*;
@@ -7,6 +7,38 @@ use std::collections::HashSet;
 
 const DEFAULT_ITEM_HEIGHT: f32 = 28.0;
 const DEFAULT_OVERSCAN: usize = 5;
+
+fn highlight_parts(text: &str, keyword: &str) -> Vec<(String, bool)> {
+    if keyword.trim().is_empty() {
+        return vec![(text.to_string(), false)];
+    }
+    let lower_text = text.to_lowercase();
+    let lower_keyword = keyword.to_lowercase();
+    let mut parts = Vec::new();
+    let mut last = 0;
+    let mut start = 0;
+    while start < lower_text.len() {
+        if let Some(pos) = lower_text[start..].find(&lower_keyword) {
+            let match_start = start + pos;
+            if match_start > last {
+                parts.push((text[last..match_start].to_string(), false));
+            }
+            let match_end = match_start + keyword.len();
+            parts.push((text[match_start..match_end.min(text.len())].to_string(), true));
+            last = match_end;
+            start = match_end;
+        } else {
+            break;
+        }
+    }
+    if last < text.len() {
+        parts.push((text[last..].to_string(), false));
+    }
+    if parts.is_empty() {
+        parts.push((text.to_string(), false));
+    }
+    parts
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum KeyTypeIcon {
@@ -68,6 +100,7 @@ pub fn VirtualTreeList(
     nodes: Vec<TreeNode>,
     selected_key: String,
     expanded_paths: Signal<HashSet<String>>,
+    search_keyword: String,
     on_select: EventHandler<String>,
     on_toggle: EventHandler<String>,
     context_menu: Signal<Option<ContextMenuState<(String, bool)>>>,
@@ -123,6 +156,7 @@ pub fn VirtualTreeList(
                                     top: top,
                                     indent: indent,
                                     is_selected: is_selected,
+                                    search_keyword: search_keyword.clone(),
                                     on_select: {
                                         let on_select = on_select.clone();
                                         let path = node.path.clone();
@@ -154,6 +188,7 @@ fn VirtualTreeItem(
     top: f32,
     indent: usize,
     is_selected: bool,
+    search_keyword: String,
     on_select: EventHandler<()>,
     on_toggle: EventHandler<()>,
     context_menu: Signal<Option<ContextMenuState<(String, bool)>>>,
@@ -244,7 +279,19 @@ fn VirtualTreeItem(
                 text_overflow: "ellipsis",
                 white_space: "nowrap",
 
-                "{node.name}"
+                for (part, is_match) in highlight_parts(&node.name, &search_keyword) {
+                    if is_match {
+                        span {
+                            color: COLOR_ACCENT,
+                            font_weight: "bold",
+                            "{part}"
+                        }
+                    } else {
+                        span {
+                            "{part}"
+                        }
+                    }
+                }
             }
 
             if node.is_folder && node.children_count > 0 {

@@ -9,6 +9,38 @@ use crate::ui::icons::*;
 use dioxus::prelude::*;
 use std::collections::HashSet;
 
+fn highlight_parts(text: &str, keyword: &str) -> Vec<(String, bool)> {
+    if keyword.trim().is_empty() {
+        return vec![(text.to_string(), false)];
+    }
+    let lower_text = text.to_lowercase();
+    let lower_keyword = keyword.to_lowercase();
+    let mut parts = Vec::new();
+    let mut last = 0;
+    let mut start = 0;
+    while start < lower_text.len() {
+        if let Some(pos) = lower_text[start..].find(&lower_keyword) {
+            let match_start = start + pos;
+            if match_start > last {
+                parts.push((text[last..match_start].to_string(), false));
+            }
+            let match_end = match_start + keyword.len();
+            parts.push((text[match_start..match_end.min(text.len())].to_string(), true));
+            last = match_end;
+            start = match_end;
+        } else {
+            break;
+        }
+    }
+    if last < text.len() {
+        parts.push((text[last..].to_string(), false));
+    }
+    if parts.is_empty() {
+        parts.push((text.to_string(), false));
+    }
+    parts
+}
+
 fn collect_leaf_paths(node: &TreeNode) -> Vec<String> {
     let mut paths = Vec::new();
     if node.is_leaf {
@@ -45,6 +77,7 @@ pub fn LazyTreeNode(
     depth: usize,
     selected_key: String,
     tree_state: Signal<TreeState>,
+    search_keyword: String,
     on_select: EventHandler<String>,
     on_expand: EventHandler<String>,
     context_menu: Signal<Option<ContextMenuState<(String, bool)>>>,
@@ -240,7 +273,19 @@ pub fn LazyTreeNode(
                     text_overflow: "ellipsis",
                     white_space: "nowrap",
 
-                    "{display_name}"
+                    for (part, is_match) in highlight_parts(&display_name, &search_keyword) {
+                        if is_match {
+                            span {
+                                color: COLOR_ACCENT,
+                                font_weight: "bold",
+                                "{part}"
+                            }
+                        } else {
+                            span {
+                                "{part}"
+                            }
+                        }
+                    }
                 }
 
                 if !node.is_leaf && node.total_keys > 0 {
@@ -261,6 +306,7 @@ pub fn LazyTreeNode(
                         depth: depth + 1,
                         selected_key: selected_key.clone(),
                         tree_state: tree_state,
+                        search_keyword: search_keyword.clone(),
                         on_select: on_select.clone(),
                         on_expand: on_expand.clone(),
                         context_menu: context_menu,

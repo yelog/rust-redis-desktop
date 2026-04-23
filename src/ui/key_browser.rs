@@ -759,6 +759,7 @@ pub fn KeyBrowser(
                             nodes: tree_nodes.read().clone(),
                             selected_key: selected_key(),
                             expanded_paths: expanded_paths,
+                            search_keyword: search_input(),
                             on_select: {
                                 let on_key_select = on_key_select.clone();
                                 move |key: String| {
@@ -786,6 +787,7 @@ pub fn KeyBrowser(
                                 depth: 0,
                                 selected_key: selected_key(),
                                 tree_state: tree_state,
+                                search_keyword: search_input(),
                                 on_select: {
                                     let on_key_select = on_key_select.clone();
                                     move |key: String| {
