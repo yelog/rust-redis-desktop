@@ -176,6 +176,7 @@ pub fn KeyBrowser(
 ) -> Element {
     let i18n = use_i18n();
     let tree_nodes = use_signal(Vec::<TreeNode>::new);
+    let mut search_input = use_signal(String::new);
     let mut search_pattern = use_signal(String::new);
     let loading = use_signal(|| false);
     let keys_count = use_signal(|| 0usize);
@@ -284,14 +285,19 @@ pub fn KeyBrowser(
         let on_connection_error = on_connection_error.clone();
         move || {
             let pool = pool.clone();
-            let is_searching = !search_pattern.read().trim().is_empty();
-            let match_pattern = key_match_pattern(&search_pattern.read());
+            let search_snapshot = search_pattern.peek().clone();
+            let is_searching = !search_snapshot.trim().is_empty();
+            let match_pattern = key_match_pattern(&search_snapshot);
             let mut loading = loading.clone();
             let mut tree_nodes = tree_nodes.clone();
             let mut keys_count = keys_count.clone();
             let load_keyspace = load_keyspace.clone();
             let mut scan_progress = scan_progress.clone();
             let mut tree_state = tree_state.clone();
+            {
+                let previous = cancel_scan.peek();
+                previous.store(true, Ordering::Relaxed);
+            }
             let cancel_flag = Arc::new(AtomicBool::new(false));
             cancel_scan.set(cancel_flag.clone());
             let mut key_type_cache = key_type_cache.clone();
@@ -390,12 +396,17 @@ pub fn KeyBrowser(
                 keys_count.set(all_keys.len());
                 key_type_cache.set(HashMap::new());
 
+                if cancel_flag.load(Ordering::Relaxed) {
+                    loading.set(false);
+                    scan_progress.write().is_scanning = false;
+                    return;
+                }
+
                 let builder = TreeBuilder::new(":");
                 let new_nodes = builder.build(all_keys);
                 let new_node_ids = collect_all_node_ids(&new_nodes);
 
                 if is_searching {
-                    // Auto-expand all folder nodes when searching
                     let all_folder_paths = collect_all_folder_paths(&new_nodes);
                     let all_folder_node_ids: HashSet<String> = all_folder_paths
                         .iter()
@@ -408,12 +419,17 @@ pub fn KeyBrowser(
                     state.selected_keys.clear();
                     state.selection_mode = false;
                 } else {
-                    tree_nodes.set(new_nodes);
-                    let mut state = tree_state.write();
                     let valid_expanded: HashSet<String> = preserved_expanded
                         .into_iter()
                         .filter(|id| new_node_ids.contains(id))
                         .collect();
+                    let valid_expanded_paths: HashSet<String> = valid_expanded
+                        .iter()
+                        .filter_map(|id| id.strip_prefix("folder:").map(|s| s.to_string()))
+                        .collect();
+                    expanded_paths.set(valid_expanded_paths);
+                    tree_nodes.set(new_nodes);
+                    let mut state = tree_state.write();
                     state.expanded_nodes = valid_expanded;
                     state.selected_keys.clear();
                     state.selection_mode = false;
@@ -548,12 +564,21 @@ pub fn KeyBrowser(
                                 color: COLOR_TEXT,
                                 font_size: "12px",
                                 placeholder: i18n.read().t("Search"),
-                                value: "{search_pattern}",
+                                value: "{search_input}",
                                 autocapitalize: "off",
                                 autocorrect: "off",
-                                oninput: move |e| search_pattern.set(e.value()),
+                                oninput: move |e| {
+                                    let value = e.value();
+                                    let was_empty = search_input().trim().is_empty();
+                                    search_input.set(value.clone());
+                                    if value.trim().is_empty() && !was_empty {
+                                        search_pattern.set(String::new());
+                                        refresh_trigger.set(refresh_trigger() + 1);
+                                    }
+                                },
                                 onkeydown: move |e| {
                                     if e.data().key() == Key::Enter {
+                                        search_pattern.set(search_input());
                                         refresh_trigger.set(refresh_trigger() + 1);
                                     }
                                 },
@@ -1139,7 +1164,7 @@ pub fn KeyBrowser(
         if show_pattern_delete_dialog() {
             PatternDeleteDialog {
                 connection_pool: connection_pool.clone(),
-                initial_pattern: search_pattern(),
+                initial_pattern: search_input(),
                 colors,
                 on_confirm: {
                     let mut refresh_trigger = refresh_trigger.clone();

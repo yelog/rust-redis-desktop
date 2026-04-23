@@ -75,16 +75,18 @@ pub fn VirtualTreeList(
     let mut scroll_top = use_signal(|| 0.0f32);
     let viewport_height = use_signal(|| 600.0f32);
     let mut adapter = use_signal(|| FlatTreeAdapter::new(DEFAULT_ITEM_HEIGHT));
-    let mut last_nodes_len = use_signal(|| 0usize);
+    let mut last_nodes = use_signal(Vec::<TreeNode>::new);
 
     use_effect(move || {
         let expanded = expanded_paths.read().clone();
-        let nodes_len = nodes.len();
+        let nodes_changed = last_nodes.read().as_slice() != nodes.as_slice();
+        let expanded_changed = adapter.read().expanded_paths() != &expanded;
 
-        if nodes_len != last_nodes_len() || adapter.read().expanded_paths() != &expanded {
+        // Rebuild when tree content changes, even if the root node count stays the same.
+        if nodes_changed || expanded_changed {
             adapter.write().set_expanded_paths(expanded);
             adapter.write().build_from_tree(&nodes);
-            last_nodes_len.set(nodes_len);
+            last_nodes.set(nodes.clone());
         }
     });
 
