@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-04-30
+
+### Added
+- lazy-load key type icons in tree based on visible range
+- highlight search keyword in key tree nodes
+
+### Fixed
+- require Enter to refresh key tree when search is cleared
+- resolve key tree stuck in filtered state after clearing search
+- ensure NSIS VIProductVersion has 4 segments for stable releases
+- compare prerelease versions correctly
+
 ## [0.1.1] - 2026-04-16
 
 ### Added
