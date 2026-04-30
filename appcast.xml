@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Rust Redis Desktop</title>
+    <link>https://yelog.github.io/rust-redis-desktop/appcast.xml</link>
+    <description>A Redis desktop manager written in Rust</description>
+    <language>en</language>
+    <item>
+      <title>Version 0.1.2 (Intel)</title>
+      <sparkle:version>0.1.2</sparkle:version>
+      <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>10.15.0</sparkle:minimumSystemVersion>
+      <pubDate>Thu, 30 Apr 2026 03:00:08 GMT</pubDate>
+      <description><![CDATA[
+        Rust Redis Desktop 0.1.2
+        
+        A Redis desktop manager built with Rust.
+        
+        For Intel-based Macs.
+      ]]></description>
+      <enclosure url="https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.2/rust-redis-desktop-x86_64.dmg"
+                 sparkle:edSignature="4ZGU1Y9YXyrh55zPrxY2QdFiGz3wM+PT/p8Z1Jx3GgOFtmRRZ3yBytEruNQo4IQcNI9yW0TmtxgJDA5X7ZumBw"
+                 length="12353588"
+                 type="application/octet-stream"/>
+    </item>
+    <item>
+      <title>Version 0.1.2 (Apple Silicon)</title>
+      <sparkle:version>0.1.2</sparkle:version>
+      <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>11.0.0</sparkle:minimumSystemVersion>
+      <pubDate>Thu, 30 Apr 2026 03:00:08 GMT</pubDate>
+      <description><![CDATA[
+        Rust Redis Desktop 0.1.2
+        
+        A Redis desktop manager built with Rust.
+        
+        For Apple Silicon (M1/M2/M3) Macs.
+      ]]></description>
+      <enclosure url="https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.2/rust-redis-desktop-aarch64.dmg"
+                 sparkle:edSignature="NCeNQSwycGTF5J+36MUMIO4O0HgR6UK7OTGsGaf6p32360h91iC9SF6BChClI0uVOywa7tNmsjONqg98VMCfDw"
+                 length="12288472"
+                 type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>

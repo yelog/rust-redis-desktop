@@ -1,0 +1,50 @@
+{
+  "channels": {
+    "beta": {
+      "version": "0.1.1-beta.7",
+      "published_at": "2026-04-15T08:34:14Z",
+      "release_notes": "### Fixed\n- recover stale redis connections during reads",
+      "platforms": {
+        "macos-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1-beta.7/rust-redis-desktop-x86_64.dmg",
+          "asset_name": "rust-redis-desktop-x86_64.dmg"
+        },
+        "macos-aarch64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1-beta.7/rust-redis-desktop-aarch64.dmg",
+          "asset_name": "rust-redis-desktop-aarch64.dmg"
+        },
+        "windows-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1-beta.7/rust-redis-desktop-x86_64-setup.exe",
+          "asset_name": "rust-redis-desktop-x86_64-setup.exe"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.1-beta.7/rust-redis-desktop-x86_64.AppImage",
+          "asset_name": "rust-redis-desktop-x86_64.AppImage"
+        }
+      }
+    },
+    "stable": {
+      "version": "0.1.2",
+      "published_at": "2026-04-30T03:00:09Z",
+      "release_notes": "### Added\n- lazy-load key type icons in tree based on visible range\n- highlight search keyword in key tree nodes\n### Fixed\n- require Enter to refresh key tree when search is cleared\n- resolve key tree stuck in filtered state after clearing search\n- ensure NSIS VIProductVersion has 4 segments for stable releases\n- compare prerelease versions correctly",
+      "platforms": {
+        "macos-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.2/rust-redis-desktop-x86_64.dmg",
+          "asset_name": "rust-redis-desktop-x86_64.dmg"
+        },
+        "macos-aarch64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.2/rust-redis-desktop-aarch64.dmg",
+          "asset_name": "rust-redis-desktop-aarch64.dmg"
+        },
+        "windows-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.2/rust-redis-desktop-x86_64-setup.exe",
+          "asset_name": "rust-redis-desktop-x86_64-setup.exe"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/yelog/rust-redis-desktop/releases/download/v0.1.2/rust-redis-desktop-x86_64.AppImage",
+          "asset_name": "rust-redis-desktop-x86_64.AppImage"
+        }
+      }
+    }
+  }
+}
