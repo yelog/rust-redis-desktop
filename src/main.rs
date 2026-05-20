@@ -31,7 +31,7 @@ use error::{AppError, Result, StartupError};
 use error_reporting::ErrorReporter;
 use i18n::I18n;
 use startup::ensure_windows_webview_runtime;
-use theme::preferred_window_theme;
+use theme::{preferred_window_theme, resolve_theme, system_theme_is_dark};
 use tray::{create_shared_state, init_tray};
 use ui::App;
 use updater::{set_pending_update, UpdateManager};
@@ -172,17 +172,37 @@ fn run_app() -> Result<()> {
             .with_visible(true),
     );
 
+    let webview_background = resolve_theme(settings.theme_preference, system_theme_is_dark())
+        .colors
+        .background;
+    let initial_head = format!(
+        r#"<style>
+html, body, #main {{
+    margin: 0;
+    min-width: 100%;
+    min-height: 100%;
+    background: {webview_background};
+}}
+</style>"#
+    );
+
     #[cfg(target_os = "windows")]
     let launch_config = {
         let webview_data_dir = prepare_windows_webview_data_directory()?;
         Config::new()
             .with_menu(menu)
             .with_window(window_builder)
+            .with_custom_head(initial_head.clone())
             .with_data_directory(webview_data_dir)
     };
 
     #[cfg(not(target_os = "windows"))]
-    let launch_config = Config::new().with_menu(menu).with_window(window_builder);
+    let launch_config = {
+        Config::new()
+            .with_menu(menu)
+            .with_window(window_builder)
+            .with_custom_head(initial_head.clone())
+    };
 
     #[cfg(not(target_os = "linux"))]
     {

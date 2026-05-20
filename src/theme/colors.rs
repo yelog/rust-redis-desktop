@@ -1037,6 +1037,21 @@ pub fn resolve_theme(preference: ThemePreference, system_is_dark: bool) -> Theme
     theme_spec(preference.resolved_theme_id(system_is_dark))
 }
 
+pub fn system_theme_is_dark() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("defaults")
+            .args(["read", "-g", "AppleInterfaceStyle"])
+            .output()
+            .map(|output| String::from_utf8_lossy(&output.stdout).contains("Dark"))
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 pub fn preferred_window_theme(preference: ThemePreference) -> Option<tao::window::Theme> {
     match preference {
         ThemePreference::System { .. } => None,

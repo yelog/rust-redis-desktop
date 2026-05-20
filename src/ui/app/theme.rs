@@ -1,20 +1,9 @@
 use crate::config::{AppSettings, ConfigStorage};
-use crate::theme::ThemeSpec;
+use crate::theme::{system_theme_is_dark as detect_system_theme_is_dark, ThemeSpec};
 use serde_json::{Map, Value};
 
 pub(super) fn system_theme_is_dark() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("defaults")
-            .args(["read", "-g", "AppleInterfaceStyle"])
-            .output()
-            .map(|output| String::from_utf8_lossy(&output.stdout).contains("Dark"))
-            .unwrap_or(false)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        false
-    }
+    detect_system_theme_is_dark()
 }
 
 pub(super) fn load_initial_settings() -> AppSettings {
