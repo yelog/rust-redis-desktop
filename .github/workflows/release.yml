@@ -497,3 +497,51 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew tap
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "Skipping Homebrew tap update (HOMEBREW_TAP_TOKEN not set)"
+            exit 0
+          fi
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARM_DMG="artifacts/macos-aarch64/rust-redis-desktop-aarch64.dmg"
+          INTEL_DMG="artifacts/macos-x86_64/rust-redis-desktop-x86_64.dmg"
+
+          ARM_SHA=$(shasum -a 256 "$ARM_DMG" | cut -d ' ' -f1)
+          INTEL_SHA=$(shasum -a 256 "$INTEL_DMG" | cut -d ' ' -f1)
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/yelog/homebrew-tap.git" homebrew-tap
+
+          python3 - "$VERSION" "$ARM_SHA" "$INTEL_SHA" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          version, arm_sha, intel_sha = sys.argv[1:4]
+          cask_path = pathlib.Path("homebrew-tap/Casks/rust-redis-desktop.rb")
+          content = cask_path.read_text(encoding="utf-8")
+          content = re.sub(r'version "[^"]+"', f'version "{version}"', content, count=1)
+          content = re.sub(
+              r'sha256 arm:\s+"[0-9a-f]+",\n\s+intel: "[0-9a-f]+"',
+              f'sha256 arm:   "{arm_sha}",\n         intel: "{intel_sha}"',
+              content,
+              count=1,
+          )
+          cask_path.write_text(content, encoding="utf-8")
+          PY
+
+          if git -C homebrew-tap diff --quiet; then
+            echo "Homebrew tap already up to date"
+            exit 0
+          fi
+
+          git -C homebrew-tap config user.name "github-actions[bot]"
+          git -C homebrew-tap config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C homebrew-tap add Casks/rust-redis-desktop.rb
+          git -C homebrew-tap commit -m "Update rust-redis-desktop to ${VERSION}"
+          git -C homebrew-tap push origin HEAD

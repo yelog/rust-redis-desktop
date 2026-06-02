@@ -113,6 +113,13 @@
 
 Download a prebuilt package from the [Releases](https://github.com/yelog/rust-redis-desktop/releases) page, or build from source.
 
+On macOS, you can install with Homebrew:
+
+```sh
+brew tap yelog/tap
+brew install --cask rust-redis-desktop
+```
+
 Release artifacts currently include:
 
 - macOS `.dmg`
