@@ -473,6 +473,13 @@ fn build_theme_bridge_script(preference: ThemePreference) -> String {
     if (bridge.observer) {{
       bridge.observer.observe(document.body, bridge.observerConfig);
     }}
+
+    if (!bridge.startupMotionReady) {{
+      bridge.startupMotionReady = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => {{
+        document.documentElement.dataset.startupMotion = "ready";
+      }}));
+    }}
   }};
 
   bridge.schedule = () => {{
@@ -624,7 +631,14 @@ pub fn App() -> Element {
 
     rsx! {
                 style { {r#"
-                * {
+                html:not([data-startup-motion="ready"]) *,
+                html:not([data-startup-motion="ready"]) *::before,
+                html:not([data-startup-motion="ready"]) *::after {
+                    transition: none !important;
+                    animation: none !important;
+                }
+
+                html[data-startup-motion="ready"] * {
                     transition: background-color 300ms ease-in-out,
                                 border-color 300ms ease-in-out,
                                 color 300ms ease-in-out,
