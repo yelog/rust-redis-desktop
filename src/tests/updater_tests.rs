@@ -4,6 +4,9 @@ use crate::updater::{Platform, UpdateChecker};
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
+    use crate::updater::{InstallResult, MacOSInstaller};
+
     #[test]
     fn test_platform_current() {
         let platform = Platform::current();
@@ -128,6 +131,19 @@ mod tests {
             error,
             crate::updater::UpdateError::PlatformNotSupported
         ));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_macos_installer_opens_downloaded_dmg() {
+        let update_path = std::path::PathBuf::from("/tmp/rust-redis-desktop-aarch64.dmg");
+
+        let result = MacOSInstaller::install(&update_path).expect("installer should open dmg");
+
+        assert_eq!(
+            result,
+            InstallResult::OpenExternal(update_path.to_string_lossy().into_owned())
+        );
     }
 
     fn sample_manifest() -> &'static str {

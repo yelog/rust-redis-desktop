@@ -21,6 +21,24 @@ pub enum UpdateDialogState {
     Error,
 }
 
+fn format_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{} KB", bytes / 1024)
+    } else {
+        format!("{} MB", bytes / (1024 * 1024))
+    }
+}
+
+fn progress_percent(downloaded: u64, total: u64) -> u8 {
+    if total == 0 {
+        return 0;
+    }
+
+    ((downloaded.saturating_mul(100) / total).min(100)) as u8
+}
+
 fn strip_inline_markdown(text: &str) -> String {
     text.replace("**", "")
         .replace("__", "")
@@ -218,33 +236,15 @@ fn MarkdownReleaseNotes(markdown: String, colors: ThemeColors) -> Element {
 pub fn UpdateDialog(
     update_info: UpdateInfo,
     colors: ThemeColors,
+    state: UpdateDialogState,
+    progress: (u64, u64),
+    error_message: String,
     on_update: EventHandler<()>,
     on_skip: EventHandler<String>,
     on_close: EventHandler<()>,
 ) -> Element {
     let i18n = use_i18n();
-    let mut state = use_signal(UpdateDialogState::default);
-    let progress = use_signal(|| (0u64, 0u64));
-    let mut error_msg = use_signal(|| String::new());
-
-    let format_size = |bytes: u64| {
-        if bytes < 1024 {
-            format!("{} B", bytes)
-        } else if bytes < 1024 * 1024 {
-            format!("{} KB", bytes / 1024)
-        } else {
-            format!("{} MB", bytes / (1024 * 1024))
-        }
-    };
-
-    let progress_percent = move || {
-        let (downloaded, total) = progress();
-        if total > 0 {
-            (downloaded * 100 / total) as u8
-        } else {
-            0
-        }
-    };
+    let percent = progress_percent(progress.0, progress.1);
 
     rsx! {
         AnimatedDialog {
@@ -315,7 +315,7 @@ pub fn UpdateDialog(
                     }
                 }
 
-                if state() == UpdateDialogState::Downloading {
+                if state == UpdateDialogState::Downloading {
                     div {
                         margin_bottom: "16px",
 
@@ -335,7 +335,7 @@ pub fn UpdateDialog(
                                 color: "{colors.accent}",
                                 font_size: "13px",
 
-                                "{format_size(progress().0)} / {format_size(progress().1)}"
+                                "{format_size(progress.0)} / {format_size(progress.1)}"
                             }
                         }
 
@@ -347,7 +347,7 @@ pub fn UpdateDialog(
                             overflow: "hidden",
 
                             div {
-                                width: "{progress_percent()}%",
+                                width: "{percent}%",
                                 height: "100%",
                                 background: "{colors.accent}",
                                 border_radius: "4px",
@@ -357,7 +357,7 @@ pub fn UpdateDialog(
                     }
                 }
 
-                if state() == UpdateDialogState::Error {
+                if state == UpdateDialogState::Error {
                     div {
                         margin_bottom: "16px",
                         padding: "12px",
@@ -367,11 +367,11 @@ pub fn UpdateDialog(
                         color: "{colors.error}",
                         font_size: "13px",
 
-                        {format!("{}{}", i18n.read().t("Download failed: "), error_msg())}
+                        "{error_message}"
                     }
                 }
 
-                if state() == UpdateDialogState::Completed {
+                if state == UpdateDialogState::Completed {
                     div {
                         margin_bottom: "16px",
                         padding: "12px",
@@ -389,7 +389,7 @@ pub fn UpdateDialog(
                     gap: "12px",
                     justify_content: "flex_end",
 
-                    if state() == UpdateDialogState::Ready {
+                    if state == UpdateDialogState::Ready {
                         button {
                             padding: "8px 16px",
                             background: "{colors.background_tertiary}",
@@ -438,14 +438,13 @@ pub fn UpdateDialog(
                             onclick: {
                                 let on_update = on_update.clone();
                                 move |_| {
-                                    state.set(UpdateDialogState::Downloading);
                                     on_update.call(())
                                 }
                             },
 
                             {i18n.read().t("Update now")}
                         }
-                    } else if state() == UpdateDialogState::Downloading {
+                    } else if state == UpdateDialogState::Downloading {
                         button {
                             padding: "8px 16px",
                             background: "{colors.background_tertiary}",
@@ -459,7 +458,7 @@ pub fn UpdateDialog(
 
                             {i18n.read().t("Downloading...")}
                         }
-                    } else if state() == UpdateDialogState::Error {
+                    } else if state == UpdateDialogState::Error {
                         button {
                             padding: "8px 16px",
                             background: "{colors.background_tertiary}",
@@ -468,9 +467,9 @@ pub fn UpdateDialog(
                             border_radius: "4px",
                             cursor: "pointer",
                             font_size: "13px",
-                            onclick: move |_| {
-                                state.set(UpdateDialogState::Ready);
-                                error_msg.set(String::new());
+                            onclick: {
+                                let on_update = on_update.clone();
+                                move |_| on_update.call(())
                             },
 
                             {i18n.read().t("Retry")}
@@ -484,7 +483,7 @@ pub fn UpdateDialog(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_release_note_markdown, ReleaseNoteBlock};
+    use super::{format_size, parse_release_note_markdown, progress_percent, ReleaseNoteBlock};
 
     #[test]
     fn parses_markdown_release_notes_into_structured_blocks() {
@@ -524,15 +523,15 @@ mod tests {
             )]
         );
     }
-}
 
-pub fn use_update_progress() -> (
-    Signal<(u64, u64)>,
-    Signal<UpdateDialogState>,
-    Signal<String>,
-) {
-    let progress = use_signal(|| (0u64, 0u64));
-    let state = use_signal(UpdateDialogState::default);
-    let error_msg = use_signal(|| String::new());
-    (progress, state, error_msg)
+    #[test]
+    fn formats_download_progress_values() {
+        assert_eq!(format_size(0), "0 B");
+        assert_eq!(format_size(1024), "1 KB");
+        assert_eq!(format_size(5 * 1024 * 1024), "5 MB");
+
+        assert_eq!(progress_percent(0, 0), 0);
+        assert_eq!(progress_percent(512, 1024), 50);
+        assert_eq!(progress_percent(2048, 1024), 100);
+    }
 }

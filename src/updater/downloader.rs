@@ -61,6 +61,10 @@ impl UpdateDownloader {
         let mut downloaded: u64 = 0;
         let mut stream = response.bytes_stream();
 
+        if let Some(ref sender) = progress {
+            let _ = sender.send((downloaded, total_size)).await;
+        }
+
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|e| UpdateError::DownloadError(e.to_string()))?;
 
@@ -69,7 +73,7 @@ impl UpdateDownloader {
             downloaded += chunk.len() as u64;
 
             if let Some(ref sender) = progress {
-                let _ = sender.try_send((downloaded, total_size));
+                let _ = sender.send((downloaded, total_size)).await;
             }
         }
 

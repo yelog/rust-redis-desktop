@@ -4,42 +4,12 @@ use std::path::PathBuf;
 pub struct MacOSInstaller;
 
 impl MacOSInstaller {
-    pub fn install(_: &PathBuf) -> Result<InstallResult> {
+    pub fn install(update_path: &PathBuf) -> Result<InstallResult> {
         #[cfg(target_os = "macos")]
         {
-            use std::process::Command;
-
-            let app_path = std::env::current_exe().map_err(UpdateError::IoError)?;
-
-            let app_dir = app_path
-                .parent()
-                .and_then(|p| p.parent())
-                .and_then(|p| p.parent())
-                .ok_or_else(|| UpdateError::InstallError("无法找到应用目录".to_string()))?;
-
-            let autoupdate_path = app_dir
-                .join("Frameworks")
-                .join("Sparkle.framework")
-                .join("Versions")
-                .join("A")
-                .join("Resources")
-                .join("Autoupdate.app")
-                .join("Contents")
-                .join("MacOS")
-                .join("Autoupdate");
-
-            if autoupdate_path.exists() {
-                Command::new(&autoupdate_path)
-                    .arg(&app_dir)
-                    .spawn()
-                    .map_err(|e| UpdateError::InstallError(e.to_string()))?;
-
-                Ok(InstallResult::RestartInProgress)
-            } else {
-                Ok(InstallResult::OpenExternal(
-                    "https://github.com/yelog/rust-redis-desktop/releases".to_string(),
-                ))
-            }
+            Ok(InstallResult::OpenExternal(
+                update_path.to_string_lossy().into_owned(),
+            ))
         }
 
         #[cfg(not(target_os = "macos"))]
