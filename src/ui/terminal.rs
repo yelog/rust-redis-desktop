@@ -9,6 +9,7 @@ use crate::theme::{
 };
 use chrono::Utc;
 use dioxus::prelude::*;
+use std::time::Duration;
 
 #[derive(Clone, PartialEq)]
 pub struct TerminalHistoryEntry {
@@ -156,6 +157,20 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
     let config_storage = use_signal(|| ConfigStorage::new().ok());
     let i18n = use_i18n();
 
+    // Auto-scroll terminal output to bottom when history changes
+    use_effect(move || {
+        let _len = history.read().len();
+        spawn(async move {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let _ = document::eval(
+                r#"
+                let el = document.getElementById('terminal-output');
+                if (el) { el.scrollTop = el.scrollHeight; }
+                "#,
+            );
+        });
+    });
+
     let suggestions = {
         let input = input.clone();
         move || {
@@ -284,6 +299,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
             }
 
             div {
+                id: "terminal-output",
                 flex: "1",
                 overflow_y: "auto",
                 padding: "12px",
