@@ -604,6 +604,11 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                         font_family: "Consolas, monospace",
                         font_size: "13px",
                         value: "{input}",
+                        // 禁用 macOS WebView 原生文本自动补全/拼写建议
+                        autocomplete: "off",
+                        autocorrect: "off",
+                        autocapitalize: "off",
+                        spellcheck: "false",
                         oninput: move |e| {
                             input.set(e.value());
                             // 输入时自动弹出建议面板
