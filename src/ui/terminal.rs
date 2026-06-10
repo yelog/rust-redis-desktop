@@ -117,6 +117,8 @@ fn CommandSuggestion(cmd: &'static RedisCommand, on_select: EventHandler<String>
 #[component]
 fn CommandHelp(cmd: &'static RedisCommand, on_close: EventHandler<()>) -> Element {
     let i18n = use_i18n();
+    let help_group = i18n.read().t(cmd.group);
+    let help_desc = i18n.read().t(cmd.description);
     rsx! {
         div {
             padding: "12px",
@@ -148,7 +150,7 @@ fn CommandHelp(cmd: &'static RedisCommand, on_close: EventHandler<()>) -> Elemen
                         color: COLOR_TEXT_SUBTLE,
                         font_size: "12px",
 
-                        "{cmd.group}"
+                        "{help_group}"
                     }
                 }
 
@@ -172,7 +174,7 @@ fn CommandHelp(cmd: &'static RedisCommand, on_close: EventHandler<()>) -> Elemen
                 font_size: "12px",
                 margin_bottom: "8px",
 
-                "{cmd.description}"
+                "{help_desc}"
             }
 
             div {
@@ -483,6 +485,8 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                             let is_selected = idx == selected_suggestion_index();
                             match item {
                                 SuggestionItem::Builtin(cmd) => {
+                                    let group_label = i18n.read().t(cmd.group);
+                                    let desc_label = i18n.read().t(cmd.description);
                                     rsx! {
                                         div {
                                             key: "builtin-{cmd.name}",
@@ -520,14 +524,14 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                                                         color: COLOR_TEXT_SUBTLE,
                                                         font_size: "10px",
 
-                                                        "{cmd.group}"
+                                                        "{group_label}"
                                                     }
 
                                                     span {
                                                         color: COLOR_TEXT_SUBTLE,
                                                         font_size: "10px",
 
-                                                        "{cmd.description}"
+                                                        "{desc_label}"
                                                     }
                                                 }
                                             }

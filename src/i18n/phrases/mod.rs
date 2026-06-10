@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 pub mod app;
+pub mod commands;
 pub mod common;
 pub mod dialogs;
 pub mod panels;
@@ -12,4 +13,5 @@ pub fn insert_all_zh_cn(m: &mut HashMap<String, String>) {
     dialogs::extend_zh_cn(m);
     panels::extend_zh_cn(m);
     value_viewer::extend_zh_cn(m);
+    commands::extend_zh_cn(m);
 }
