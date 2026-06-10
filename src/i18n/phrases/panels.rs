@@ -28,9 +28,10 @@ pub fn extend_zh_cn(m: &mut HashMap<String, String>) {
         ("Cancel", "取消"),
         ("Close", "关闭"),
         (
-            "Press TAB after typing a command to view suggestions, or enter HELP <command> to view command help",
-            "输入命令后按 TAB 查看补全建议，输入 HELP <command> 查看命令帮助",
+            "Enter to execute, Tab to fill suggestion, ↑/↓ to browse history, HELP <cmd> for docs",
+            "回车执行，Tab 补全建议，↑/↓ 浏览历史，HELP <cmd> 查看帮助",
         ),
+        ("history", "历史"),
         ("Run", "运行"),
         ("Slow Log", "慢查询日志"),
         ("Refresh", "刷新"),

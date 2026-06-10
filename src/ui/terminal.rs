@@ -390,6 +390,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
     } else {
         i18n.read().t("Run")
     };
+    let history_label = i18n.read().t("history");
 
     rsx! {
         div {
@@ -535,6 +536,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                                 }
                                 SuggestionItem::History(cmd) => {
                                     let cmd_clone = cmd.clone();
+                                    let hist_label = history_label.clone();
                                     rsx! {
                                         div {
                                             key: "hist-{cmd_clone}",
@@ -566,7 +568,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
                                                     color: COLOR_TEXT_SUBTLE,
                                                     font_size: "10px",
 
-                                                    "history"
+                                                    "{hist_label}"
                                                 }
                                             }
                                         }
