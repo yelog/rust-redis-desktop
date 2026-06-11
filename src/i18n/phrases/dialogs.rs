@@ -30,6 +30,7 @@ pub fn extend_zh_cn(m: &mut HashMap<String, String>) {
             "Download complete. Starting installation...",
             "下载完成，即将开始安装...",
         ),
+        ("Starting updater...", "正在启动更新器..."),
         ("Remind me later", "稍后提醒"),
         ("Skip this version", "跳过此版本"),
         ("Update now", "立即更新"),

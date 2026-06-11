@@ -4804,6 +4804,7 @@ checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags 2.11.1",
  "block2 0.6.2",
+ "libc",
  "objc2 0.6.4",
  "objc2-core-foundation",
 ]
@@ -6021,7 +6022,7 @@ dependencies = [
 
 [[package]]
 name = "rust-redis-desktop"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "aes",
  "arboard",
@@ -6039,6 +6040,8 @@ dependencies = [
  "humansize",
  "image",
  "jaded",
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
  "once_cell",
  "open",
  "prost",

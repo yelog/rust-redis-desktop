@@ -22,8 +22,8 @@ use self::render::{
 use self::theme::{build_theme_palette, load_initial_settings, system_theme_is_dark};
 use crate::config::{AppSettings, ConfigStorage};
 use crate::connection::{
-    ConnectionConfig, ConnectionEvent, ConnectionHealthMonitor, ConnectionManager,
-    ConnectionPool, ConnectionState,
+    ConnectionConfig, ConnectionEvent, ConnectionHealthMonitor, ConnectionManager, ConnectionPool,
+    ConnectionState,
 };
 use crate::i18n::I18n;
 use crate::theme::{
@@ -1042,91 +1042,147 @@ pub fn App() -> Element {
                         let update_download_progress = update_download_progress.clone();
                         let update_downloaded_path = update_downloaded_path.clone();
                         let update_dialog_state = update_dialog_state.clone();
-                        let update_dialog_error = update_dialog_error.clone();
-                        let toast_for_update = toast_for_update.clone();
-                        let info_for_closure = info.clone();
-                        move |_| {
-                            let info_clone = info_for_closure.clone();
-                            let mut update_download_progress = update_download_progress.clone();
-                            let mut update_downloaded_path = update_downloaded_path.clone();
-                            let mut update_dialog_state = update_dialog_state.clone();
-                            let mut update_dialog_error = update_dialog_error.clone();
-                            let mut toast_for_update = toast_for_update.clone();
-                            update_download_progress.set((0, 0));
-                            update_downloaded_path.set(None);
-                            update_dialog_error.set(String::new());
-                            update_dialog_state.set(UpdateDialogState::Downloading);
-                            spawn(async move {
-                                if let Ok(mut manager) = UpdateManager::new() {
-                                    let (tx, mut rx) = tokio::sync::mpsc::channel::<(u64, u64)>(100);
-                                    let mut progress = update_download_progress.clone();
-                                    spawn(async move {
-                                        while let Some((downloaded, total)) = rx.recv().await {
-                                            progress.set((downloaded, total));
-                                        }
-                                    });
-                                    match manager.download_update(&info_clone, Some(tx)).await {
-                                        Ok(path) => {
-                                            update_dialog_state.set(UpdateDialogState::Completed);
-                                            update_downloaded_path.set(Some(path.clone()));
-                                            match manager.install_update(&path) {
-                                                Ok(result) => {
-                                                    match result {
-                                                        InstallResult::RestartRequired => {
-                                                            set_pending_update(None);
-                                                            update_dialog_state.set(UpdateDialogState::Ready);
-                                                            toast_for_update.write().success("更新完成，请重启应用");
-                                                        }
-                                                        InstallResult::RestartInProgress => {
-                                                            set_pending_update(None);
-                                                            update_dialog_state.set(UpdateDialogState::Ready);
-                                                            toast_for_update.write().success("正在安装更新...");
-                                                        }
-                                                        InstallResult::OpenExternal(target) => {
-                                                            match open::that(&target) {
-                                                                Ok(_) => {
-                                                                    set_pending_update(None);
-                                                                    update_dialog_state.set(UpdateDialogState::Ready);
-                                                                    if target.starts_with("http://") || target.starts_with("https://") {
-                                                                        toast_for_update.write().success("请在浏览器中下载更新");
-                                                                    } else {
-                                                                        toast_for_update.write().success("已打开安装包，请按提示完成更新");
-                                                                    }
-                                                                }
-                                                                Err(e) => {
-                                                                    let msg = format!("打开安装包失败: {}", e);
-                                                                    update_dialog_error.set(msg.clone());
-                                                                    update_dialog_state.set(UpdateDialogState::Error);
-                                                                    toast_for_update.write().error(&msg);
-                                                                }
-                                                            }
-                                                        }
+                            let update_dialog_error = update_dialog_error.clone();
+                            let toast_for_update = toast_for_update.clone();
+                            #[cfg(not(target_os = "macos"))]
+                            let info_for_closure = info.clone();
+                            move |_| {
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let mut update_download_progress = update_download_progress.clone();
+                                    let mut update_downloaded_path = update_downloaded_path.clone();
+                                    let mut update_dialog_state = update_dialog_state.clone();
+                                    let mut update_dialog_error = update_dialog_error.clone();
+                                    let mut toast_for_update = toast_for_update.clone();
+                                    update_download_progress.set((0, 0));
+                                    update_downloaded_path.set(None);
+                                    update_dialog_error.set(String::new());
+                                    update_dialog_state.set(UpdateDialogState::Installing);
+
+                                    match UpdateManager::new() {
+                                        Ok(manager) => match manager.install_update(&PathBuf::new()) {
+                                            Ok(InstallResult::RestartRequired | InstallResult::RestartInProgress) => {
+                                                set_pending_update(None);
+                                                update_dialog_state.set(UpdateDialogState::Ready);
+                                                toast_for_update.write().success("已启动 macOS 更新器，请按提示完成更新");
+                                            }
+                                            Ok(InstallResult::OpenExternal(target)) => match open::that(&target) {
+                                                Ok(_) => {
+                                                    set_pending_update(None);
+                                                    update_dialog_state.set(UpdateDialogState::Ready);
+                                                    if target.starts_with("http://") || target.starts_with("https://") {
+                                                        toast_for_update.write().success("请在浏览器中下载更新");
+                                                    } else {
+                                                        toast_for_update.write().success("已打开安装包，请按提示完成更新");
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    let msg = format!("安装失败: {}", e);
+                                                    let msg = format!("打开更新页面失败: {}", e);
                                                     update_dialog_error.set(msg.clone());
                                                     update_dialog_state.set(UpdateDialogState::Error);
                                                     toast_for_update.write().error(&msg);
                                                 }
+                                            },
+                                            Err(e) => {
+                                                let msg = format!("启动更新器失败: {}", e);
+                                                update_dialog_error.set(msg.clone());
+                                                update_dialog_state.set(UpdateDialogState::Error);
+                                                toast_for_update.write().error(&msg);
                                             }
-                                        }
-                                        Err(e) => {
-                                            let msg = format!("下载失败: {}", e);
+                                        },
+                                        Err(_) => {
+                                            let msg = "无法初始化更新管理器".to_string();
                                             update_dialog_error.set(msg.clone());
                                             update_dialog_state.set(UpdateDialogState::Error);
                                             toast_for_update.write().error(&msg);
                                         }
                                     }
-                                } else {
-                                    let msg = "无法初始化更新管理器".to_string();
-                                    update_dialog_error.set(msg.clone());
-                                    update_dialog_state.set(UpdateDialogState::Error);
-                                    toast_for_update.write().error(&msg);
                                 }
-                            });
-                        }
-                    },
+
+                                #[cfg(not(target_os = "macos"))]
+                                {
+                                    let info_clone = info_for_closure.clone();
+                                    let mut update_download_progress = update_download_progress.clone();
+                                    let mut update_downloaded_path = update_downloaded_path.clone();
+                                    let mut update_dialog_state = update_dialog_state.clone();
+                                    let mut update_dialog_error = update_dialog_error.clone();
+                                    let mut toast_for_update = toast_for_update.clone();
+                                    update_download_progress.set((0, 0));
+                                    update_downloaded_path.set(None);
+                                    update_dialog_error.set(String::new());
+                                    update_dialog_state.set(UpdateDialogState::Downloading);
+                                    spawn(async move {
+                                        if let Ok(mut manager) = UpdateManager::new() {
+                                            let (tx, mut rx) = tokio::sync::mpsc::channel::<(u64, u64)>(100);
+                                            let mut progress = update_download_progress.clone();
+                                            spawn(async move {
+                                                while let Some((downloaded, total)) = rx.recv().await {
+                                                    progress.set((downloaded, total));
+                                                }
+                                            });
+                                            match manager.download_update(&info_clone, Some(tx)).await {
+                                                Ok(path) => {
+                                                    update_dialog_state.set(UpdateDialogState::Completed);
+                                                    update_downloaded_path.set(Some(path.clone()));
+                                                    match manager.install_update(&path) {
+                                                        Ok(result) => {
+                                                            match result {
+                                                                InstallResult::RestartRequired => {
+                                                                    set_pending_update(None);
+                                                                    update_dialog_state.set(UpdateDialogState::Ready);
+                                                                    toast_for_update.write().success("更新完成，请重启应用");
+                                                                }
+                                                                InstallResult::RestartInProgress => {
+                                                                    set_pending_update(None);
+                                                                    update_dialog_state.set(UpdateDialogState::Ready);
+                                                                    toast_for_update.write().success("正在安装更新...");
+                                                                }
+                                                                InstallResult::OpenExternal(target) => {
+                                                                    match open::that(&target) {
+                                                                        Ok(_) => {
+                                                                            set_pending_update(None);
+                                                                            update_dialog_state.set(UpdateDialogState::Ready);
+                                                                            if target.starts_with("http://") || target.starts_with("https://") {
+                                                                                toast_for_update.write().success("请在浏览器中下载更新");
+                                                                            } else {
+                                                                                toast_for_update.write().success("已打开安装包，请按提示完成更新");
+                                                                            }
+                                                                        }
+                                                                        Err(e) => {
+                                                                            let msg = format!("打开安装包失败: {}", e);
+                                                                            update_dialog_error.set(msg.clone());
+                                                                            update_dialog_state.set(UpdateDialogState::Error);
+                                                                            toast_for_update.write().error(&msg);
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            let msg = format!("安装失败: {}", e);
+                                                            update_dialog_error.set(msg.clone());
+                                                            update_dialog_state.set(UpdateDialogState::Error);
+                                                            toast_for_update.write().error(&msg);
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    let msg = format!("下载失败: {}", e);
+                                                    update_dialog_error.set(msg.clone());
+                                                    update_dialog_state.set(UpdateDialogState::Error);
+                                                    toast_for_update.write().error(&msg);
+                                                }
+                                            }
+                                        } else {
+                                            let msg = "无法初始化更新管理器".to_string();
+                                            update_dialog_error.set(msg.clone());
+                                            update_dialog_state.set(UpdateDialogState::Error);
+                                            toast_for_update.write().error(&msg);
+                                        }
+                                    });
+                                }
+                            }
+                        },
                     on_skip: {
                         let update_download_progress = update_download_progress.clone();
                         let update_downloaded_path = update_downloaded_path.clone();

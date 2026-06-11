@@ -17,6 +17,7 @@ pub enum UpdateDialogState {
     #[default]
     Ready,
     Downloading,
+    Installing,
     Completed,
     Error,
 }
@@ -384,6 +385,19 @@ pub fn UpdateDialog(
                     }
                 }
 
+                if state == UpdateDialogState::Installing {
+                    div {
+                        margin_bottom: "16px",
+                        padding: "12px",
+                        background: "{colors.background_tertiary}",
+                        border_radius: "6px",
+                        color: "{colors.text_secondary}",
+                        font_size: "13px",
+
+                        {i18n.read().t("Starting updater...")}
+                    }
+                }
+
                 div {
                     display: "flex",
                     gap: "12px",
@@ -444,7 +458,7 @@ pub fn UpdateDialog(
 
                             {i18n.read().t("Update now")}
                         }
-                    } else if state == UpdateDialogState::Downloading {
+                    } else if state == UpdateDialogState::Downloading || state == UpdateDialogState::Installing {
                         button {
                             padding: "8px 16px",
                             background: "{colors.background_tertiary}",
@@ -456,7 +470,11 @@ pub fn UpdateDialog(
                             opacity: "0.6",
                             disabled: true,
 
-                            {i18n.read().t("Downloading...")}
+                            if state == UpdateDialogState::Downloading {
+                                {i18n.read().t("Downloading...")}
+                            } else {
+                                {i18n.read().t("Starting updater...")}
+                            }
                         }
                     } else if state == UpdateDialogState::Error {
                         button {

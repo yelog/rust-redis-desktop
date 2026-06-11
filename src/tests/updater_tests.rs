@@ -135,12 +135,12 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn test_macos_installer_opens_downloaded_dmg() {
+    fn test_macos_installer_does_not_open_downloaded_dmg() {
         let update_path = std::path::PathBuf::from("/tmp/rust-redis-desktop-aarch64.dmg");
 
-        let result = MacOSInstaller::install(&update_path).expect("installer should open dmg");
+        let result = MacOSInstaller::install(&update_path).expect("installer should start update");
 
-        assert_eq!(
+        assert_ne!(
             result,
             InstallResult::OpenExternal(update_path.to_string_lossy().into_owned())
         );
