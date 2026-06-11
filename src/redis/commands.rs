@@ -406,6 +406,24 @@ impl ConnectionPool {
     pub async fn execute_raw_command(&self, command: &str) -> Result<String> {
         self.check_raw_command_permission(command)?;
 
+        // First attempt
+        match self.try_execute_raw_command(command).await {
+            Err(
+                e @ (ConnectionError::Timeout | ConnectionError::ConnectionFailed(_)),
+            ) => {
+                tracing::warn!(
+                    "Command '{}' failed ({}), auto-reconnecting before retry",
+                    command,
+                    e
+                );
+                self.reconnect().await?;
+                self.try_execute_raw_command(command).await
+            }
+            result => result,
+        }
+    }
+
+    async fn try_execute_raw_command(&self, command: &str) -> Result<String> {
         let mut connection = self.connection.lock().await;
 
         if let Some(ref mut conn) = *connection {

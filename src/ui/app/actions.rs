@@ -1,11 +1,15 @@
 use crate::config::{AppSettings, ConfigStorage};
-use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
+use crate::connection::{
+    ConnectionConfig, ConnectionEvent, ConnectionHealthMonitor, ConnectionManager, ConnectionPool,
+    ConnectionState,
+};
 use crate::i18n::{use_i18n, I18n};
 use crate::theme::ThemePreference;
 use crate::ui::ToastManager;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 pub(super) fn save_settings_action(
@@ -172,12 +176,18 @@ pub(super) fn confirm_delete_connection_action(
     mut selected_connection: Signal<Option<Uuid>>,
     mut selected_key: Signal<String>,
     mut current_db: Signal<u8>,
+    mut health_monitors: Signal<HashMap<Uuid, ConnectionHealthMonitor>>,
 ) -> Callback<Uuid> {
     Callback::new(move |id: Uuid| {
         show_delete_connection_dialog.set(None);
         spawn(async move {
             if let Some(storage) = config_storage.read().as_ref() {
                 let _ = storage.delete_connection(id);
+            }
+
+            // Stop health monitor before removing the pool
+            if let Some(monitor) = health_monitors.write().remove(&id) {
+                monitor.stop();
             }
 
             connection_pools.write().remove(&id);
@@ -209,9 +219,12 @@ pub(super) fn select_connection_action(
     mut connection_pools: Signal<HashMap<Uuid, ConnectionPool>>,
     connection_manager: Signal<ConnectionManager>,
     config_storage: Signal<Option<ConfigStorage>>,
+    event_tx: mpsc::Sender<(Uuid, ConnectionEvent)>,
+    mut health_monitors: Signal<HashMap<Uuid, ConnectionHealthMonitor>>,
 ) -> Callback<Uuid> {
     Callback::new(move |id: Uuid| {
         let previous_conn = selected_connection();
+        let event_tx = event_tx.clone();
 
         selected_key.set(String::new());
         current_tab.set(super::state::Tab::Data);
@@ -246,6 +259,7 @@ pub(super) fn select_connection_action(
                 connection_states
                     .write()
                     .insert(id, ConnectionState::Connected);
+                start_health_monitor(id, pool, event_tx, health_monitors).await;
                 return;
             }
 
@@ -259,10 +273,11 @@ pub(super) fn select_connection_action(
                     tracing::error!("Failed to sync database for connection {id}: {error}");
                 }
                 current_db.set(db);
-                connection_pools.write().insert(id, pool);
+                connection_pools.write().insert(id, pool.clone());
                 connection_states
                     .write()
                     .insert(id, ConnectionState::Connected);
+                start_health_monitor(id, pool, event_tx, health_monitors).await;
                 return;
             }
 
@@ -273,10 +288,11 @@ pub(super) fn select_connection_action(
                             Ok(pool) => {
                                 current_db.set(pool.current_db());
                                 let _ = connection_manager.read().add_connection(config).await;
-                                connection_pools.write().insert(id, pool);
+                                connection_pools.write().insert(id, pool.clone());
                                 connection_states
                                     .write()
                                     .insert(id, ConnectionState::Connected);
+                                start_health_monitor(id, pool, event_tx, health_monitors).await;
                             }
                             Err(_) => {
                                 connection_states.write().insert(id, ConnectionState::Error);
@@ -298,8 +314,11 @@ pub(super) fn reconnect_connection_action(
     mut connection_versions: Signal<HashMap<Uuid, u32>>,
     selected_connection: Signal<Option<Uuid>>,
     mut current_db: Signal<u8>,
+    event_tx: mpsc::Sender<(Uuid, ConnectionEvent)>,
+    mut health_monitors: Signal<HashMap<Uuid, ConnectionHealthMonitor>>,
 ) -> Callback<Uuid> {
     Callback::new(move |id: Uuid| {
+        let event_tx = event_tx.clone();
         spawn(async move {
             reconnecting_ids.write().insert(id);
             connection_states
@@ -312,7 +331,7 @@ pub(super) fn reconnect_connection_action(
                         match ConnectionPool::new(config.clone()).await {
                             Ok(pool) => {
                                 let db = pool.current_db();
-                                connection_pools.write().insert(id, pool);
+                                connection_pools.write().insert(id, pool.clone());
                                 let _ = connection_manager.read().add_connection(config).await;
 
                                 let version =
@@ -324,6 +343,7 @@ pub(super) fn reconnect_connection_action(
                                 if selected_connection() == Some(id) {
                                     current_db.set(db);
                                 }
+                                start_health_monitor(id, pool, event_tx, health_monitors).await;
                             }
                             Err(_) => {
                                 connection_states.write().insert(id, ConnectionState::Error);
@@ -336,4 +356,23 @@ pub(super) fn reconnect_connection_action(
             reconnecting_ids.write().remove(&id);
         });
     })
+}
+
+/// Start a health monitor for the given connection, replacing any existing one.
+pub(super) async fn start_health_monitor(
+    id: Uuid,
+    pool: ConnectionPool,
+    event_tx: mpsc::Sender<(Uuid, ConnectionEvent)>,
+    mut health_monitors: Signal<HashMap<Uuid, ConnectionHealthMonitor>>,
+) {
+    // Stop existing monitor if any
+    if let Some(old) = health_monitors.write().remove(&id) {
+        old.stop();
+    }
+
+    let mut monitor = ConnectionHealthMonitor::new(pool, id);
+    monitor.set_event_sender(event_tx);
+    monitor.start().await;
+    health_monitors.write().insert(id, monitor);
+    tracing::debug!("Health monitor started for connection {id}");
 }

@@ -22,3 +22,4 @@ test/ssh-config/
 
 # Temporary plans and drafts
 docs/plans/
+.codegraph/

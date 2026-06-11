@@ -8,7 +8,11 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{mpsc, Mutex, Semaphore};
+use uuid::Uuid;
+
+/// Per-command execution timeout (distinct from connection timeout).
+const CMD_TIMEOUT_SECS: u64 = 10;
 
 const HEARTBEAT_INTERVAL_SECS: u64 = 30;
 const MAX_CONSECUTIVE_FAILURES: u32 = 3;
@@ -108,16 +112,15 @@ impl RedisConnection {
     where
         V: redis::FromRedisValue,
     {
-        match self {
-            RedisConnection::Single(c) => cmd
-                .query_async(c)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string())),
-            RedisConnection::Cluster(c) => cmd
-                .query_async(c)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string())),
-        }
+        tokio::time::timeout(Duration::from_secs(CMD_TIMEOUT_SECS), async {
+            match self {
+                RedisConnection::Single(c) => cmd.query_async(c).await,
+                RedisConnection::Cluster(c) => cmd.query_async(c).await,
+            }
+        })
+        .await
+        .map_err(|_| ConnectionError::Timeout)?
+        .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
     }
 
     pub async fn get_string(&mut self, key: &str) -> Result<String> {
@@ -377,22 +380,15 @@ impl RedisConnection {
     }
 
     async fn execute_cmd_raw(&mut self, cmd: &mut redis::Cmd) -> Result<redis::Value> {
-        match self {
-            RedisConnection::Single(conn) => {
-                let result: redis::Value = cmd
-                    .query_async(conn)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-                Ok(result)
+        tokio::time::timeout(Duration::from_secs(CMD_TIMEOUT_SECS), async {
+            match self {
+                RedisConnection::Single(conn) => cmd.query_async(conn).await,
+                RedisConnection::Cluster(conn) => cmd.query_async(conn).await,
             }
-            RedisConnection::Cluster(conn) => {
-                let result: redis::Value = cmd
-                    .query_async(conn)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-                Ok(result)
-            }
-        }
+        })
+        .await
+        .map_err(|_| ConnectionError::Timeout)?
+        .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
     }
 }
 
@@ -716,18 +712,48 @@ impl Default for HealthStatus {
     }
 }
 
+/// Events emitted by the health monitor for the UI layer to consume.
+#[derive(Debug, Clone)]
+pub enum ConnectionEvent {
+    /// All consecutive health checks passed after a previous failure.
+    Recovered,
+    /// Health check failed; includes the consecutive failure count.
+    HealthCheckFailed { consecutive_failures: u32 },
+    /// Automatic reconnect attempt started.
+    Reconnecting,
+    /// Automatic reconnect succeeded.
+    Reconnected,
+    /// Automatic reconnect failed permanently (after exhausting retries).
+    ReconnectFailed { error: String },
+}
+
 pub struct ConnectionHealthMonitor {
     pool: ConnectionPool,
     status: Arc<Mutex<HealthStatus>>,
     running: Arc<AtomicBool>,
+    event_tx: Option<mpsc::Sender<(Uuid, ConnectionEvent)>>,
+    connection_id: Uuid,
 }
 
 impl ConnectionHealthMonitor {
-    pub fn new(pool: ConnectionPool) -> Self {
+    pub fn new(pool: ConnectionPool, connection_id: Uuid) -> Self {
         Self {
             pool,
             status: Arc::new(Mutex::new(HealthStatus::default())),
             running: Arc::new(AtomicBool::new(false)),
+            event_tx: None,
+            connection_id,
+        }
+    }
+
+    /// Set the event sender that bridges health events to the UI layer.
+    pub fn set_event_sender(&mut self, tx: mpsc::Sender<(Uuid, ConnectionEvent)>) {
+        self.event_tx = Some(tx);
+    }
+
+    async fn emit_event(&self, event: ConnectionEvent) {
+        if let Some(ref tx) = self.event_tx {
+            let _ = tx.send((self.connection_id, event)).await;
         }
     }
 
@@ -739,6 +765,8 @@ impl ConnectionHealthMonitor {
         let pool = self.pool.clone();
         let status = self.status.clone();
         let running = self.running.clone();
+        let event_tx = self.event_tx.clone();
+        let connection_id = self.connection_id;
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
@@ -752,19 +780,58 @@ impl ConnectionHealthMonitor {
                 status_guard.last_check = Some(Instant::now());
 
                 if is_healthy {
+                    let was_unhealthy = !status_guard.is_healthy
+                        || status_guard.consecutive_failures > 0;
                     status_guard.is_healthy = true;
                     status_guard.consecutive_failures = 0;
                     status_guard.last_error = None;
                     tracing::debug!("Connection health check passed");
+
+                    // Notify UI if recovering from a failure streak
+                    if was_unhealthy {
+                        if let Some(ref tx) = event_tx {
+                            let _ = tx.send((connection_id, ConnectionEvent::Recovered)).await;
+                        }
+                    }
                 } else {
                     status_guard.consecutive_failures += 1;
                     status_guard.is_healthy = false;
+                    let failures = status_guard.consecutive_failures;
 
-                    if status_guard.consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
+                    tracing::warn!(
+                        "Connection health check failed ({}/{})",
+                        failures,
+                        MAX_CONSECUTIVE_FAILURES
+                    );
+
+                    if failures >= MAX_CONSECUTIVE_FAILURES {
+                        // Check auto_reconnect before attempting reconnect
+                        if !pool.config().auto_reconnect {
+                            status_guard.last_error = Some("Auto-reconnect disabled".to_string());
+                            drop(status_guard);
+                            if let Some(ref tx) = event_tx {
+                                let _ = tx
+                                    .send((
+                                        connection_id,
+                                        ConnectionEvent::ReconnectFailed {
+                                            error: "Auto-reconnect is disabled".to_string(),
+                                        },
+                                    ))
+                                    .await;
+                            }
+                            continue;
+                        }
+
                         tracing::warn!(
                             "Connection failed {} times, attempting reconnect",
-                            status_guard.consecutive_failures
+                            failures
                         );
+
+                        if let Some(ref tx) = event_tx {
+                            let _ = tx
+                                .send((connection_id, ConnectionEvent::Reconnecting))
+                                .await;
+                        }
 
                         drop(status_guard);
 
@@ -773,6 +840,17 @@ impl ConnectionHealthMonitor {
                             status_guard.last_error = Some(e.to_string());
                             tracing::error!("Reconnect failed: {}", e);
 
+                            if let Some(ref tx) = event_tx {
+                                let _ = tx
+                                    .send((
+                                        connection_id,
+                                        ConnectionEvent::ReconnectFailed {
+                                            error: e.to_string(),
+                                        },
+                                    ))
+                                    .await;
+                            }
+
                             tokio::time::sleep(Duration::from_secs(RECONNECT_DELAY_SECS)).await;
                         } else {
                             let mut status_guard = status.lock().await;
@@ -780,7 +858,15 @@ impl ConnectionHealthMonitor {
                             status_guard.consecutive_failures = 0;
                             status_guard.last_error = None;
                             tracing::info!("Reconnect successful");
+
+                            if let Some(ref tx) = event_tx {
+                                let _ = tx
+                                    .send((connection_id, ConnectionEvent::Reconnected))
+                                    .await;
+                            }
                         }
+                    } else {
+                        drop(status_guard);
                     }
                 }
             }

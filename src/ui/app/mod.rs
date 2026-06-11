@@ -8,7 +8,7 @@ use self::actions::{
     confirm_delete_connection_action, delete_connection_prompt_action, edit_connection_action,
     import_connections_action, open_bool_signal, open_optional_uuid_signal,
     reconnect_connection_action, reorder_connections_action, save_connection_action,
-    save_settings_action, select_connection_action,
+    save_settings_action, select_connection_action, start_health_monitor,
 };
 use self::effects::{
     use_keyboard_shortcuts, use_load_saved_connections, use_manual_update_check,
@@ -21,7 +21,10 @@ use self::render::{
 };
 use self::theme::{build_theme_palette, load_initial_settings, system_theme_is_dark};
 use crate::config::{AppSettings, ConfigStorage};
-use crate::connection::{ConnectionConfig, ConnectionManager, ConnectionPool, ConnectionState};
+use crate::connection::{
+    ConnectionConfig, ConnectionEvent, ConnectionHealthMonitor, ConnectionManager,
+    ConnectionPool, ConnectionState,
+};
 use crate::i18n::I18n;
 use crate::theme::{
     preferred_window_theme, resolve_theme, theme_spec, ThemePreference, ThemeSpec, COLOR_ACCENT,
@@ -539,6 +542,15 @@ pub fn App() -> Element {
     let mut connection_versions = use_signal(HashMap::<Uuid, u32>::new);
     let mut connection_states = use_signal(HashMap::<Uuid, ConnectionState>::new);
     let mut readonly_connections = use_signal(HashMap::<Uuid, bool>::new);
+    let mut health_monitors = use_signal(HashMap::<Uuid, ConnectionHealthMonitor>::new);
+
+    // Channel bridging ConnectionHealthMonitor (tokio task) → UI state (Dioxus Signal).
+    // Created once via use_hook; the Sender is Clone so it can be captured by FnMut closures.
+    let (connection_event_tx, connection_event_rx_cell) = use_hook(|| {
+        let (tx, rx) = tokio::sync::mpsc::channel::<(Uuid, ConnectionEvent)>(64);
+        (tx, std::rc::Rc::new(std::cell::RefCell::new(Some(rx))))
+    });
+    let connection_event_tx = connection_event_tx.clone();
     let mut show_settings = use_signal(|| false);
     let mut show_flush_dialog = use_signal(|| None::<Uuid>);
     let mut show_import_dialog = use_signal(|| None::<Uuid>);
@@ -571,6 +583,44 @@ pub fn App() -> Element {
     use_load_saved_connections(config_storage, connections, readonly_connections);
 
     use_theme_bridge(theme_preference, build_theme_bridge_script);
+
+    // Consume health monitor events and update UI connection state
+    {
+        let mut states_for_events = connection_states.clone();
+        let rx_cell = connection_event_rx_cell.clone();
+        use_effect(move || {
+            // Take the receiver on the first run; subsequent re-renders get None and skip.
+            if let Some(mut rx) = rx_cell.borrow_mut().take() {
+                spawn(async move {
+                    while let Some((conn_id, event)) = rx.recv().await {
+                        match event {
+                            ConnectionEvent::Reconnected | ConnectionEvent::Recovered => {
+                                tracing::info!(
+                                    "Connection {conn_id} recovered, updating UI to Connected"
+                                );
+                                states_for_events
+                                    .write()
+                                    .insert(conn_id, ConnectionState::Connected);
+                            }
+                            ConnectionEvent::ReconnectFailed { error } => {
+                                tracing::warn!(
+                                    "Connection {conn_id} reconnect failed: {error}, updating UI to Error"
+                                );
+                                states_for_events
+                                    .write()
+                                    .insert(conn_id, ConnectionState::Error);
+                            }
+                            ConnectionEvent::HealthCheckFailed { .. }
+                            | ConnectionEvent::Reconnecting => {
+                                // Intermediate states — don't change the UI state yet.
+                                // The UI will show Error only after reconnect fails.
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    }
 
     use_effect(move || {
         desktop_for_theme.set_theme(preferred_window_theme(theme_preference()));
@@ -688,6 +738,8 @@ pub fn App() -> Element {
                                     connection_pools,
                                     connection_manager,
                                     config_storage,
+                                    connection_event_tx.clone(),
+                                    health_monitors,
                                 ),
                                 on_reconnect_connection: reconnect_connection_action(
                                     reconnecting_ids,
@@ -698,9 +750,15 @@ pub fn App() -> Element {
                                     connection_versions,
                                     selected_connection,
                                     current_db,
+                                    connection_event_tx.clone(),
+                                    health_monitors,
                                 ),
                             on_close_connection: move |id: Uuid| {
                                 spawn(async move {
+                                    // Stop health monitor before removing the pool
+                                    if let Some(monitor) = health_monitors.write().remove(&id) {
+                                        monitor.stop();
+                                    }
                                     connection_pools.write().remove(&id);
                                     connection_manager.read().remove_connection(id).await;
                                     connection_states.write().insert(id, ConnectionState::Disconnected);
@@ -795,6 +853,7 @@ pub fn App() -> Element {
                                         font_size: "13px",
 
                                         onclick: move |_| {
+                                            let event_tx = connection_event_tx.clone();
                                             spawn(async move {
                                                 reconnecting_ids.write().insert(conn_id);
                                                 connection_states.write().insert(conn_id, ConnectionState::Connecting);
@@ -804,11 +863,12 @@ pub fn App() -> Element {
                                                         if let Some(config) = saved.into_iter().find(|c| c.id == conn_id) {
                                                             match ConnectionPool::new(config.clone()).await {
                                                                 Ok(pool) => {
-                                                                    connection_pools.write().insert(conn_id, pool);
+                                                                    connection_pools.write().insert(conn_id, pool.clone());
                                                                     let _ = connection_manager.read().add_connection(config).await;
                                                                     let version = connection_versions.read().get(&conn_id).copied().unwrap_or(0);
                                                                     connection_versions.write().insert(conn_id, version + 1);
                                                                     connection_states.write().insert(conn_id, ConnectionState::Connected);
+                                                                    start_health_monitor(conn_id, pool, event_tx, health_monitors).await;
                                                                 }
                                                                 Err(_) => {
                                                                     connection_states.write().insert(conn_id, ConnectionState::Error);
@@ -906,6 +966,7 @@ pub fn App() -> Element {
                             selected_connection,
                             selected_key,
                             current_db,
+                            health_monitors,
                         ),
                         on_cancel: move |_| show_delete_connection_dialog.set(None),
                     }

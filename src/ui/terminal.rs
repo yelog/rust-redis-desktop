@@ -1,5 +1,5 @@
 use crate::config::{ConfigStorage, HistoryEntry};
-use crate::connection::ConnectionPool;
+use crate::connection::{ConnectionError, ConnectionPool};
 use crate::i18n::use_i18n;
 use crate::redis::{find_command, find_commands, RedisCommand};
 use crate::theme::{
@@ -196,7 +196,10 @@ fn CommandHelp(cmd: &'static RedisCommand, on_close: EventHandler<()>) -> Elemen
 }
 
 #[component]
-pub fn Terminal(connection_pool: ConnectionPool) -> Element {
+pub fn Terminal(
+    connection_pool: ConnectionPool,
+    on_connection_error: EventHandler<()>,
+) -> Element {
     let mut input = use_signal(String::new);
     let history = use_signal(Vec::<TerminalHistoryEntry>::new);
     let executing = use_signal(|| false);
@@ -321,6 +324,7 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
             let mut show_help = show_help.clone();
             let mut history_cursor = history_cursor.clone();
             let mut command_history = command_history.clone();
+            let on_connection_error = on_connection_error.clone();
             spawn(async move {
                 executing.set(true);
                 show_suggestions.set(false);
@@ -354,7 +358,18 @@ pub fn Terminal(connection_pool: ConnectionPool) -> Element {
 
                 let result = match pool.execute_raw_command(&cmd).await {
                     Ok(res) => res,
-                    Err(e) => format!("ERROR: {}", e),
+                    Err(e) => {
+                        // Notify UI about connection-level errors
+                        if matches!(
+                            e,
+                            ConnectionError::Timeout
+                                | ConnectionError::ConnectionFailed(_)
+                                | ConnectionError::Closed
+                        ) {
+                            on_connection_error.call(());
+                        }
+                        format!("ERROR: {}", e)
+                    }
                 };
 
                 let execution_time_ms = start.elapsed().as_millis() as u64;

@@ -257,6 +257,7 @@ pub(super) fn ConnectedTabShellSection(
                     Terminal {
                         key: "{conn_id}",
                         connection_pool: pool.clone(),
+                        on_connection_error,
                     }
                 } else if current_tab() == Tab::Monitor {
                     MonitorPanel {
