@@ -10,6 +10,7 @@ pub struct FlatNode {
     pub is_folder: bool,
     pub is_expanded: bool,
     pub children_count: usize,
+    pub total_keys: usize,
     pub key_type: Option<KeyType>,
 }
 
@@ -77,6 +78,7 @@ impl FlatTreeAdapter {
             is_folder: !node.is_leaf,
             is_expanded,
             children_count: node.children.len(),
+            total_keys: node.total_keys,
             key_type: node.key_info.as_ref().map(|info| info.key_type.clone()),
         };
 

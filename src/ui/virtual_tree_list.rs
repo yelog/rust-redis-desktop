@@ -329,11 +329,11 @@ fn VirtualTreeItem(
                 }
             }
 
-            if node.is_folder && node.children_count > 0 {
+            if node.is_folder && node.total_keys > 0 {
                 span {
                     color: COLOR_OUTLINE,
                     font_size: "11px",
-                    "({node.children_count})"
+                    "({node.total_keys})"
                 }
             }
         }

@@ -165,4 +165,29 @@ mod tests {
         assert_ne!(sys_file.node_id, empty_leaf.node_id);
         assert_eq!(sys_file.path, empty_leaf.path);
     }
+
+    #[test]
+    fn folders_count_all_descendant_keys() {
+        let tree = TreeBuilder::new(":").build(vec![
+            "cache:users:one".to_string(),
+            "cache:users:two".to_string(),
+            "cache:sessions:one".to_string(),
+        ]);
+
+        let cache = tree.iter().find(|node| node.name == "cache").unwrap();
+        let users = cache
+            .children
+            .iter()
+            .find(|node| node.name == "users")
+            .unwrap();
+        let sessions = cache
+            .children
+            .iter()
+            .find(|node| node.name == "sessions")
+            .unwrap();
+
+        assert_eq!(cache.total_keys, 3);
+        assert_eq!(users.total_keys, 2);
+        assert_eq!(sessions.total_keys, 1);
+    }
 }
