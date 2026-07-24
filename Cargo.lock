@@ -6022,7 +6022,7 @@ dependencies = [
 
 [[package]]
 name = "rust-redis-desktop"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "aes",
  "arboard",
