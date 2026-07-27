@@ -46,6 +46,16 @@ fn collect_all_folder_paths(nodes: &[TreeNode]) -> HashSet<String> {
     paths
 }
 
+fn retain_existing_folder_paths(
+    expanded_paths: HashSet<String>,
+    folder_paths: &HashSet<String>,
+) -> HashSet<String> {
+    expanded_paths
+        .into_iter()
+        .filter(|path| folder_paths.contains(path))
+        .collect()
+}
+
 fn collect_all_keys(nodes: &[TreeNode]) -> Vec<String> {
     let mut keys = Vec::new();
     for node in nodes {
@@ -350,6 +360,7 @@ pub fn KeyBrowser(
             spawn(async move {
                 loading.set(true);
                 let preserved_expanded = tree_state.read().expanded_nodes.clone();
+                let preserved_expanded_paths = expanded_paths.read().clone();
                 scan_progress.write().is_scanning = true;
                 scan_progress.write().scanned = 0;
                 scan_progress.write().current_batch = 0;
@@ -447,7 +458,6 @@ pub fn KeyBrowser(
                 let builder = TreeBuilder::new(":");
                 let new_nodes = builder.build(all_keys);
                 let new_node_ids = collect_all_node_ids(&new_nodes);
-
                 if is_searching {
                     let all_folder_paths = collect_all_folder_paths(&new_nodes);
                     let all_folder_node_ids: HashSet<String> = all_folder_paths
@@ -461,13 +471,12 @@ pub fn KeyBrowser(
                     state.selected_keys.clear();
                     state.selection_mode = false;
                 } else {
+                    let all_folder_paths = collect_all_folder_paths(&new_nodes);
+                    let valid_expanded_paths =
+                        retain_existing_folder_paths(preserved_expanded_paths, &all_folder_paths);
                     let valid_expanded: HashSet<String> = preserved_expanded
                         .into_iter()
                         .filter(|id| new_node_ids.contains(id))
-                        .collect();
-                    let valid_expanded_paths: HashSet<String> = valid_expanded
-                        .iter()
-                        .filter_map(|id| id.strip_prefix("folder:").map(|s| s.to_string()))
                         .collect();
                     expanded_paths.set(valid_expanded_paths);
                     tree_nodes.set(new_nodes);
@@ -1242,5 +1251,32 @@ pub fn KeyBrowser(
                 on_close: move |_| show_memory_analysis_dialog.set(false),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::retain_existing_folder_paths;
+    use std::collections::HashSet;
+
+    #[test]
+    fn retains_only_expanded_folders_present_after_refresh() {
+        let expanded_paths = HashSet::from([
+            "orders:".to_string(),
+            "orders:pending:".to_string(),
+            "removed:".to_string(),
+        ]);
+        let folder_paths = HashSet::from([
+            "orders:".to_string(),
+            "orders:pending:".to_string(),
+            "new:".to_string(),
+        ]);
+
+        let retained = retain_existing_folder_paths(expanded_paths, &folder_paths);
+
+        assert_eq!(
+            retained,
+            HashSet::from(["orders:".to_string(), "orders:pending:".to_string()])
+        );
     }
 }
