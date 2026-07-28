@@ -780,8 +780,8 @@ impl ConnectionHealthMonitor {
                 status_guard.last_check = Some(Instant::now());
 
                 if is_healthy {
-                    let was_unhealthy = !status_guard.is_healthy
-                        || status_guard.consecutive_failures > 0;
+                    let was_unhealthy =
+                        !status_guard.is_healthy || status_guard.consecutive_failures > 0;
                     status_guard.is_healthy = true;
                     status_guard.consecutive_failures = 0;
                     status_guard.last_error = None;
@@ -860,9 +860,8 @@ impl ConnectionHealthMonitor {
                             tracing::info!("Reconnect successful");
 
                             if let Some(ref tx) = event_tx {
-                                let _ = tx
-                                    .send((connection_id, ConnectionEvent::Reconnected))
-                                    .await;
+                                let _ =
+                                    tx.send((connection_id, ConnectionEvent::Reconnected)).await;
                             }
                         }
                     } else {

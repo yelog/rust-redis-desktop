@@ -196,10 +196,7 @@ fn CommandHelp(cmd: &'static RedisCommand, on_close: EventHandler<()>) -> Elemen
 }
 
 #[component]
-pub fn Terminal(
-    connection_pool: ConnectionPool,
-    on_connection_error: EventHandler<()>,
-) -> Element {
+pub fn Terminal(connection_pool: ConnectionPool, on_connection_error: EventHandler<()>) -> Element {
     let mut input = use_signal(String::new);
     let history = use_signal(Vec::<TerminalHistoryEntry>::new);
     let executing = use_signal(|| false);
@@ -265,11 +262,7 @@ pub fn Terminal(
                 return Vec::new();
             }
 
-            let cmd_word = query
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .to_uppercase();
+            let cmd_word = query.split_whitespace().next().unwrap_or("").to_uppercase();
             if cmd_word.is_empty() {
                 return Vec::new();
             }

@@ -408,9 +408,7 @@ impl ConnectionPool {
 
         // First attempt
         match self.try_execute_raw_command(command).await {
-            Err(
-                e @ (ConnectionError::Timeout | ConnectionError::ConnectionFailed(_)),
-            ) => {
+            Err(e @ (ConnectionError::Timeout | ConnectionError::ConnectionFailed(_))) => {
                 tracing::warn!(
                     "Command '{}' failed ({}), auto-reconnecting before retry",
                     command,

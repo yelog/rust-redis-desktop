@@ -1,5 +1,7 @@
 use crate::redis::{KeyType, TreeNode};
-use crate::theme::{COLOR_ACCENT, COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_TEXT, COLOR_TEXT_SECONDARY};
+use crate::theme::{
+    COLOR_ACCENT, COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_TEXT, COLOR_TEXT_SECONDARY,
+};
 use crate::ui::context_menu::ContextMenuState;
 use crate::ui::{FlatNode, FlatTreeAdapter};
 use dioxus::prelude::*;
@@ -24,7 +26,10 @@ fn highlight_parts(text: &str, keyword: &str) -> Vec<(String, bool)> {
                 parts.push((text[last..match_start].to_string(), false));
             }
             let match_end = match_start + keyword.len();
-            parts.push((text[match_start..match_end.min(text.len())].to_string(), true));
+            parts.push((
+                text[match_start..match_end.min(text.len())].to_string(),
+                true,
+            ));
             last = match_end;
             start = match_end;
         } else {
