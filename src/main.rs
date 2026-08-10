@@ -34,7 +34,6 @@ use startup::ensure_windows_webview_runtime;
 use theme::{preferred_window_theme, resolve_theme, system_theme_is_dark};
 use tray::{create_shared_state, init_tray};
 use ui::App;
-use updater::{set_pending_update, UpdateManager};
 
 #[cfg(target_os = "macos")]
 use dioxus::desktop::tao::platform::macos::WindowBuilderExtMacOS;
@@ -139,26 +138,6 @@ fn run_app() -> Result<()> {
         .and_then(|s| s.load_settings().ok())
         .unwrap_or_default();
     let i18n = I18n::new(settings.language_preference.resolve());
-
-    if let Ok(mut manager) = UpdateManager::new() {
-        if manager.should_auto_check() {
-            match tokio::runtime::Runtime::new() {
-                Ok(rt) => {
-                    std::thread::spawn(move || {
-                        rt.block_on(async {
-                            if let Ok(Some(info)) = manager.check_for_updates().await {
-                                tracing::info!("Found new version: {}", info.version);
-                                set_pending_update(Some(info));
-                            }
-                        });
-                    });
-                }
-                Err(e) => {
-                    non_fatal_error!("Update checker runtime", &e);
-                }
-            }
-        }
-    }
 
     let menu = create_menu(&i18n)
         .map_err(|e| AppError::Startup(StartupError::MenuCreation { source: e }))?;

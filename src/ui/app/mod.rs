@@ -11,8 +11,8 @@ use self::actions::{
     save_settings_action, select_connection_action, start_health_monitor,
 };
 use self::effects::{
-    use_keyboard_shortcuts, use_load_saved_connections, use_manual_update_check,
-    use_system_theme_listener, use_theme_bridge,
+    use_auto_update_check, use_keyboard_shortcuts, use_load_saved_connections,
+    use_manual_update_check, use_system_theme_listener, use_theme_bridge,
 };
 use self::render::{
     empty_connection_panel, spinner_panel, ConnectedTabShellSection,
@@ -656,6 +656,7 @@ pub fn App() -> Element {
         });
     }
 
+    use_auto_update_check();
     use_manual_update_check(i18n, toast_for_update);
 
     use_system_theme_listener(system_theme_dark);

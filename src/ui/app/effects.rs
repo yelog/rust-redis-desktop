@@ -138,6 +138,21 @@ pub(super) fn use_manual_update_check(
     });
 }
 
+pub(super) fn use_auto_update_check() {
+    use_future(move || async move {
+        let Ok(mut manager) = UpdateManager::new() else {
+            return;
+        };
+
+        if manager.should_auto_check() {
+            if let Ok(Some(info)) = manager.check_for_updates().await {
+                tracing::info!("Found new version: {}", info.version);
+                set_pending_update(Some(info));
+            }
+        }
+    });
+}
+
 pub(super) fn use_system_theme_listener(mut system_theme_dark: Signal<bool>) {
     use_future(move || async move {
         let mut eval = document::eval(
