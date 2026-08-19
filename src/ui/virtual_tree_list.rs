@@ -3,6 +3,7 @@ use crate::theme::{
     COLOR_ACCENT, COLOR_BG_TERTIARY, COLOR_OUTLINE, COLOR_TEXT, COLOR_TEXT_SECONDARY,
 };
 use crate::ui::context_menu::ContextMenuState;
+use crate::ui::icons::*;
 use crate::ui::{FlatNode, FlatTreeAdapter};
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -73,19 +74,6 @@ impl From<Option<KeyType>> for KeyTypeIcon {
 }
 
 impl KeyTypeIcon {
-    pub fn emoji(&self) -> &'static str {
-        match self {
-            KeyTypeIcon::String => "📄",
-            KeyTypeIcon::Hash => "📑",
-            KeyTypeIcon::List => "📋",
-            KeyTypeIcon::Set => "📦",
-            KeyTypeIcon::ZSet => "📊",
-            KeyTypeIcon::Stream => "📜",
-            KeyTypeIcon::JSON => "🔷",
-            KeyTypeIcon::None => "📄",
-        }
-    }
-
     pub fn color(&self) -> &'static str {
         match self {
             KeyTypeIcon::String => "#4ade80",
@@ -240,12 +228,6 @@ fn VirtualTreeItem(
     };
     let text_color = if is_selected { COLOR_TEXT } else { COLOR_TEXT };
     let key_type_icon: KeyTypeIcon = resolved_key_type.into();
-    let folder_icon = if node.is_folder {
-        "📁"
-    } else {
-        key_type_icon.emoji()
-    };
-
     rsx! {
         div {
             position: "absolute",
@@ -297,19 +279,27 @@ fn VirtualTreeItem(
                     color: COLOR_TEXT_SECONDARY,
                     font_size: "12px",
                     display: "inline_block",
-                    transition: "transform 200ms ease-out",
-                    transform: if node.is_expanded { "rotate(90deg)" } else { "rotate(0deg)" },
                     if node.children_count > 0 {
-                        "▶"
-                    } else {
-                        ""
+                        if node.is_expanded {
+                            IconChevronDown { size: Some(12) }
+                        } else {
+                            IconChevronRight { size: Some(12) }
+                        }
                     }
                 }
             }
 
-            span {
-                font_size: "14px",
-                "{folder_icon}"
+            if node.is_folder {
+                IconFolder { size: Some(14), color: Some(COLOR_TEXT_SECONDARY.to_string()) }
+            } else {
+                match key_type_icon {
+                    KeyTypeIcon::String | KeyTypeIcon::None => rsx! { IconFile { size: Some(14), color: Some(key_type_icon.color().to_string()) } },
+                    KeyTypeIcon::Hash | KeyTypeIcon::JSON => rsx! { IconHash { size: Some(14), color: Some(key_type_icon.color().to_string()) } },
+                    KeyTypeIcon::List => rsx! { IconList { size: Some(14), color: Some(key_type_icon.color().to_string()) } },
+                    KeyTypeIcon::Set => rsx! { IconSet { size: Some(14), color: Some(key_type_icon.color().to_string()) } },
+                    KeyTypeIcon::ZSet => rsx! { IconZSet { size: Some(14), color: Some(key_type_icon.color().to_string()) } },
+                    KeyTypeIcon::Stream => rsx! { IconStream { size: Some(14), color: Some(key_type_icon.color().to_string()) } },
+                }
             }
 
             span {

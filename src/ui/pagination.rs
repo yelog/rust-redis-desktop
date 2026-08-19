@@ -1,4 +1,5 @@
 use crate::i18n::use_i18n;
+use crate::ui::icons::IconChevronRight;
 use dioxus::prelude::*;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -155,7 +156,7 @@ pub fn Pagination(page_info: PageInfo, on_page_change: EventHandler<usize>) -> E
                     }
                 },
 
-                "▶"
+                IconChevronRight { size: Some(14) }
             }
 
             span {

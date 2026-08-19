@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 # GUI
 dioxus = { version = "0.7", features = ["desktop"] }
+dioxus-free-icons = { version = "0.10", default-features = false, features = ["lucide"] }
 freya = "0.3"
 tao = "0.34"
 

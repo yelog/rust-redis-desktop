@@ -9,6 +9,7 @@ use crate::theme::{
     COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_WARNING, SYNTAX_BOOLEAN, SYNTAX_COMMENT,
     SYNTAX_FUNCTION, SYNTAX_KEY, SYNTAX_NULL, SYNTAX_NUMBER, SYNTAX_STRING, SYNTAX_TYPE,
 };
+use crate::ui::icons::{IconChevronDown, IconChevronRight};
 use crate::ui::{copy_text_to_clipboard, json_viewer::JsonViewer};
 use dioxus::prelude::*;
 use serde_json::Value as JsonValue;
@@ -328,7 +329,11 @@ fn JsonObjectNode(
                         font_size: "12px",
                         width: "12px",
 
-                        if *expanded.read() { "▼" } else { "▶" }
+                        if *expanded.read() {
+                            IconChevronDown { size: Some(12) }
+                        } else {
+                            IconChevronRight { size: Some(12) }
+                        }
                     }
                 } else {
                     span {
@@ -506,7 +511,11 @@ fn JsonArrayNode(
                     font_size: "12px",
                     width: "12px",
 
-                    if *expanded.read() { "▼" } else { "▶" }
+                    if *expanded.read() {
+                        IconChevronDown { size: Some(12) }
+                    } else {
+                        IconChevronRight { size: Some(12) }
+                    }
                 }
 
                 span {

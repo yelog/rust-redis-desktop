@@ -5,6 +5,7 @@ use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_INFO,
     COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_WARNING,
 };
+use crate::ui::icons::{IconActivity, IconRefresh, IconSquare};
 use dioxus::prelude::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -203,13 +204,13 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
     let data = monitor_data();
     let max_memory = data.iter().map(|d| d.used_memory).max().unwrap_or(1);
     let max_ops = data.iter().map(|d| d.ops_per_sec).max().unwrap_or(1);
-    let monitor_title = format!("📊 {}", i18n.read().t("Monitor"));
+    let monitor_label = i18n.read().t("Monitor");
     let toggle_monitoring_label = if is_monitoring() {
-        format!("⏹ {}", i18n.read().t("Stop Monitoring"))
+        i18n.read().t("Stop Monitoring")
     } else {
-        format!("▶ {}", i18n.read().t("Start Monitoring"))
+        i18n.read().t("Start Monitoring")
     };
-    let refresh_label = format!("🔄 {}", i18n.read().t("Refresh"));
+    let refresh_label = i18n.read().t("Refresh");
 
     rsx! {
         style { {include_str!("monitor_panel.css")} }
@@ -233,7 +234,8 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                     font_size: "18px",
                     margin: "0",
 
-                    {monitor_title}
+                    IconActivity { size: Some(18) }
+                    " {monitor_label}"
                 }
 
                 div {
@@ -250,7 +252,12 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                         font_size: "12px",
                         onclick: start_monitoring,
 
-                        {toggle_monitoring_label}
+                        if is_monitoring() {
+                            IconSquare { size: Some(14) }
+                        } else {
+                            IconActivity { size: Some(14) }
+                        }
+                        " {toggle_monitoring_label}"
                     }
 
                     button {
@@ -263,7 +270,8 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                         font_size: "12px",
                         onclick: refresh_data,
 
-                        {refresh_label}
+                        IconRefresh { size: Some(14) }
+                        " {refresh_label}"
                     }
                 }
             }

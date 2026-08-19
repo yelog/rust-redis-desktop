@@ -232,8 +232,7 @@ pub fn LazyTreeNode(
                         font_size: "12px",
                         cursor: "pointer",
                         display: "inline_block",
-                        transition: "transform 200ms ease-out",
-                        transform: if is_expanded { "rotate(90deg)" } else { "rotate(0deg)" },
+                        transition: "color 120ms ease-out",
                         onclick: {
                             let node_id = node.node_id.clone();
                             move |e| {
@@ -242,7 +241,11 @@ pub fn LazyTreeNode(
                             }
                         },
 
-                        "▶"
+                        if is_expanded {
+                            IconChevronDown { size: Some(12) }
+                        } else {
+                            IconChevronRight { size: Some(12) }
+                        }
                     }
                 } else {
                     span { width: "12px" }

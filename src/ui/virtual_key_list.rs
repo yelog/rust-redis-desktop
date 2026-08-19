@@ -63,7 +63,9 @@ pub fn VirtualKeyList(
                                     color: "#888",
                                     font_size: "12px",
 
-                                    if !node.is_leaf { "▶" } else { "" }
+                                    if !node.is_leaf {
+                                        IconChevronRight { size: Some(12) }
+                                    }
                                 }
 
                                 if node.is_leaf {

@@ -42,7 +42,11 @@ pub fn KeyItem(
                     span {
                         font_size: "12px",
                         color: "#888",
-                        if is_expanded() { "▼" } else { "▶" }
+                        if is_expanded() {
+                            IconChevronDown { size: Some(12) }
+                        } else {
+                            IconChevronRight { size: Some(12) }
+                        }
                     }
                 } else {
                     span { width: "12px" }
