@@ -429,6 +429,9 @@ jobs:
         with:
           path: artifacts
 
+      - name: Install PyNaCl for Sparkle verification
+        run: pip3 install pynacl
+
       - name: Display structure of downloaded files
         run: find artifacts -type f
 
@@ -444,11 +447,22 @@ jobs:
           cat artifacts/macos-aarch64/sparkle-signatures.txt >> sparkle-signatures-all.txt || true
           
           # 解析签名
-          X86_SIGNATURE=$(grep -A3 "ARCH=x86_64" sparkle-signatures-all.txt | grep "SIGNATURE=" | cut -d= -f2 || echo "")
+          X86_SIGNATURE=$(grep -A3 "ARCH=x86_64" sparkle-signatures-all.txt | sed -n 's/^SIGNATURE=//p')
           X86_LENGTH=$(grep -A3 "ARCH=x86_64" sparkle-signatures-all.txt | grep "LENGTH=" | cut -d= -f2 || stat -c%s "artifacts/macos-x86_64/rust-redis-desktop-x86_64.dmg" 2>/dev/null || echo "0")
           
-          ARM_SIGNATURE=$(grep -A3 "ARCH=aarch64" sparkle-signatures-all.txt | grep "SIGNATURE=" | cut -d= -f2 || echo "")
+          ARM_SIGNATURE=$(grep -A3 "ARCH=aarch64" sparkle-signatures-all.txt | sed -n 's/^SIGNATURE=//p')
           ARM_LENGTH=$(grep -A3 "ARCH=aarch64" sparkle-signatures-all.txt | grep "LENGTH=" | cut -d= -f2 || stat -c%s "artifacts/macos-aarch64/rust-redis-desktop-aarch64.dmg" 2>/dev/null || echo "0")
+
+          python3 scripts/verify_sparkle_signature.py \
+            "$SPARKLE_PUBLIC_KEY" \
+            artifacts/macos-x86_64/rust-redis-desktop-x86_64.dmg \
+            "$X86_SIGNATURE" \
+            "$X86_LENGTH"
+          python3 scripts/verify_sparkle_signature.py \
+            "$SPARKLE_PUBLIC_KEY" \
+            artifacts/macos-aarch64/rust-redis-desktop-aarch64.dmg \
+            "$ARM_SIGNATURE" \
+            "$ARM_LENGTH"
           
           # 生成 appcast.xml
           chmod +x scripts/generate-appcast.sh
@@ -472,16 +486,6 @@ jobs:
           path: pages-output/
           retention-days: 1
 
-      - name: Deploy appcast to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: pages-output
-          publish_branch: gh-pages
-          force_orphan: true
-          user_name: 'github-actions[bot]'
-          user_email: 'github-actions[bot]@users.noreply.github.com'
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -497,6 +501,27 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify release assets are available
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          RELEASE_URL="https://github.com/yelog/rust-redis-desktop/releases/download/v${VERSION}"
+
+          for asset in rust-redis-desktop-x86_64.dmg rust-redis-desktop-aarch64.dmg; do
+            curl --fail --silent --show-error --location \
+              --retry 5 --retry-delay 2 --retry-all-errors \
+              --output /dev/null "$RELEASE_URL/$asset"
+          done
+
+      - name: Deploy appcast to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: pages-output
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
 
       - name: Update Homebrew tap
         if: ${{ !contains(github.ref_name, '-') }}
