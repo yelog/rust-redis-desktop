@@ -144,6 +144,68 @@ pub fn ContextMenu(
         }
     });
 
+    use_effect(move || {
+        if *visibility.read() != VisibilityState::Visible {
+            return;
+        }
+
+        spawn(async move {
+            let script = format!(
+                r#"
+                const menu = document.querySelector('[data-context-menu-id="{menu_id}"]');
+                if (!menu) return;
+
+                const anchorX = {x};
+                const anchorY = {y};
+                const margin = 8;
+
+                const positionMenu = () => {{
+                    if (!menu.isConnected) return;
+
+                    // Layout dimensions are unaffected by the menu's scale animation.
+                    const width = menu.offsetWidth;
+                    const height = menu.offsetHeight;
+                    const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+                    const maxTop = Math.max(margin, window.innerHeight - height - margin);
+
+                    let left = anchorX;
+                    let top = anchorY;
+                    let originX = 'left';
+                    let originY = 'top';
+
+                    if (left + width + margin > window.innerWidth) {{
+                        left = anchorX - width;
+                        originX = 'right';
+                    }}
+                    if (top + height + margin > window.innerHeight) {{
+                        top = anchorY - height;
+                        originY = 'bottom';
+                    }}
+
+                    menu.style.left = `${{Math.max(margin, Math.min(left, maxLeft))}}px`;
+                    menu.style.top = `${{Math.max(margin, Math.min(top, maxTop))}}px`;
+                    menu.style.transformOrigin = `${{originX}} ${{originY}}`;
+                }};
+
+                requestAnimationFrame(positionMenu);
+                window.addEventListener('resize', positionMenu);
+
+                await new Promise(resolve => {{
+                    const observer = new MutationObserver(() => {{
+                        if (!menu.isConnected) {{
+                            observer.disconnect();
+                            window.removeEventListener('resize', positionMenu);
+                            resolve();
+                        }}
+                    }});
+                    observer.observe(document.body, {{ childList: true, subtree: true }});
+                }});
+                "#
+            );
+            let _ = dioxus::document::eval(&script).await;
+        });
+    });
+
     let state = *visibility.read();
     if state == VisibilityState::Hidden {
         return rsx! {};
@@ -159,6 +221,7 @@ pub fn ContextMenu(
     rsx! {
         div {
             "data-context-menu": "true",
+            "data-context-menu-id": "{menu_id}",
             position: "fixed",
             left: "{x}px",
             top: "{y}px",
@@ -168,7 +231,11 @@ pub fn ContextMenu(
             box_shadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
             padding: "6px",
             z_index: "1000",
-            min_width: "160px",
+            min_width: "min(160px, calc(100vw - 16px))",
+            max_width: "calc(100vw - 16px)",
+            max_height: "calc(100vh - 16px)",
+            overflow_y: "auto",
+            box_sizing: "border-box",
             display: "flex",
             flex_direction: "column",
             gap: "2px",
