@@ -28,4 +28,11 @@ mod tests {
         assert_eq!(visible_range(100, 200.0, 100.0, 20.0, 2), (8, 17));
         assert_eq!(visible_range(10, 500.0, 100.0, 20.0, 2), (10, 10));
     }
+
+    #[test]
+    fn handles_invalid_dimensions_and_negative_scroll() {
+        assert_eq!(visible_range(10, -100.0, 100.0, 20.0, 2), (0, 7));
+        assert_eq!(visible_range(10, 0.0, -1.0, 20.0, 2), (0, 2));
+        assert_eq!(visible_range(10, 0.0, 100.0, 0.0, 2), (0, 0));
+    }
 }

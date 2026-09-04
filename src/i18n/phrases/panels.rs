@@ -154,6 +154,12 @@ pub fn extend_zh_cn(m: &mut HashMap<String, String>) {
         ("Evicted Keys", "淘汰 Key"),
         ("Expired Keys", "过期 Key"),
         ("Command stats", "命令统计"),
+        ("Command", "命令"),
+        ("Calls", "调用次数"),
+        ("Total usec", "总微秒数"),
+        ("usec/call", "平均微秒/次"),
+        ("Rejected", "拒绝"),
+        ("Failed", "失败"),
     ] {
         m.insert(key.into(), value.into());
     }

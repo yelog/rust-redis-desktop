@@ -1,5 +1,8 @@
-use std::collections::HashMap;
 use std::io;
+
+#[cfg(test)]
+use std::collections::HashMap;
+#[cfg(test)]
 use std::sync::Mutex;
 
 const SERVICE: &str = "rust-redis-desktop";
@@ -43,11 +46,13 @@ fn keyring_error(error: keyring::Error) -> io::Error {
     )
 }
 
+#[cfg(test)]
 #[derive(Default)]
 pub struct MemoryCredentialStore {
     secrets: Mutex<HashMap<String, String>>,
 }
 
+#[cfg(test)]
 impl CredentialStore for MemoryCredentialStore {
     fn put(&self, id: &str, secret: &str) -> io::Result<()> {
         self.secrets

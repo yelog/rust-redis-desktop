@@ -107,5 +107,42 @@ pub fn load() -> HashMap<String, String> {
         "Connection is in readonly mode, write operations are blocked".into(),
     );
 
+    // Large database workflows and monitoring
+    for phrase in [
+        "Continue scan",
+        "Load next indexed page",
+        "Confirm large database scan",
+        "Unable to determine",
+        "Scan progressively",
+        "Complete scan",
+        "Database",
+        "Key count",
+        "keys",
+        "This database reaches the scan confirmation threshold",
+        "Even SCAN can consume Redis CPU, network bandwidth, and local resources during a complete traversal.",
+        "Progressive scan stopped after",
+        "matching keys; refresh or change the scan mode to load more.",
+        "Key scan mode",
+        "Progressive",
+        "Complete indexed",
+        "Progressive mode limits local results; complete indexed mode is intended for large databases.",
+        "Large database scan confirmation",
+        "Ask before scanning when DBSIZE reaches this value; 0 disables the warning.",
+        "Progressive scan result limit",
+        "Progressive scans stop after this many matching keys and can be continued later.",
+        "Cache Hit Rate",
+        "Evicted Keys",
+        "Expired Keys",
+        "Command stats",
+        "Command",
+        "Calls",
+        "Total usec",
+        "usec/call",
+        "Rejected",
+        "Failed",
+    ] {
+        m.insert(phrase.into(), phrase.into());
+    }
+
     m
 }

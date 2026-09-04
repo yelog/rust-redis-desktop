@@ -25,9 +25,7 @@ let end_index = (start_index + visible_count + overscan * 2).min(total);
 ```
 
 **效果**：
-- **内存**: O(40) 而非 O(100,000)
-- **渲染时间**: ~16ms (常数时间)
-- **滚动**: 60fps 流畅
+- 渲染节点数量由 `visible_range` 根据视口和 overscan 限制；具体 RSS、帧率和耗时见基准报告。
 
 ### 2. 增量扫描 (Incremental Scanning) ✅
 
@@ -51,28 +49,30 @@ pub async fn scan_keys_with_progress<F>(
 
 **当前边界**：
 - Redis 请求按批执行，避免单个请求返回全部 Key。
-- 当前 UI 最终仍会构建完整的内存 Key 树，内存并非恒定。
-- 大库确认、渐进上限和完整磁盘索引正在逐步实施。
+- 渐进模式仍会把当前结果保存在内存中，内存并非恒定。
+- 完整索引模式将键写入临时 SQLite，并按页读取；索引生命周期绑定当前扫描界面。
 
 ### 3. 性能测试工具 ✅
 
 创建了测试脚本：
 ```bash
-scripts/generate_test_keys.sh
+scripts/generate-benchmark-data.sh
+scripts/measure-key-browser.sh
 ```
 
-可生成 10万 测试键用于性能验证。
+前者生成带命名空间的测试键，后者记录 Redis 版本、匹配键数量和 Redis 端 SCAN 耗时，并留下应用 UI 手工测量栏位。
 
 ## 性能对比
 
-以下历史数字没有统一基准环境和当前版本的可复测证据，暂不作为承诺：
+下表只保留待实测项，不把历史估算当作产品承诺。运行 `scripts/measure-key-browser.sh` 后，将 Redis 端结果和桌面端手工测量填入 `docs/performance/key-browser-baseline.md`。
 
-| 指标 | 优化前 | 优化后 | 改进 |
-|------|--------|--------|------|
-| **10万 keys 内存** | ~500MB | ~50MB | **90% ↓** |
-| **首次渲染** | 2-5秒 | <100ms | **50x ⚡** |
-| **滚动帧率** | 5-15 fps | 60 fps | **10x ⚡** |
-| **启动时间** | ~500ms | ~100ms | **5x ⚡** |
+| 指标 | 当前结果 | 记录位置 |
+|------|----------|----------|
+| **Redis 端 SCAN 耗时** | 待实测 | `key-browser-baseline.md` |
+| **首次可见结果** | 待桌面端实测 | `key-browser-baseline.md` |
+| **完整扫描耗时** | 待桌面端实测 | `key-browser-baseline.md` |
+| **峰值/空闲 RSS** | 待桌面端实测 | `key-browser-baseline.md` |
+| **滚动帧率** | 待桌面端实测 | `key-browser-baseline.md` |
 
 ## 测试方法
 
@@ -84,11 +84,12 @@ scripts/generate_test_keys.sh
 # 启动 Redis
 redis-server
 
-# 生成 10万测试键
-./scripts/generate_test_keys.sh
+# 生成 10万测试键。`--yes` 仅用于已确认 Redis URL 的自动化环境
+./scripts/generate-benchmark-data.sh --count 100000 --prefix rrd-benchmark --yes
 
-# 或手动生成
-redis-cli --eval generate_keys.lua 0 100000
+# 记录 Redis 端扫描基线
+./scripts/measure-key-browser.sh --count 100000 --prefix rrd-benchmark
+
 ```
 
 ### 2. 运行应用测试
@@ -116,13 +117,13 @@ top | grep rust-redis-desktop
 instruments -t "Allocations" ./target/release/rust-redis-desktop
 ```
 
-## 待优化项目
+## 后续优化项目
 
 ### 优先级：高
 
-- [ ] 大数据库扫描前确认和可恢复的渐进扫描
-- [ ] 使用临时磁盘索引代替完整内存 Key 树
-- [ ] 对 Hash/List/Set/ZSet/Stream 表格执行虚拟行渲染
+- [x] 大数据库扫描前确认和可恢复的渐进扫描
+- [x] 使用临时磁盘索引代替完整内存 Key 树（完整索引模式）
+- [x] 对 Hash/List/Set/ZSet/Stream 表格执行分页和虚拟行渲染
 
 - [ ] **树节点懒加载**
   - 只在展开时加载子节点
@@ -131,8 +132,17 @@ instruments -t "Allocations" ./target/release/rust-redis-desktop
 
 - [ ] **键值缓存**
   - 缓存最近访问的键值
-  - 减少网络请求
-  - 提升二次访问速度
+   - 减少网络请求
+   - 提升二次访问速度
+
+### UI 手工验收边界
+
+以下项目依赖桌面 WebView 和真实窗口事件，当前通过手工验收清单验证：
+
+- 大数据库确认对话框的渐进扫描、完整扫描和取消按钮
+- 渐进扫描达到上限后，继续扫描能够从上次 cursor 继续
+- 完整索引模式的“加载下一索引页”不会一次性渲染全部键
+- Stream、Hash、List、Set、ZSet 继续滚动时不会重复加载或超过最大加载行数
 
 ### 优先级：低
 

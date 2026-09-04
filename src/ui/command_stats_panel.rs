@@ -54,7 +54,11 @@ pub fn CommandStatsPanel(connection_pool: ConnectionPool) -> Element {
                 align_items: "center",
                 margin_bottom: "16px",
 
-                h2 { color: COLOR_TEXT, font_size: "18px", "Command stats" }
+                h2 {
+                    color: COLOR_TEXT,
+                    font_size: "18px",
+                    {i18n.read().t("Command stats")}
+                }
                 button {
                     padding: "7px 12px",
                     background: COLOR_BG_SECONDARY,
@@ -76,12 +80,12 @@ pub fn CommandStatsPanel(connection_pool: ConnectionPool) -> Element {
                     border_collapse: "collapse",
                     thead {
                         tr {
-                            th { "Command" }
-                            th { "Calls" }
-                            th { "Total usec" }
-                            th { "usec/call" }
-                            th { "Rejected" }
-                            th { "Failed" }
+                            th { {i18n.read().t("Command")} }
+                            th { {i18n.read().t("Calls")} }
+                            th { {i18n.read().t("Total usec")} }
+                            th { {i18n.read().t("usec/call")} }
+                            th { {i18n.read().t("Rejected")} }
+                            th { {i18n.read().t("Failed")} }
                         }
                     }
                     tbody {

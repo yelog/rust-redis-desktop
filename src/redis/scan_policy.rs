@@ -4,32 +4,6 @@ pub enum ScanDecision {
     Confirm { db_size: u64, threshold: u64 },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScanStopReason {
-    CursorComplete,
-    ResultLimit,
-    Cancelled,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ScanSession {
-    pub cursor: u64,
-    pub scanned: usize,
-    pub matched: usize,
-    pub complete: bool,
-}
-
-impl Default for ScanSession {
-    fn default() -> Self {
-        Self {
-            cursor: 0,
-            scanned: 0,
-            matched: 0,
-            complete: false,
-        }
-    }
-}
-
 pub fn decide_scan(db_size: u64, threshold: u64) -> ScanDecision {
     if threshold > 0 && db_size >= threshold {
         ScanDecision::Confirm { db_size, threshold }

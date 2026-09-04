@@ -137,13 +137,21 @@ pub struct ScanProgress {
     pub stopped_at_limit: bool,
 }
 
+fn progressive_scan_result_limit(existing_count: usize, configured_limit: usize) -> usize {
+    existing_count.saturating_add(configured_limit.max(1_000))
+}
+
+fn should_offer_scan_resume(progress: &ScanProgress, cursor: u64, has_pending_keys: bool) -> bool {
+    progress.stopped_at_limit && (cursor != 0 || has_pending_keys) && !progress.is_scanning
+}
+
 async fn scan_all_keys(
     pool: ConnectionPool,
     match_pattern: String,
     cancel_flag: Arc<AtomicBool>,
-    mut scan_progress: Signal<ScanProgress>,
+    scan_progress: Signal<ScanProgress>,
     result_limit: Option<usize>,
-) -> Result<(Vec<String>, u64), String> {
+) -> Result<(Vec<String>, u64, Vec<String>), String> {
     scan_all_keys_from(
         pool,
         match_pattern,
@@ -152,8 +160,25 @@ async fn scan_all_keys(
         result_limit,
         0,
         Vec::new(),
+        Vec::new(),
     )
     .await
+}
+
+fn split_scan_limit(
+    all_keys: &mut Vec<String>,
+    result_limit: Option<usize>,
+) -> Option<Vec<String>> {
+    let limit = result_limit?;
+    if all_keys.len() <= limit {
+        return None;
+    }
+
+    Some(all_keys.split_off(limit))
+}
+
+fn scan_limit_reached(key_count: usize, result_limit: Option<usize>) -> bool {
+    result_limit.is_some_and(|limit| key_count >= limit)
 }
 
 async fn scan_all_keys_from(
@@ -164,8 +189,22 @@ async fn scan_all_keys_from(
     result_limit: Option<usize>,
     mut cursor: u64,
     mut all_keys: Vec<String>,
-) -> Result<(Vec<String>, u64), String> {
+    mut pending_keys: Vec<String>,
+) -> Result<(Vec<String>, u64, Vec<String>), String> {
+    let initial_scan = cursor == 0 && all_keys.is_empty() && pending_keys.is_empty();
+    all_keys.append(&mut pending_keys);
     scan_progress.write().scanned = all_keys.len();
+    if scan_limit_reached(all_keys.len(), result_limit) {
+        let pending = split_scan_limit(&mut all_keys, result_limit).unwrap_or_default();
+        if cursor != 0 || !pending.is_empty() {
+            scan_progress.write().stopped_at_limit = true;
+        }
+        return Ok((all_keys, cursor, pending));
+    }
+
+    if !initial_scan && cursor == 0 {
+        return Ok((all_keys, cursor, Vec::new()));
+    }
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
@@ -185,10 +224,12 @@ async fn scan_all_keys_from(
                 scan_progress.write().current_batch = batch_len;
                 cursor = next_cursor;
 
-                if result_limit.is_some_and(|limit| all_keys.len() >= limit) {
-                    all_keys.truncate(result_limit.unwrap());
-                    scan_progress.write().stopped_at_limit = true;
-                    break;
+                if scan_limit_reached(all_keys.len(), result_limit) {
+                    let pending = split_scan_limit(&mut all_keys, result_limit).unwrap_or_default();
+                    if cursor != 0 || !pending.is_empty() {
+                        scan_progress.write().stopped_at_limit = true;
+                    }
+                    return Ok((all_keys, cursor, pending));
                 }
 
                 if cursor == 0 {
@@ -199,7 +240,7 @@ async fn scan_all_keys_from(
         }
     }
 
-    Ok((all_keys, cursor))
+    Ok((all_keys, cursor, Vec::new()))
 }
 
 async fn scan_keys_into_index(
@@ -309,6 +350,7 @@ pub fn KeyBrowser(
     let mut scan_resume = use_signal(|| false);
     let scan_cursor = use_signal(|| 0u64);
     let scan_keys = use_signal(Vec::<String>::new);
+    let scan_pending_keys = use_signal(Vec::<String>::new);
     let key_index = use_signal(|| None::<Arc<std::sync::Mutex<KeyIndex>>>);
     let indexed_offset = use_signal(|| 0usize);
     let indexed_total = use_signal(|| 0usize);
@@ -443,6 +485,7 @@ pub fn KeyBrowser(
         let scan_resume = scan_resume.clone();
         let scan_cursor = scan_cursor.clone();
         let scan_keys = scan_keys.clone();
+        let scan_pending_keys = scan_pending_keys.clone();
         let key_index = key_index.clone();
         let indexed_offset = indexed_offset.clone();
         let indexed_total = indexed_total.clone();
@@ -472,6 +515,7 @@ pub fn KeyBrowser(
             let mut scan_resume = scan_resume.clone();
             let mut scan_cursor = scan_cursor.clone();
             let mut scan_keys = scan_keys.clone();
+            let mut scan_pending_keys = scan_pending_keys.clone();
             let mut key_index = key_index.clone();
             let mut indexed_offset = indexed_offset.clone();
             let mut indexed_total = indexed_total.clone();
@@ -548,6 +592,7 @@ pub fn KeyBrowser(
                     keys_count.set(total);
                     key_type_cache.set(HashMap::new());
                     scan_keys.set(Vec::new());
+                    scan_pending_keys.set(Vec::new());
                     scan_cursor.set(0);
                     indexed_offset.set(INDEX_PAGE_SIZE.min(total));
                     indexed_total.set(total);
@@ -565,17 +610,24 @@ pub fn KeyBrowser(
                 indexed_total.set(0);
                 let starting_cursor = if is_resuming { scan_cursor() } else { 0 };
                 let starting_keys = if is_resuming { scan_keys() } else { Vec::new() };
+                let starting_pending_keys = if is_resuming {
+                    scan_pending_keys()
+                } else {
+                    Vec::new()
+                };
                 let result_limit = if selected_scan_mode == KeyScanMode::Progressive {
-                    Some(
-                        starting_keys
-                            .len()
-                            .saturating_add(progressive_scan_limit.max(1_000)),
-                    )
+                    Some(progressive_scan_result_limit(
+                        starting_keys.len(),
+                        progressive_scan_limit,
+                    ))
                 } else {
                     None
                 };
                 let scan_result = match pool.ensure_connection().await {
-                    Ok(_) => match if starting_cursor == 0 && starting_keys.is_empty() {
+                    Ok(_) => match if starting_cursor == 0
+                        && starting_keys.is_empty()
+                        && starting_pending_keys.is_empty()
+                    {
                         scan_all_keys(
                             pool.clone(),
                             match_pattern.clone(),
@@ -592,7 +644,8 @@ pub fn KeyBrowser(
                             scan_progress,
                             result_limit,
                             starting_cursor,
-                            starting_keys,
+                            starting_keys.clone(),
+                            starting_pending_keys.clone(),
                         )
                         .await
                     } {
@@ -607,28 +660,47 @@ pub fn KeyBrowser(
                             scan_progress.write().current_batch = 0;
 
                             match pool.ensure_connection().await {
-                                Ok(_) => match scan_all_keys(
-                                    pool.clone(),
-                                    match_pattern.clone(),
-                                    cancel_flag.clone(),
-                                    scan_progress,
-                                    result_limit,
-                                )
-                                .await
-                                {
-                                    Ok(result) => result,
-                                    Err(retry_error) => {
-                                        let message = format!(
-                                            "Failed to refresh keys after reconnect: {}",
-                                            retry_error
-                                        );
-                                        toast_manager.write().error(&message);
-                                        on_connection_error.call(());
-                                        loading.set(false);
-                                        scan_progress.write().is_scanning = false;
-                                        return;
+                                Ok(_) => {
+                                    let retry_result = if starting_cursor == 0
+                                        && starting_keys.is_empty()
+                                        && starting_pending_keys.is_empty()
+                                    {
+                                        scan_all_keys(
+                                            pool.clone(),
+                                            match_pattern.clone(),
+                                            cancel_flag.clone(),
+                                            scan_progress,
+                                            result_limit,
+                                        )
+                                        .await
+                                    } else {
+                                        scan_all_keys_from(
+                                            pool.clone(),
+                                            match_pattern.clone(),
+                                            cancel_flag.clone(),
+                                            scan_progress,
+                                            result_limit,
+                                            starting_cursor,
+                                            starting_keys.clone(),
+                                            starting_pending_keys.clone(),
+                                        )
+                                        .await
+                                    };
+                                    match retry_result {
+                                        Ok(result) => result,
+                                        Err(retry_error) => {
+                                            let message = format!(
+                                                "Failed to refresh keys after reconnect: {}",
+                                                retry_error
+                                            );
+                                            toast_manager.write().error(&message);
+                                            on_connection_error.call(());
+                                            loading.set(false);
+                                            scan_progress.write().is_scanning = false;
+                                            return;
+                                        }
                                     }
-                                },
+                                }
                                 Err(reconnect_error) => {
                                     let message = format!(
                                         "Failed to reconnect before refreshing keys: {}",
@@ -654,9 +726,10 @@ pub fn KeyBrowser(
                         return;
                     }
                 };
-                let (all_keys, next_cursor) = scan_result;
+                let (all_keys, next_cursor, pending_keys) = scan_result;
 
                 scan_keys.set(all_keys.clone());
+                scan_pending_keys.set(pending_keys);
                 scan_cursor.set(next_cursor);
 
                 keys_count.set(all_keys.len());
@@ -730,6 +803,10 @@ pub fn KeyBrowser(
 
     let selected_count = tree_state.read().selected_keys.len();
     let current_selection_mode = tree_state.read().selection_mode;
+    let can_resume_scan = {
+        let progress = scan_progress.read();
+        should_offer_scan_resume(&progress, scan_cursor(), !scan_pending_keys().is_empty())
+    };
 
     rsx! {
         div {
@@ -1384,10 +1461,7 @@ pub fn KeyBrowser(
                             }
                         }
 
-                        if scan_progress.read().stopped_at_limit
-                            && scan_cursor() != 0
-                            && !scan_progress.read().is_scanning
-                        {
+                        if can_resume_scan {
                             ContextMenuItem {
                                 icon: Some(rsx! { IconRefresh { size: Some(14) } }),
                                 label: i18n.read().t("Continue scan"),
@@ -1568,7 +1642,10 @@ pub fn KeyBrowser(
 
 #[cfg(test)]
 mod tests {
-    use super::retain_existing_folder_paths;
+    use super::{
+        key_match_pattern, progressive_scan_result_limit, retain_existing_folder_paths,
+        scan_limit_reached, should_offer_scan_resume, split_scan_limit, ScanProgress,
+    };
     use std::collections::HashSet;
 
     #[test]
@@ -1590,5 +1667,65 @@ mod tests {
             retained,
             HashSet::from(["orders:".to_string(), "orders:pending:".to_string()])
         );
+    }
+
+    #[test]
+    fn builds_redis_match_pattern_from_trimmed_search() {
+        assert_eq!(key_match_pattern("  "), "*");
+        assert_eq!(key_match_pattern("  orders:  "), "*orders:*");
+        assert_eq!(key_match_pattern("users"), "*users*");
+    }
+
+    #[test]
+    fn resumes_progressive_scans_after_the_configured_increment() {
+        assert_eq!(progressive_scan_result_limit(0, 500), 1_000);
+        assert_eq!(progressive_scan_result_limit(1_000, 2_000), 3_000);
+        assert_eq!(
+            progressive_scan_result_limit(usize::MAX, usize::MAX),
+            usize::MAX
+        );
+    }
+
+    #[test]
+    fn keeps_scan_items_beyond_the_page_limit_for_resume() {
+        let mut visible = vec!["one".to_string(), "two".to_string(), "three".to_string()];
+
+        let pending = split_scan_limit(&mut visible, Some(2)).unwrap();
+
+        assert_eq!(visible, ["one", "two"]);
+        assert_eq!(pending, ["three"]);
+        assert!(split_scan_limit(&mut visible, Some(2)).is_none());
+        assert!(split_scan_limit(&mut visible, None).is_none());
+    }
+
+    #[test]
+    fn stops_when_a_scan_batch_exactly_reaches_the_limit() {
+        assert!(scan_limit_reached(2, Some(2)));
+        assert!(!scan_limit_reached(1, Some(2)));
+        assert!(!scan_limit_reached(2, None));
+    }
+
+    #[test]
+    fn only_offers_resume_when_scan_stopped_at_a_live_cursor() {
+        let stopped = ScanProgress {
+            stopped_at_limit: true,
+            ..Default::default()
+        };
+        assert!(should_offer_scan_resume(&stopped, 42, false));
+        assert!(should_offer_scan_resume(&stopped, 0, true));
+        assert!(!should_offer_scan_resume(&stopped, 0, false));
+        assert!(!should_offer_scan_resume(
+            &ScanProgress {
+                is_scanning: true,
+                ..stopped.clone()
+            },
+            42,
+            false
+        ));
+        assert!(!should_offer_scan_resume(
+            &ScanProgress::default(),
+            42,
+            true
+        ));
     }
 }

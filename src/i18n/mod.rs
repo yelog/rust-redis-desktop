@@ -164,3 +164,52 @@ pub fn get_system_language() -> Language {
         })
         .unwrap_or(Language::En)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_scan_and_monitor_phrases_are_available_in_both_languages() {
+        let keys = [
+            "Continue scan",
+            "Load next indexed page",
+            "Confirm large database scan",
+            "Unable to determine",
+            "Scan progressively",
+            "Complete scan",
+            "Database",
+            "Key count",
+            "keys",
+            "This database reaches the scan confirmation threshold",
+            "Even SCAN can consume Redis CPU, network bandwidth, and local resources during a complete traversal.",
+            "Progressive scan stopped after",
+            "matching keys; refresh or change the scan mode to load more.",
+            "Key scan mode",
+            "Progressive",
+            "Complete indexed",
+            "Progressive mode limits local results; complete indexed mode is intended for large databases.",
+            "Large database scan confirmation",
+            "Ask before scanning when DBSIZE reaches this value; 0 disables the warning.",
+            "Progressive scan result limit",
+            "Progressive scans stop after this many matching keys and can be continued later.",
+            "Cache Hit Rate",
+            "Evicted Keys",
+            "Expired Keys",
+            "Command stats",
+            "Command",
+            "Calls",
+            "Total usec",
+            "usec/call",
+            "Rejected",
+            "Failed",
+        ];
+        let english = en::load();
+        let chinese = I18n::new(Language::ZhCN);
+
+        for key in keys {
+            assert_eq!(english.get(key).map(String::as_str), Some(key));
+            assert_ne!(chinese.t(key), key, "missing Chinese translation for {key}");
+        }
+    }
+}

@@ -318,4 +318,16 @@ mod tests {
         assert_eq!(cache[0].name, b"user");
         assert_eq!(cache[1].name, b"status");
     }
+
+    #[test]
+    fn counts_and_pages_tree_entries_with_offsets() {
+        let mut index = KeyIndex::new_temp().unwrap();
+        index
+            .insert_batch(&[b"a:1".to_vec(), b"b:1".to_vec(), b"c:1".to_vec()])
+            .unwrap();
+
+        assert_eq!(index.tree_count(b"").unwrap(), 3);
+        assert_eq!(index.tree_page(b"", 1, 1).unwrap()[0].name, b"b");
+        assert!(index.tree_page(b"", 3, 1).unwrap().is_empty());
+    }
 }

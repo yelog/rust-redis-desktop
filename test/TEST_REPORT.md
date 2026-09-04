@@ -55,6 +55,7 @@
 - [ ] Cluster 集群模式 (需要等待集群初始化完成)
 - [ ] 只读模式 (需要应用程序层面测试)
 - [ ] 大数据集分页测试 (可选)
+- [ ] 大数据库扫描工作流 (`test-large-database-workflow.sh`)
 
 ## 测试脚本
 
@@ -86,6 +87,9 @@ cargo test
 
 # 数据验证
 ./verify-results.sh
+
+# 大数据库扫描、游标续扫和集合长度验证
+./test-large-database-workflow.sh --count 1200
 
 # 连接模式测试
 ./test-connections.sh direct

@@ -152,6 +152,11 @@ if [ "$SKIP_INTEGRATION" = false ]; then
     else
         echo -e "${YELLOW}跳过集成测试 (verify-results.sh 不存在)${NC}"
     fi
+
+    if [ -f "$SCRIPT_DIR/test-large-database-workflow.sh" ]; then
+        echo -e "\n${BLUE}运行大数据库扫描工作流测试...${NC}"
+        REDIS_URL="redis://$REDIS_HOST:$REDIS_PORT/15" bash "$SCRIPT_DIR/test-large-database-workflow.sh"
+    fi
     
     # 连接模式测试
     if [ -f "$SCRIPT_DIR/test-connections.sh" ]; then
