@@ -1,6 +1,7 @@
 pub mod autostart;
 pub mod config;
 pub mod connection;
+pub mod credential_store;
 pub mod crypto;
 pub mod error;
 pub mod error_reporting;

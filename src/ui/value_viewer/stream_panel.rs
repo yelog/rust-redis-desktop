@@ -18,6 +18,7 @@ use crate::theme::{
 };
 use crate::ui::icons::{IconCopy, IconTrash};
 use crate::ui::pagination::LargeKeyWarning;
+use crate::ui::visible_range;
 use crate::ui::ToastManager;
 use dioxus::prelude::*;
 use std::collections::HashMap;
@@ -58,6 +59,7 @@ pub(super) fn StreamPanel(
     mut stream_search: Signal<String>,
     mut deleting_stream_entry: Signal<Option<String>>,
     mut deleting_stream_entry_exiting: Signal<bool>,
+    mut stream_loading_more: Signal<bool>,
 ) -> Element {
     let i18n = use_i18n();
     let stream_val = stream_value();
@@ -80,6 +82,15 @@ pub(super) fn StreamPanel(
         })
         .cloned()
         .collect();
+    let mut scroll_top = use_signal(|| 0.0f64);
+    const STREAM_ROW_HEIGHT: f64 = 80.0;
+    let (visible_start, visible_end) = visible_range(
+        filtered_stream_entries.len(),
+        scroll_top(),
+        600.0,
+        STREAM_ROW_HEIGHT,
+        5,
+    );
 
     rsx! {
         div {
@@ -169,6 +180,30 @@ pub(super) fn StreamPanel(
                 border: "1px solid {COLOR_BORDER}",
                 border_radius: "8px",
                 background: COLOR_BG_SECONDARY,
+                onscroll: {
+                    let pool = connection_pool.clone();
+                    let key = display_key.clone();
+                    move |event| {
+                        let data = event.data();
+                        scroll_top.set(data.scroll_top());
+                        let remaining = data.scroll_height() as f64
+                            - data.scroll_top()
+                            - data.client_height() as f64;
+                        if remaining < 200.0 && !stream_loading_more() {
+                            let pool = pool.clone();
+                            let key = key.clone();
+                            spawn(async move {
+                                data_loader::load_more_stream(
+                                    pool,
+                                    key,
+                                    stream_value,
+                                    stream_loading_more,
+                                )
+                                .await;
+                            });
+                        }
+                    }
+                },
 
                 table {
                     width: "100%",
@@ -215,7 +250,15 @@ pub(super) fn StreamPanel(
                                 }
                             }
                         } else {
-                            for (entry_id, fields) in filtered_stream_entries.iter() {
+                            tr {
+                                td { colspan: "3", height: "{visible_start as f64 * STREAM_ROW_HEIGHT}px", padding: "0" }
+                            }
+
+                            for (entry_id, fields) in filtered_stream_entries
+                                .iter()
+                                .skip(visible_start)
+                                .take(visible_end.saturating_sub(visible_start))
+                            {
                                 tr {
                                     key: "{entry_id}",
                                     border_bottom: "1px solid {COLOR_BORDER}",
@@ -283,6 +326,14 @@ pub(super) fn StreamPanel(
                                             IconTrash { size: Some(15) }
                                         }
                                     }
+                                }
+                            }
+
+                            tr {
+                                td {
+                                    colspan: "3",
+                                    height: "{filtered_stream_entries.len().saturating_sub(visible_end) as f64 * STREAM_ROW_HEIGHT}px",
+                                    padding: "0",
                                 }
                             }
                         }

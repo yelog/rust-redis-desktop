@@ -110,6 +110,8 @@ pub fn extend_zh_cn(m: &mut HashMap<String, String>) {
         ("Applying TTL...", "设置中..."),
         ("Delete by pattern", "按模式批量删除"),
         ("Scanning...", "扫描中..."),
+        ("Continue scan", "继续扫描"),
+        ("Load next indexed page", "加载下一索引页"),
         ("No matching keys found", "没有找到匹配的 key"),
         (
             "This will permanently delete all matching keys.",
@@ -158,6 +160,41 @@ pub fn extend_zh_cn(m: &mut HashMap<String, String>) {
         ("General", "通用"),
         ("Appearance", "外观"),
         ("About", "关于"),
+        ("Confirm large database scan", "确认大型数据库扫描"),
+        ("Unable to determine", "无法确定"),
+        ("Scan progressively", "渐进扫描"),
+        ("Complete scan", "完整扫描"),
+        ("keys", "个 key"),
+        (
+            "This database reaches the scan confirmation threshold",
+            "此数据库已达到扫描确认阈值",
+        ),
+        (
+            "Even SCAN can consume Redis CPU, network bandwidth, and local resources during a complete traversal.",
+            "即使使用 SCAN，完整遍历仍会消耗 Redis CPU、网络带宽和本地资源。",
+        ),
+        ("Progressive scan stopped after", "渐进扫描已在达到"),
+        (
+            "matching keys; refresh or change the scan mode to load more.",
+            "个匹配 key 后暂停；刷新或切换扫描模式可以加载更多。",
+        ),
+        ("Key scan mode", "Key 扫描模式"),
+        ("Progressive", "渐进扫描"),
+        ("Complete indexed", "完整索引扫描"),
+        (
+            "Progressive mode limits local results; complete indexed mode is intended for large databases.",
+            "渐进模式限制本地结果数量，完整索引模式适用于大型数据库。",
+        ),
+        ("Large database scan confirmation", "大数据库扫描确认"),
+        (
+            "Ask before scanning when DBSIZE reaches this value; 0 disables the warning.",
+            "当 DBSIZE 达到此值时扫描前询问；设置为 0 可关闭提醒。",
+        ),
+        ("Progressive scan result limit", "渐进扫描结果上限"),
+        (
+            "Progressive scans stop after this many matching keys and can be continued later.",
+            "渐进扫描达到此匹配数量后暂停，之后可以继续扫描。",
+        ),
     ] {
         m.insert(key.into(), value.into());
     }

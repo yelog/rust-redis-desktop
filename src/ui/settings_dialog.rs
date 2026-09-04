@@ -1,5 +1,5 @@
 use crate::autostart::AutostartManager;
-use crate::config::AppSettings;
+use crate::config::{AppSettings, KeyScanMode};
 use crate::i18n::{use_i18n, LanguagePreference};
 use crate::theme::{ThemeColors, ThemeId, ThemeMode, ThemePreference};
 use crate::ui::animated_dialog::{AnimatedDialog, EXIT_ANIMATION_DURATION_MS};
@@ -55,6 +55,9 @@ pub fn SettingsDialog(
     let mut language_preference = use_signal(|| settings.language_preference);
     let mut auto_check_updates = use_signal(|| settings.auto_check_updates);
     let launch_at_startup = use_signal(|| settings.launch_at_startup);
+    let mut scan_confirmation_threshold = use_signal(|| settings.scan_confirmation_threshold);
+    let mut progressive_scan_limit = use_signal(|| settings.progressive_scan_limit);
+    let mut key_scan_mode = use_signal(|| settings.key_scan_mode);
     let launch_at_startup_error = use_signal(|| None::<String>);
     let dialog_open = use_signal(|| true);
 
@@ -75,6 +78,9 @@ pub fn SettingsDialog(
                 language_preference: language_preference(),
                 auto_check_updates: auto_check_updates(),
                 launch_at_startup: launch_at_startup(),
+                scan_confirmation_threshold: scan_confirmation_threshold(),
+                progressive_scan_limit: progressive_scan_limit().max(1_000),
+                key_scan_mode: key_scan_mode(),
             });
         }
     };
@@ -220,6 +226,129 @@ pub fn SettingsDialog(
                                                         }
                                                     },
                                                 }
+                                            }
+                                        }
+                                    }
+
+                                    SettingsGroup {
+                                        label: "Key scan mode",
+                                        colors,
+
+                                        div {
+                                            display: "flex",
+                                            flex_direction: "column",
+                                            gap: "8px",
+
+                                            div {
+                                                display: "flex",
+                                                flex_wrap: "wrap",
+                                                gap: "8px",
+
+                                                for (value, label) in [
+                                                    (KeyScanMode::Progressive, "Progressive"),
+                                                    (KeyScanMode::Complete, "Complete indexed"),
+                                                ] {
+                                                    ChoiceChip {
+                                                        label,
+                                                        selected: key_scan_mode() == value,
+                                                        colors,
+                                                        on_click: {
+                                                            let apply = apply_settings.clone();
+                                                            move |_| {
+                                                                key_scan_mode.set(value);
+                                                                apply();
+                                                            }
+                                                        },
+                                                    }
+                                                }
+                                            }
+
+                                            div {
+                                                color: "{colors.text_subtle}",
+                                                font_size: "12px",
+                                                line_height: "1.4",
+
+                                                {i18n.read().t("Progressive mode limits local results; complete indexed mode is intended for large databases.")}
+                                            }
+                                        }
+                                    }
+
+                                    SettingsGroup {
+                                        label: "Large database scan confirmation",
+                                        colors,
+
+                                        div {
+                                            display: "flex",
+                                            flex_direction: "column",
+                                            gap: "8px",
+
+                                            input {
+                                                width: "180px",
+                                                padding: "8px 10px",
+                                                background: "{colors.background}",
+                                                border: "1px solid {colors.border}",
+                                                border_radius: "6px",
+                                                color: "{colors.text}",
+                                                r#type: "number",
+                                                min: "0",
+                                                value: "{scan_confirmation_threshold}",
+                                                oninput: {
+                                                    let apply = apply_settings.clone();
+                                                    move |event| {
+                                                        if let Ok(value) = event.value().parse::<u64>() {
+                                                            scan_confirmation_threshold.set(value);
+                                                            apply();
+                                                        }
+                                                    }
+                                                },
+                                            }
+
+                                            div {
+                                                color: "{colors.text_subtle}",
+                                                font_size: "12px",
+                                                line_height: "1.4",
+
+                                                {i18n.read().t("Ask before scanning when DBSIZE reaches this value; 0 disables the warning.")}
+                                            }
+                                        }
+                                    }
+
+                                    SettingsGroup {
+                                        label: "Progressive scan result limit",
+                                        colors,
+
+                                        div {
+                                            display: "flex",
+                                            flex_direction: "column",
+                                            gap: "8px",
+
+                                            input {
+                                                width: "180px",
+                                                padding: "8px 10px",
+                                                background: "{colors.background}",
+                                                border: "1px solid {colors.border}",
+                                                border_radius: "6px",
+                                                color: "{colors.text}",
+                                                r#type: "number",
+                                                min: "1000",
+                                                value: "{progressive_scan_limit}",
+                                                oninput: {
+                                                    let apply = apply_settings.clone();
+                                                    move |event| {
+                                                        if let Ok(value) = event.value().parse::<usize>() {
+                                                            progressive_scan_limit.set(value.max(1_000));
+                                                            apply();
+                                                        }
+                                                    }
+                                                },
+                                            }
+
+                                            div {
+                                                color: "{colors.text_subtle}",
+                                                font_size: "12px",
+                                                line_height: "1.4",
+
+                                                {i18n.read().t("Progressive scans stop after this many matching keys and can be continued later.")}
                                             }
                                         }
                                     }

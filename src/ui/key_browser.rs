@@ -1,10 +1,11 @@
+use crate::config::KeyScanMode;
 use crate::connection::ConnectionPool;
 use crate::i18n::use_i18n;
-use crate::redis::{KeyType, TreeBuilder, TreeNode};
+use crate::redis::{decide_scan, KeyIndex, KeyType, ScanDecision, TreeBuilder, TreeNode};
 use crate::theme::{
     ThemeColors, COLOR_BG, COLOR_BG_LOWEST, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER,
     COLOR_ERROR, COLOR_ERROR_BG, COLOR_OUTLINE_VARIANT, COLOR_PRIMARY, COLOR_TEXT,
-    COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_WARNING,
 };
 use crate::ui::add_key_dialog::AddKeyDialog;
 use crate::ui::batch_ttl_dialog::BatchTtlDialog;
@@ -15,8 +16,8 @@ use crate::ui::icons::*;
 use crate::ui::memory_analysis_dialog::MemoryAnalysisDialog;
 use crate::ui::pattern_delete_dialog::PatternDeleteDialog;
 use crate::ui::{
-    copy_text_to_clipboard, LazyTreeNode, ResizableDivider, ToastManager, TreeState, ValueViewer,
-    VirtualTreeList,
+    copy_text_to_clipboard, LazyTreeNode, ResizableDivider, ScanConfirmDialog, ToastManager,
+    TreeState, ValueViewer, VirtualTreeList,
 };
 use dioxus::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -25,6 +26,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 const SCAN_BATCH_SIZE: usize = 500;
+const INDEX_PAGE_SIZE: usize = 2_000;
 
 fn collect_all_node_ids(nodes: &[TreeNode]) -> HashSet<String> {
     let mut ids = HashSet::new();
@@ -132,6 +134,7 @@ pub struct ScanProgress {
     pub scanned: usize,
     pub current_batch: usize,
     pub is_scanning: bool,
+    pub stopped_at_limit: bool,
 }
 
 async fn scan_all_keys(
@@ -139,9 +142,30 @@ async fn scan_all_keys(
     match_pattern: String,
     cancel_flag: Arc<AtomicBool>,
     mut scan_progress: Signal<ScanProgress>,
-) -> Result<Vec<String>, String> {
-    let mut all_keys = Vec::new();
-    let mut cursor: u64 = 0;
+    result_limit: Option<usize>,
+) -> Result<(Vec<String>, u64), String> {
+    scan_all_keys_from(
+        pool,
+        match_pattern,
+        cancel_flag,
+        scan_progress,
+        result_limit,
+        0,
+        Vec::new(),
+    )
+    .await
+}
+
+async fn scan_all_keys_from(
+    pool: ConnectionPool,
+    match_pattern: String,
+    cancel_flag: Arc<AtomicBool>,
+    mut scan_progress: Signal<ScanProgress>,
+    result_limit: Option<usize>,
+    mut cursor: u64,
+    mut all_keys: Vec<String>,
+) -> Result<(Vec<String>, u64), String> {
+    scan_progress.write().scanned = all_keys.len();
 
     loop {
         if cancel_flag.load(Ordering::Relaxed) {
@@ -161,6 +185,12 @@ async fn scan_all_keys(
                 scan_progress.write().current_batch = batch_len;
                 cursor = next_cursor;
 
+                if result_limit.is_some_and(|limit| all_keys.len() >= limit) {
+                    all_keys.truncate(result_limit.unwrap());
+                    scan_progress.write().stopped_at_limit = true;
+                    break;
+                }
+
                 if cursor == 0 {
                     break;
                 }
@@ -169,7 +199,69 @@ async fn scan_all_keys(
         }
     }
 
-    Ok(all_keys)
+    Ok((all_keys, cursor))
+}
+
+async fn scan_keys_into_index(
+    pool: ConnectionPool,
+    match_pattern: String,
+    cancel_flag: Arc<AtomicBool>,
+    mut scan_progress: Signal<ScanProgress>,
+) -> Result<KeyIndex, String> {
+    let mut index = KeyIndex::new_temp().map_err(|error| error.to_string())?;
+    let mut cursor = 0;
+    loop {
+        if cancel_flag.load(Ordering::Relaxed) {
+            break;
+        }
+        let (next_cursor, keys) = pool
+            .scan_keys_with_cursor(&match_pattern, cursor, SCAN_BATCH_SIZE)
+            .await
+            .map_err(|error| error.to_string())?;
+        let batch_len = keys.len();
+        let bytes = keys.into_iter().map(String::into_bytes).collect::<Vec<_>>();
+        index = tokio::task::spawn_blocking(move || {
+            index.insert_batch(&bytes)?;
+            Ok::<KeyIndex, crate::redis::KeyIndexError>(index)
+        })
+        .await
+        .map_err(|error| format!("key index worker failed: {error}"))?
+        .map_err(|error| error.to_string())?;
+        scan_progress.write().scanned = index.count().map_err(|error| error.to_string())? as usize;
+        scan_progress.write().current_batch = batch_len;
+        cursor = next_cursor;
+        if cursor == 0 {
+            break;
+        }
+    }
+    Ok(index)
+}
+
+fn indexed_page_keys(index: &KeyIndex, offset: usize) -> Result<Vec<String>, String> {
+    index
+        .page(offset as u64, INDEX_PAGE_SIZE)
+        .map_err(|error| error.to_string())
+        .map(|rows| {
+            rows.into_iter()
+                .map(|row| String::from_utf8_lossy(&row.key).into_owned())
+                .collect()
+        })
+}
+
+fn indexed_page_nodes(index: &KeyIndex, offset: usize) -> Result<Vec<TreeNode>, String> {
+    indexed_page_keys(index, offset).map(|keys| {
+        keys.into_iter()
+            .map(|key| TreeNode {
+                name: key.clone(),
+                node_id: format!("leaf:{key}"),
+                path: key,
+                is_leaf: true,
+                children: Vec::new(),
+                key_info: None,
+                total_keys: 1,
+            })
+            .collect()
+    })
 }
 
 #[component]
@@ -180,6 +272,9 @@ pub fn KeyBrowser(
     selected_key: Signal<String>,
     current_db: Signal<u8>,
     refresh_trigger: Signal<u32>,
+    scan_confirmation_threshold: u64,
+    progressive_scan_limit: usize,
+    key_scan_mode: KeyScanMode,
     colors: ThemeColors,
     on_connection_error: EventHandler<()>,
     on_key_select: EventHandler<String>,
@@ -209,6 +304,14 @@ pub fn KeyBrowser(
     let use_virtual_scroll = use_signal(|| true);
     let mut db_menu = use_signal(|| None::<ContextMenuState<()>>);
     let mut toolbar_menu = use_signal(|| None::<ContextMenuState<()>>);
+    let mut scan_confirmation = use_signal(|| None::<Option<u64>>);
+    let mut scan_action = use_signal(|| None::<KeyScanMode>);
+    let mut scan_resume = use_signal(|| false);
+    let scan_cursor = use_signal(|| 0u64);
+    let scan_keys = use_signal(Vec::<String>::new);
+    let key_index = use_signal(|| None::<Arc<std::sync::Mutex<KeyIndex>>>);
+    let indexed_offset = use_signal(|| 0usize);
+    let indexed_total = use_signal(|| 0usize);
 
     {
         let pool = connection_pool.clone();
@@ -335,6 +438,14 @@ pub fn KeyBrowser(
         let expanded_paths = expanded_paths.clone();
         let toast_manager = toast_manager.clone();
         let on_connection_error = on_connection_error.clone();
+        let mut scan_confirmation = scan_confirmation.clone();
+        let scan_action = scan_action.clone();
+        let scan_resume = scan_resume.clone();
+        let scan_cursor = scan_cursor.clone();
+        let scan_keys = scan_keys.clone();
+        let key_index = key_index.clone();
+        let indexed_offset = indexed_offset.clone();
+        let indexed_total = indexed_total.clone();
         move || {
             let pool = pool.clone();
             let search_snapshot = search_pattern.peek().clone();
@@ -356,17 +467,53 @@ pub fn KeyBrowser(
             let mut expanded_paths = expanded_paths.clone();
             let mut toast_manager = toast_manager.clone();
             let on_connection_error = on_connection_error.clone();
+            let mut scan_confirmation = scan_confirmation.clone();
+            let mut scan_action = scan_action.clone();
+            let mut scan_resume = scan_resume.clone();
+            let mut scan_cursor = scan_cursor.clone();
+            let mut scan_keys = scan_keys.clone();
+            let mut key_index = key_index.clone();
+            let mut indexed_offset = indexed_offset.clone();
+            let mut indexed_total = indexed_total.clone();
 
             spawn(async move {
+                let selected_scan_mode = scan_action().unwrap_or(key_scan_mode);
+                let is_resuming = scan_resume();
+                if scan_action().is_none() && !is_resuming {
+                    match pool.db_size().await {
+                        Ok(size) => {
+                            if matches!(
+                                decide_scan(size, scan_confirmation_threshold),
+                                ScanDecision::Confirm { .. }
+                            ) {
+                                scan_confirmation.set(Some(Some(size)));
+                                loading.set(false);
+                                return;
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                "Unable to determine database size before scan: {}",
+                                error
+                            );
+                            scan_confirmation.set(Some(None));
+                            loading.set(false);
+                            return;
+                        }
+                    }
+                }
+                scan_action.set(None);
+                scan_resume.set(false);
                 loading.set(true);
                 let preserved_expanded = tree_state.read().expanded_nodes.clone();
                 let preserved_expanded_paths = expanded_paths.read().clone();
                 scan_progress.write().is_scanning = true;
                 scan_progress.write().scanned = 0;
                 scan_progress.write().current_batch = 0;
+                scan_progress.write().stopped_at_limit = false;
 
-                let all_keys = match pool.ensure_connection().await {
-                    Ok(_) => match scan_all_keys(
+                if selected_scan_mode == KeyScanMode::Complete {
+                    let index = match scan_keys_into_index(
                         pool.clone(),
                         match_pattern.clone(),
                         cancel_flag.clone(),
@@ -374,12 +521,87 @@ pub fn KeyBrowser(
                     )
                     .await
                     {
-                        Ok(keys) => keys,
-                        Err(first_error) => {
+                        Ok(index) => index,
+                        Err(error) => {
+                            toast_manager.write().error(&error);
+                            loading.set(false);
+                            scan_progress.write().is_scanning = false;
+                            return;
+                        }
+                    };
+                    if cancel_flag.load(Ordering::Relaxed) {
+                        loading.set(false);
+                        scan_progress.write().is_scanning = false;
+                        return;
+                    }
+                    let total = index.count().unwrap_or(0) as usize;
+                    let page = match indexed_page_nodes(&index, 0) {
+                        Ok(page) => page,
+                        Err(error) => {
+                            toast_manager.write().error(&error);
+                            loading.set(false);
+                            scan_progress.write().is_scanning = false;
+                            return;
+                        }
+                    };
+                    tree_nodes.set(page);
+                    keys_count.set(total);
+                    key_type_cache.set(HashMap::new());
+                    scan_keys.set(Vec::new());
+                    scan_cursor.set(0);
+                    indexed_offset.set(INDEX_PAGE_SIZE.min(total));
+                    indexed_total.set(total);
+                    key_index.set(Some(Arc::new(std::sync::Mutex::new(index))));
+                    expanded_paths.set(HashSet::new());
+                    tree_state.set(TreeState::default());
+                    loading.set(false);
+                    scan_progress.write().is_scanning = false;
+                    load_keyspace();
+                    return;
+                }
+
+                key_index.set(None);
+                indexed_offset.set(0);
+                indexed_total.set(0);
+                let starting_cursor = if is_resuming { scan_cursor() } else { 0 };
+                let starting_keys = if is_resuming { scan_keys() } else { Vec::new() };
+                let result_limit = if selected_scan_mode == KeyScanMode::Progressive {
+                    Some(
+                        starting_keys
+                            .len()
+                            .saturating_add(progressive_scan_limit.max(1_000)),
+                    )
+                } else {
+                    None
+                };
+                let scan_result = match pool.ensure_connection().await {
+                    Ok(_) => match if starting_cursor == 0 && starting_keys.is_empty() {
+                        scan_all_keys(
+                            pool.clone(),
+                            match_pattern.clone(),
+                            cancel_flag.clone(),
+                            scan_progress,
+                            result_limit,
+                        )
+                        .await
+                    } else {
+                        scan_all_keys_from(
+                            pool.clone(),
+                            match_pattern.clone(),
+                            cancel_flag.clone(),
+                            scan_progress,
+                            result_limit,
+                            starting_cursor,
+                            starting_keys,
+                        )
+                        .await
+                    } {
+                        Ok(result) => result,
+                        Err(error) => {
                             tracing::warn!(
                                 "Initial key scan failed for connection {}: {}",
                                 connection_id,
-                                first_error
+                                error
                             );
                             scan_progress.write().scanned = 0;
                             scan_progress.write().current_batch = 0;
@@ -390,18 +612,14 @@ pub fn KeyBrowser(
                                     match_pattern.clone(),
                                     cancel_flag.clone(),
                                     scan_progress,
+                                    result_limit,
                                 )
                                 .await
                                 {
-                                    Ok(keys) => keys,
+                                    Ok(result) => result,
                                     Err(retry_error) => {
                                         let message = format!(
                                             "Failed to refresh keys after reconnect: {}",
-                                            retry_error
-                                        );
-                                        tracing::error!(
-                                            "Key refresh failed after reconnect for connection {}: {}",
-                                            connection_id,
                                             retry_error
                                         );
                                         toast_manager.write().error(&message);
@@ -416,11 +634,6 @@ pub fn KeyBrowser(
                                         "Failed to reconnect before refreshing keys: {}",
                                         reconnect_error
                                     );
-                                    tracing::error!(
-                                        "Reconnect failed before retrying key refresh for connection {}: {}",
-                                        connection_id,
-                                        reconnect_error
-                                    );
                                     toast_manager.write().error(&message);
                                     on_connection_error.call(());
                                     loading.set(false);
@@ -433,11 +646,7 @@ pub fn KeyBrowser(
                     Err(error) => {
                         let message =
                             format!("Failed to reconnect before refreshing keys: {}", error);
-                        tracing::error!(
-                            "Reconnect failed before key refresh for connection {}: {}",
-                            connection_id,
-                            error
-                        );
+                        tracing::error!("{}", message);
                         toast_manager.write().error(&message);
                         on_connection_error.call(());
                         loading.set(false);
@@ -445,6 +654,10 @@ pub fn KeyBrowser(
                         return;
                     }
                 };
+                let (all_keys, next_cursor) = scan_result;
+
+                scan_keys.set(all_keys.clone());
+                scan_cursor.set(next_cursor);
 
                 keys_count.set(all_keys.len());
                 key_type_cache.set(HashMap::new());
@@ -776,6 +989,20 @@ pub fn KeyBrowser(
                                     {i18n.read().t("Delete")}
                                 }
                             }
+                        }
+                    }
+
+                    if scan_progress.read().stopped_at_limit && !loading() {
+                        div {
+                            margin_top: "4px",
+                            color: COLOR_WARNING,
+                            font_size: "11px",
+                            {format!(
+                                "{} {} {}",
+                                i18n.read().t("Progressive scan stopped after"),
+                                progressive_scan_limit.max(1_000),
+                                i18n.read().t("matching keys; refresh or change the scan mode to load more.")
+                            )}
                         }
                     }
                 }
@@ -1156,6 +1383,56 @@ pub fn KeyBrowser(
                                 },
                             }
                         }
+
+                        if scan_progress.read().stopped_at_limit
+                            && scan_cursor() != 0
+                            && !scan_progress.read().is_scanning
+                        {
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconRefresh { size: Some(14) } }),
+                                label: i18n.read().t("Continue scan"),
+                                danger: false,
+                                disabled: false,
+                                onclick: {
+                                    let mut scan_resume = scan_resume.clone();
+                                    let mut refresh_trigger = refresh_trigger.clone();
+                                    move |_| {
+                                        toolbar_menu.set(None);
+                                        scan_resume.set(true);
+                                        refresh_trigger.set(refresh_trigger() + 1);
+                                    }
+                                },
+                            }
+                        }
+
+                        if key_index().is_some()
+                            && indexed_offset() < indexed_total()
+                            && !scan_progress.read().is_scanning
+                        {
+                            ContextMenuItem {
+                                icon: Some(rsx! { IconRefresh { size: Some(14) } }),
+                                label: i18n.read().t("Load next indexed page"),
+                                danger: false,
+                                disabled: false,
+                                onclick: {
+                                    let index = key_index.clone();
+                                    let mut indexed_offset = indexed_offset.clone();
+                                    let mut tree_nodes = tree_nodes.clone();
+                                    move |_| {
+                                        toolbar_menu.set(None);
+                                        let offset = indexed_offset();
+                                        if let Some(index) = index() {
+                                            if let Ok(guard) = index.lock() {
+                                                if let Ok(page) = indexed_page_nodes(&guard, offset) {
+                                                    indexed_offset.set(offset + page.len());
+                                                    tree_nodes.set(page);
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                            }
+                        }
                     }
                 }
             }
@@ -1249,6 +1526,41 @@ pub fn KeyBrowser(
                     }
                 },
                 on_close: move |_| show_memory_analysis_dialog.set(false),
+            }
+        }
+
+        if let Some(db_size) = scan_confirmation() {
+            ScanConfirmDialog {
+                current_db: current_db(),
+                db_size,
+                threshold: scan_confirmation_threshold,
+                progressive_limit: progressive_scan_limit.max(1_000),
+                scan_mode: key_scan_mode,
+                colors,
+                on_progressive: {
+                    let mut scan_confirmation = scan_confirmation.clone();
+                    let mut scan_action = scan_action.clone();
+                    let mut refresh_trigger = refresh_trigger.clone();
+                    move |_| {
+                        scan_confirmation.set(None);
+                        scan_action.set(Some(KeyScanMode::Progressive));
+                        refresh_trigger.set(refresh_trigger() + 1);
+                    }
+                },
+                on_complete: {
+                    let mut scan_confirmation = scan_confirmation.clone();
+                    let mut scan_action = scan_action.clone();
+                    let mut refresh_trigger = refresh_trigger.clone();
+                    move |_| {
+                        scan_confirmation.set(None);
+                        scan_action.set(Some(KeyScanMode::Complete));
+                        refresh_trigger.set(refresh_trigger() + 1);
+                    }
+                },
+                on_cancel: {
+                    let mut scan_confirmation = scan_confirmation.clone();
+                    move |_| scan_confirmation.set(None)
+                },
             }
         }
     }

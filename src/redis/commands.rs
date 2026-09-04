@@ -67,6 +67,15 @@ pub struct ServerInfo {
     pub rdb_changes_since_last_save: Option<u64>,
     pub aof_enabled: Option<u8>,
     pub aof_rewrite_in_progress: Option<u8>,
+    pub keyspace_hits: Option<u64>,
+    pub keyspace_misses: Option<u64>,
+    pub evicted_keys: Option<u64>,
+    pub expired_keys: Option<u64>,
+    pub rejected_connections: Option<u64>,
+    pub instantaneous_input_kbps: Option<f64>,
+    pub instantaneous_output_kbps: Option<f64>,
+    pub used_cpu_sys: Option<f64>,
+    pub used_cpu_user: Option<f64>,
     pub keyspace: HashMap<String, u64>,
     pub keys_total: u64,
     pub expires_total: u64,
@@ -282,6 +291,17 @@ impl ConnectionPool {
 
         if let Some(ref mut conn) = *connection {
             conn.set_string(key, value).await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    pub async fn set_string_bytes(&self, key: &str, value: &[u8]) -> Result<()> {
+        self.check_write_permission("SET")?;
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            conn.set_bytes(key, value).await
         } else {
             Err(ConnectionError::Closed)
         }
@@ -553,6 +573,19 @@ fn parse_server_info(info: &str) -> ServerInfo {
                 "aof_rewrite_in_progress" => {
                     server_info.aof_rewrite_in_progress = value.parse().ok()
                 }
+                "keyspace_hits" => server_info.keyspace_hits = value.parse().ok(),
+                "keyspace_misses" => server_info.keyspace_misses = value.parse().ok(),
+                "evicted_keys" => server_info.evicted_keys = value.parse().ok(),
+                "expired_keys" => server_info.expired_keys = value.parse().ok(),
+                "rejected_connections" => server_info.rejected_connections = value.parse().ok(),
+                "instantaneous_input_kbps" => {
+                    server_info.instantaneous_input_kbps = value.parse().ok()
+                }
+                "instantaneous_output_kbps" => {
+                    server_info.instantaneous_output_kbps = value.parse().ok()
+                }
+                "used_cpu_sys" => server_info.used_cpu_sys = value.parse().ok(),
+                "used_cpu_user" => server_info.used_cpu_user = value.parse().ok(),
                 key if key.starts_with("db") => {
                     if let Some(stats) = parse_db_stats(value) {
                         server_info.keyspace.insert(key.to_string(), stats.keys);
@@ -588,6 +621,36 @@ fn parse_db_stats(value: &str) -> Option<DbStats> {
     }
 
     Some(DbStats { keys, expires })
+}
+
+pub fn hit_rate(hits: u64, misses: u64) -> Option<f64> {
+    let total = hits.saturating_add(misses);
+    (total > 0).then(|| hits as f64 / total as f64)
+}
+
+#[cfg(test)]
+mod server_info_tests {
+    use super::*;
+
+    #[test]
+    fn parses_operational_stats() {
+        let info = parse_server_info(
+            "# Stats\nkeyspace_hits:90\nkeyspace_misses:10\nevicted_keys:3\nexpired_keys:4\nrejected_connections:2\ninstantaneous_input_kbps:1.5\nused_cpu_sys:2.25\n",
+        );
+        assert_eq!(info.keyspace_hits, Some(90));
+        assert_eq!(info.keyspace_misses, Some(10));
+        assert_eq!(info.evicted_keys, Some(3));
+        assert_eq!(info.expired_keys, Some(4));
+        assert_eq!(info.rejected_connections, Some(2));
+        assert_eq!(info.instantaneous_input_kbps, Some(1.5));
+        assert_eq!(info.used_cpu_sys, Some(2.25));
+    }
+
+    #[test]
+    fn hit_rate_handles_empty_and_normal_counters() {
+        assert_eq!(hit_rate(0, 0), None);
+        assert_eq!(hit_rate(90, 10), Some(0.9));
+    }
 }
 
 impl ConnectionPool {
@@ -857,6 +920,34 @@ impl ConnectionPool {
         if let Some(ref mut conn) = *connection {
             conn.execute_cmd(&mut redis::cmd("XRANGE").arg(key).arg(start).arg(end))
                 .await
+        } else {
+            Err(ConnectionError::Closed)
+        }
+    }
+
+    /// Load a bounded page of stream entries. The exclusive start prevents
+    /// repeating the last entry when the viewer requests the next page.
+    pub async fn stream_range_page(
+        &self,
+        key: &str,
+        start_exclusive: Option<&str>,
+        count: usize,
+    ) -> Result<Vec<(String, Vec<(String, String)>)>> {
+        let mut connection = self.connection.lock().await;
+
+        if let Some(ref mut conn) = *connection {
+            let start = start_exclusive
+                .map(|id| format!("({id}"))
+                .unwrap_or_else(|| "-".to_string());
+            conn.execute_cmd(
+                &mut redis::cmd("XRANGE")
+                    .arg(key)
+                    .arg(start)
+                    .arg("+")
+                    .arg("COUNT")
+                    .arg(count),
+            )
+            .await
         } else {
             Err(ConnectionError::Closed)
         }

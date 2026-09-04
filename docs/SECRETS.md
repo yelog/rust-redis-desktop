@@ -87,3 +87,21 @@ APPLE_APP_PASSWORD: xxxx-xxxx-xxxx-xxxx
 | Windows | `rust-redis-desktop-x86_64-windows.zip` |
 | Linux | `rust-redis-desktop-x86_64.AppImage` |
 | Linux | `rust-redis-desktop_x.x.x_amd64.deb` |
+# Credential Storage
+
+New application builds attempt to store Redis and SSH credentials in the
+operating system credential store through the `keyring` crate. The JSON config
+retains only a `keyring:<connection-id>:<kind>` reference for those secrets.
+
+Supported secret kinds are `redis`, `ssh-password`, and `ssh-passphrase`.
+
+Existing AES-CBC `encrypted_*` values remain readable for compatibility. When
+the OS credential store cannot be initialized, saving falls back to the legacy
+format so a connection is not silently lost. This fallback is transitional and
+should be surfaced to the user before a future release makes OS storage
+mandatory.
+
+Deleting a saved connection attempts to delete all associated keyring entries.
+The keyring protects secrets from casual config-file disclosure, but it does
+not protect against a local user who can already access the application's OS
+credential store.

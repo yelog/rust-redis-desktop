@@ -7,8 +7,9 @@ use crate::theme::{
     COLOR_SURFACE_LOW, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY,
 };
 use crate::ui::{
-    ClientsPanel, ConnectionExportDialog, ConnectionImportDialog, FlushConfirmDialog, ImportPanel,
-    KeyBrowser, MonitorPanel, PubSubPanel, ScriptPanel, SettingsDialog, SlowLogPanel, Terminal,
+    ClientsPanel, CommandStatsPanel, ConnectionExportDialog, ConnectionImportDialog,
+    FlushConfirmDialog, ImportPanel, KeyBrowser, MonitorPanel, PubSubPanel, ScriptPanel,
+    SettingsDialog, SlowLogPanel, Terminal,
 };
 use dioxus::prelude::*;
 use std::sync::Arc;
@@ -169,6 +170,9 @@ pub(super) fn ConnectedTabShellSection(
     colors: ThemeColors,
     resolved_theme_key: String,
     auto_refresh_interval: u32,
+    scan_confirmation_threshold: u64,
+    progressive_scan_limit: usize,
+    key_scan_mode: crate::config::KeyScanMode,
     on_connection_error: EventHandler<()>,
 ) -> Element {
     let i18n = use_i18n();
@@ -194,6 +198,7 @@ pub(super) fn ConnectedTabShellSection(
                     (Tab::Data, i18n.read().t("Data")),
                     (Tab::Terminal, i18n.read().t("Terminal")),
                     (Tab::Monitor, i18n.read().t("Monitor")),
+                    (Tab::CommandStats, i18n.read().t("Command stats")),
                     (Tab::SlowLog, i18n.read().t("Slow Log")),
                     (Tab::Clients, i18n.read().t("Clients")),
                     (Tab::PubSub, "Pub/Sub".to_string()),
@@ -245,6 +250,9 @@ pub(super) fn ConnectedTabShellSection(
                             selected_key,
                             current_db,
                             refresh_trigger,
+                            scan_confirmation_threshold,
+                            progressive_scan_limit,
+                            key_scan_mode,
                             colors,
                             on_connection_error,
                             on_key_select: move |key: String| {
@@ -264,6 +272,11 @@ pub(super) fn ConnectedTabShellSection(
                         key: "{conn_id}",
                         connection_pool: pool.clone(),
                         auto_refresh_interval,
+                    }
+                } else if current_tab() == Tab::CommandStats {
+                    CommandStatsPanel {
+                        key: "{conn_id}",
+                        connection_pool: pool.clone(),
                     }
                 } else if current_tab() == Tab::SlowLog {
                     SlowLogPanel {

@@ -47,6 +47,7 @@ pub(super) fn format_bytes(data: &[u8], format: super::BinaryFormat) -> String {
             use base64::{engine::general_purpose, Engine as _};
             general_purpose::STANDARD.encode(data)
         }
+        super::BinaryFormat::EscapedText => crate::formatter::escape_bytes(data),
         super::BinaryFormat::JavaSerialized => {
             if is_java_serialization(data) {
                 format!(

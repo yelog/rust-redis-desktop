@@ -1,13 +1,21 @@
 mod cluster;
 mod command_docs;
+mod command_stats;
 mod commands;
+mod key_index;
+mod monitor;
+mod scan_policy;
 mod search;
 mod tree;
 mod types;
 
 pub use cluster::*;
 pub use command_docs::*;
+pub use command_stats::*;
 pub use commands::*;
+pub use key_index::*;
+pub use monitor::*;
+pub use scan_policy::*;
 pub use search::*;
 pub use tree::*;
 pub use types::*;

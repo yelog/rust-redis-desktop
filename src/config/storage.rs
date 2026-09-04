@@ -1,4 +1,5 @@
 use crate::connection::ConnectionConfig;
+use crate::credential_store::CredentialStore;
 use crate::error::{ConfigError, Result};
 use crate::i18n::LanguagePreference;
 use crate::theme::ThemePreference;
@@ -70,10 +71,32 @@ pub struct AppSettings {
     pub auto_check_updates: bool,
     #[serde(default)]
     pub launch_at_startup: bool,
+    #[serde(default = "default_scan_confirmation_threshold")]
+    pub scan_confirmation_threshold: u64,
+    #[serde(default = "default_progressive_scan_limit")]
+    pub progressive_scan_limit: usize,
+    #[serde(default)]
+    pub key_scan_mode: KeyScanMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum KeyScanMode {
+    #[default]
+    Progressive,
+    Complete,
 }
 
 fn default_auto_check_updates() -> bool {
     true
+}
+
+fn default_scan_confirmation_threshold() -> u64 {
+    100_000
+}
+
+fn default_progressive_scan_limit() -> usize {
+    100_000
 }
 
 impl Default for AppSettings {
@@ -84,6 +107,9 @@ impl Default for AppSettings {
             language_preference: LanguagePreference::default(),
             auto_check_updates: true,
             launch_at_startup: false,
+            scan_confirmation_threshold: default_scan_confirmation_threshold(),
+            progressive_scan_limit: default_progressive_scan_limit(),
+            key_scan_mode: KeyScanMode::default(),
         }
     }
 }
@@ -152,8 +178,20 @@ impl ConfigStorage {
 
     pub fn delete_connection(&self, id: Uuid) -> io::Result<()> {
         let mut file = self.load_or_create_config_file()?;
+        let removed = file
+            .connections
+            .iter()
+            .find(|connection| connection.id == id)
+            .cloned();
         file.connections.retain(|c| c.id != id);
-        self.save_config_file(&file)
+        self.save_config_file(&file)?;
+        if removed.is_some() {
+            let store = crate::credential_store::OsCredentialStore;
+            for suffix in ["redis", "ssh-password", "ssh-passphrase"] {
+                let _ = store.delete(&format!("{id}:{suffix}"));
+            }
+        }
+        Ok(())
     }
 
     pub fn load_settings(&self) -> io::Result<AppSettings> {

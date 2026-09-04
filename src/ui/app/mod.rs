@@ -901,6 +901,9 @@ pub fn App() -> Element {
                                         colors,
                                         resolved_theme_key: resolved_theme_key.to_string(),
                                         auto_refresh_interval: app_settings.read().auto_refresh_interval,
+                                        scan_confirmation_threshold: app_settings.read().scan_confirmation_threshold,
+                                        progressive_scan_limit: app_settings.read().progressive_scan_limit,
+                                        key_scan_mode: app_settings.read().key_scan_mode,
                                         on_connection_error: move |_| {
                                             connection_states
                                                 .write()

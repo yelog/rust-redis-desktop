@@ -5,6 +5,7 @@ pub enum Tab {
     Data,
     Terminal,
     Monitor,
+    CommandStats,
     SlowLog,
     Clients,
     PubSub,

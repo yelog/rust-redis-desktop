@@ -296,11 +296,19 @@ async fn load_key_data_once(
                 serialization_data.set(None);
             }
             KeyType::Stream => {
+                let total = pool
+                    .stream_len(&key)
+                    .await
+                    .map_err(|e| format!("Failed to load stream length: {e}"))?;
                 let entries = pool
-                    .stream_range(&key, "-", "+")
+                    .stream_range_page(&key, None, super::PAGE_SIZE)
                     .await
                     .map_err(|e| format!("Failed to load stream data: {e}"))?;
-                tracing::info!("Stream loaded: {} entries", entries.len());
+                tracing::info!(
+                    "Stream loaded: {} entries (total: {})",
+                    entries.len(),
+                    total
+                );
                 stream_value.set(entries);
                 string_value.set(String::new());
                 hash_value.set(HashMap::new());
@@ -341,6 +349,48 @@ async fn load_key_data_once(
 
     loading.set(false);
     load_result
+}
+
+pub(super) async fn load_more_stream(
+    pool: ConnectionPool,
+    key: String,
+    mut stream_value: Signal<Vec<(String, Vec<(String, String)>)>>,
+    mut loading_more: Signal<bool>,
+) {
+    if loading_more() {
+        return;
+    }
+    if stream_value().len() >= super::MAX_LOADED_ROWS {
+        return;
+    }
+
+    loading_more.set(true);
+    let current = stream_value();
+    let total = match pool.stream_len(&key).await {
+        Ok(total) => total as usize,
+        Err(error) => {
+            tracing::error!("读取 stream 长度失败: {}", error);
+            loading_more.set(false);
+            return;
+        }
+    };
+    if current.len() >= total {
+        loading_more.set(false);
+        return;
+    }
+    let last_id = current.last().map(|(id, _)| id.clone());
+    match pool
+        .stream_range_page(&key, last_id.as_deref(), super::PAGE_SIZE)
+        .await
+    {
+        Ok(entries) => {
+            let mut updated = current;
+            updated.extend(entries);
+            stream_value.set(updated);
+        }
+        Err(error) => tracing::error!("加载更多 stream 数据失败: {}", error),
+    }
+    loading_more.set(false);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -499,6 +549,10 @@ pub(super) async fn load_more_hash(
     if hash_loading_more() || !hash_has_more() {
         return;
     }
+    if hash_value().len() >= super::MAX_LOADED_ROWS {
+        hash_has_more.set(false);
+        return;
+    }
     hash_loading_more.set(true);
     match pool.get_hash_page(&key, cursor, super::PAGE_SIZE).await {
         Ok((new_cursor, items)) => {
@@ -530,6 +584,10 @@ pub(super) async fn load_more_zset(
     if zset_loading_more() || !zset_has_more() {
         return;
     }
+    if zset_value().len() >= super::MAX_LOADED_ROWS {
+        zset_has_more.set(false);
+        return;
+    }
     zset_loading_more.set(true);
     match pool.get_zset_page(&key, cursor, super::PAGE_SIZE).await {
         Ok((new_cursor, items)) => {
@@ -559,6 +617,10 @@ pub(super) async fn load_more_set(
     if set_loading_more() || !set_has_more() {
         return;
     }
+    if set_value().len() >= super::MAX_LOADED_ROWS {
+        set_has_more.set(false);
+        return;
+    }
     set_loading_more.set(true);
     match pool.get_set_page(&key, cursor, super::PAGE_SIZE).await {
         Ok((new_cursor, items)) => {
@@ -585,6 +647,10 @@ pub(super) async fn load_more_list(
     total: usize,
 ) {
     if list_loading_more() || !list_has_more() {
+        return;
+    }
+    if list_value().len() >= super::MAX_LOADED_ROWS {
+        list_has_more.set(false);
         return;
     }
     list_loading_more.set(true);

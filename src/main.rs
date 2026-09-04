@@ -6,6 +6,7 @@
 mod autostart;
 mod config;
 mod connection;
+mod credential_store;
 mod crypto;
 mod error;
 mod error_reporting;

@@ -1,9 +1,10 @@
 use crate::connection::ConnectionPool;
 use crate::i18n::use_i18n;
-use crate::redis::ServerInfo;
+use crate::redis::{hit_rate, ServerInfo};
 use crate::theme::{
     COLOR_ACCENT, COLOR_BG, COLOR_BG_SECONDARY, COLOR_BG_TERTIARY, COLOR_BORDER, COLOR_INFO,
-    COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE, COLOR_WARNING,
+    COLOR_SUCCESS, COLOR_TEXT, COLOR_TEXT_CONTRAST, COLOR_TEXT_SECONDARY, COLOR_TEXT_SUBTLE,
+    COLOR_WARNING,
 };
 use crate::ui::icons::{IconActivity, IconRefresh, IconSquare};
 use dioxus::prelude::*;
@@ -109,8 +110,8 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                             ops_per_sec: info.instantaneous_ops_per_sec.unwrap_or(0),
                             connected_clients: info.connected_clients.unwrap_or(0),
                             keys_total: info.keys_total,
-                            hits: 0,
-                            misses: 0,
+                            hits: info.keyspace_hits.unwrap_or(0),
+                            misses: info.keyspace_misses.unwrap_or(0),
                         };
                         let mut data_vec = monitor_data();
                         data_vec.push(data);
@@ -173,8 +174,8 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                     ops_per_sec: info.instantaneous_ops_per_sec.unwrap_or(0),
                                     connected_clients: info.connected_clients.unwrap_or(0),
                                     keys_total: info.keys_total,
-                                    hits: 0,
-                                    misses: 0,
+                                    hits: info.keyspace_hits.unwrap_or(0),
+                                    misses: info.keyspace_misses.unwrap_or(0),
                                 };
                                 let mut data_vec = monitor_data();
                                 data_vec.push(data);
@@ -437,6 +438,82 @@ pub fn MonitorPanel(connection_pool: ConnectionPool, auto_refresh_interval: u32)
                                 margin_top: "4px",
 
                                 "keys"
+                            }
+                        }
+                    }
+
+                    div {
+                        display: "grid",
+                        grid_template_columns: "repeat(auto-fit, minmax(180px, 1fr))",
+                        gap: "12px",
+                        margin_bottom: "20px",
+
+                        div {
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "8px",
+                            padding: "12px 14px",
+
+                            div {
+                                color: COLOR_TEXT_SECONDARY,
+                                font_size: "12px",
+                                margin_bottom: "5px",
+                                {i18n.read().t("Cache Hit Rate")}
+                            }
+                            div {
+                                color: COLOR_SUCCESS,
+                                font_size: "20px",
+                                font_weight: "bold",
+                                if let Some(ref info) = info {
+                                    {hit_rate(
+                                        info.keyspace_hits.unwrap_or(0),
+                                        info.keyspace_misses.unwrap_or(0),
+                                    )
+                                    .map(|rate| format!("{:.1}%", rate * 100.0))
+                                    .unwrap_or_else(|| "-".to_string())}
+                                } else {
+                                    "-"
+                                }
+                            }
+                        }
+
+                        div {
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "8px",
+                            padding: "12px 14px",
+
+                            div {
+                                color: COLOR_TEXT_SECONDARY,
+                                font_size: "12px",
+                                margin_bottom: "5px",
+                                {i18n.read().t("Evicted Keys")}
+                            }
+                            div {
+                                color: COLOR_WARNING,
+                                font_size: "20px",
+                                font_weight: "bold",
+                                "{info.as_ref().and_then(|value| value.evicted_keys).unwrap_or(0)}"
+                            }
+                        }
+
+                        div {
+                            background: COLOR_BG_SECONDARY,
+                            border: "1px solid {COLOR_BORDER}",
+                            border_radius: "8px",
+                            padding: "12px 14px",
+
+                            div {
+                                color: COLOR_TEXT_SECONDARY,
+                                font_size: "12px",
+                                margin_bottom: "5px",
+                                {i18n.read().t("Expired Keys")}
+                            }
+                            div {
+                                color: COLOR_ACCENT,
+                                font_size: "20px",
+                                font_weight: "bold",
+                                "{info.as_ref().and_then(|value| value.expired_keys).unwrap_or(0)}"
                             }
                         }
                     }

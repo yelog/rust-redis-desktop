@@ -1,7 +1,9 @@
 pub mod custom;
+pub mod escaped;
 pub mod preset;
 
 pub use custom::{CustomFormatter, FormatterConfig, FormatterRegistry};
+pub use escaped::{escape_bytes, unescape_text, EscapeError};
 pub use preset::apply_preset_formatter;
 
 #[derive(Debug, Clone, PartialEq)]

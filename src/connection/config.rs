@@ -42,11 +42,20 @@ impl EncryptedField {
 }
 
 fn encrypt_secret(
+    id: &str,
     plaintext: &mut Option<String>,
     encrypted: &mut Option<EncryptedField>,
 ) -> io::Result<()> {
     match plaintext.take() {
         Some(secret) if !secret.is_empty() => {
+            #[cfg(not(test))]
+            if let Ok(entry) = keyring::Entry::new("rust-redis-desktop", id) {
+                if entry.set_password(&secret).is_ok() {
+                    *encrypted = Some(EncryptedField::new(format!("keyring:{id}"), String::new()));
+                    return Ok(());
+                }
+            }
+
             let encrypted_data = encrypt_password(&secret)?;
             *encrypted = Some(EncryptedField::new(
                 encrypted_data.ciphertext,
@@ -72,6 +81,25 @@ fn decrypt_secret(
     if let Some(encrypted) = encrypted {
         if encrypted.is_empty() {
             return Ok(());
+        }
+
+        if let Some(id) = encrypted.ciphertext.strip_prefix("keyring:") {
+            #[cfg(not(test))]
+            {
+                let entry = keyring::Entry::new("rust-redis-desktop", id)
+                    .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))?;
+                let secret = entry
+                    .get_password()
+                    .map_err(|error| io::Error::new(io::ErrorKind::Other, error.to_string()))?;
+                if !secret.is_empty() {
+                    *plaintext = Some(secret);
+                }
+                return Ok(());
+            }
+            #[cfg(test)]
+            {
+                let _ = id;
+            }
         }
 
         let secret = decrypt_password(&encrypted.ciphertext, &encrypted.iv)?;
@@ -280,11 +308,23 @@ impl ConnectionConfig {
     }
 
     pub fn encrypt_credentials(mut self) -> io::Result<Self> {
-        encrypt_secret(&mut self.password, &mut self.encrypted_password)?;
+        encrypt_secret(
+            &format!("{}:redis", self.id),
+            &mut self.password,
+            &mut self.encrypted_password,
+        )?;
 
         if let Some(ssh) = self.ssh.as_mut() {
-            encrypt_secret(&mut ssh.password, &mut ssh.encrypted_password)?;
-            encrypt_secret(&mut ssh.passphrase, &mut ssh.encrypted_passphrase)?;
+            encrypt_secret(
+                &format!("{}:ssh-password", self.id),
+                &mut ssh.password,
+                &mut ssh.encrypted_password,
+            )?;
+            encrypt_secret(
+                &format!("{}:ssh-passphrase", self.id),
+                &mut ssh.passphrase,
+                &mut ssh.encrypted_passphrase,
+            )?;
         }
 
         Ok(self)

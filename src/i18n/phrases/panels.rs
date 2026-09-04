@@ -150,6 +150,10 @@ pub fn extend_zh_cn(m: &mut HashMap<String, String>) {
         ),
         ("Refreshing...", "刷新中..."),
         ("Unable to load server info", "无法获取服务器信息"),
+        ("Cache Hit Rate", "缓存命中率"),
+        ("Evicted Keys", "淘汰 Key"),
+        ("Expired Keys", "过期 Key"),
+        ("Command stats", "命令统计"),
     ] {
         m.insert(key.into(), value.into());
     }

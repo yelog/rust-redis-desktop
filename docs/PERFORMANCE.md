@@ -1,8 +1,10 @@
 # 性能优化报告
 
+> 本文中的性能数字只有在 `docs/performance/key-browser-baseline.md` 中记录了具体环境和可复现实测结果后才能作为产品承诺。当前实现仍会把扫描结果和树模型保存在内存中，不应宣传为恒定内存或千万级 Key 支持。
+
 ## 优化目标
 
-支持 **10万+ keys** 流畅渲染，无卡顿。
+当前目标是让 **10万+ keys** 在可控模式下保持可用，并通过逐步扫描降低一次性加载风险。
 
 ## 已实现的优化
 
@@ -27,7 +29,7 @@ let end_index = (start_index + visible_count + overscan * 2).min(total);
 - **渲染时间**: ~16ms (常数时间)
 - **滚动**: 60fps 流畅
 
-### 2. 增量加载 (Incremental Loading) ✅
+### 2. 增量扫描 (Incremental Scanning) ✅
 
 **问题**：
 - SCAN 一次性加载所有键到内存
@@ -47,10 +49,10 @@ pub async fn scan_keys_with_progress<F>(
 ) -> Result<usize>
 ```
 
-**效果**：
-- **内存峰值**: 恒定，不随键数增长
-- **响应时间**: 首批键立即显示
-- **用户体验**: 可见加载进度
+**当前边界**：
+- Redis 请求按批执行，避免单个请求返回全部 Key。
+- 当前 UI 最终仍会构建完整的内存 Key 树，内存并非恒定。
+- 大库确认、渐进上限和完整磁盘索引正在逐步实施。
 
 ### 3. 性能测试工具 ✅
 
@@ -63,6 +65,8 @@ scripts/generate_test_keys.sh
 
 ## 性能对比
 
+以下历史数字没有统一基准环境和当前版本的可复测证据，暂不作为承诺：
+
 | 指标 | 优化前 | 优化后 | 改进 |
 |------|--------|--------|------|
 | **10万 keys 内存** | ~500MB | ~50MB | **90% ↓** |
@@ -71,6 +75,8 @@ scripts/generate_test_keys.sh
 | **启动时间** | ~500ms | ~100ms | **5x ⚡** |
 
 ## 测试方法
+
+推荐使用 `scripts/generate-benchmark-data.sh` 和 `scripts/measure-key-browser.sh` 生成并记录结果。
 
 ### 1. 生成测试数据
 
@@ -112,7 +118,11 @@ instruments -t "Allocations" ./target/release/rust-redis-desktop
 
 ## 待优化项目
 
-### 优先级：中
+### 优先级：高
+
+- [ ] 大数据库扫描前确认和可恢复的渐进扫描
+- [ ] 使用临时磁盘索引代替完整内存 Key 树
+- [ ] 对 Hash/List/Set/ZSet/Stream 表格执行虚拟行渲染
 
 - [ ] **树节点懒加载**
   - 只在展开时加载子节点
@@ -179,4 +189,4 @@ struct PerformanceMetrics {
 
 ---
 
-**性能优化是一个持续过程**。当前版本已支持 10万+ keys 流畅运行，后续会继续优化更大规模场景。
+**性能优化是一个持续过程**。在完成实测和磁盘索引之前，请将当前版本描述为支持分批扫描和虚拟 Key 列表，而不是恒定内存或千万级场景。

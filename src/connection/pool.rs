@@ -141,6 +141,12 @@ impl RedisConnection {
         self.execute_cmd(&mut cmd).await
     }
 
+    pub async fn set_bytes(&mut self, key: &str, value: &[u8]) -> Result<()> {
+        let mut cmd = redis::cmd("SET");
+        cmd.arg(key).arg(value);
+        self.execute_cmd(&mut cmd).await
+    }
+
     pub async fn del_key(&mut self, key: &str) -> Result<i32> {
         let mut cmd = redis::cmd("DEL");
         cmd.arg(key);

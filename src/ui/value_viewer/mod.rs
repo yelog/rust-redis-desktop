@@ -29,6 +29,7 @@ use self::styles::{
 };
 use self::zset_panel::ZSetPanel;
 use crate::connection::ConnectionPool;
+use crate::formatter::unescape_text;
 use crate::i18n::use_i18n;
 use crate::redis::{KeyInfo, KeyType};
 use crate::serialization::{parse_to_json, SerializationFormat};
@@ -47,6 +48,7 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 const PAGE_SIZE: usize = 100;
+const MAX_LOADED_ROWS: usize = 10_000;
 
 const LARGE_KEY_THRESHOLD: usize = 1000;
 const ROW_CREATE_BG: &str = COLOR_ROW_CREATE_BG;
@@ -57,6 +59,7 @@ pub enum BinaryFormat {
     #[default]
     Hex,
     Base64,
+    EscapedText,
     Image,
     Protobuf,
     JavaSerialized,
@@ -89,6 +92,7 @@ pub fn ValueViewer(
     let set_value = use_signal(Vec::new);
     let zset_value = use_signal(Vec::new);
     let stream_value = use_signal(Vec::new);
+    let stream_loading_more = use_signal(|| false);
     let loading = use_signal(|| false);
     let mut saving = use_signal(|| false);
     let mut is_binary = use_signal(|| false);
@@ -855,6 +859,19 @@ pub fn ValueViewer(
                                                                     "Base64"
                                                                 }
 
+                                                                button {
+                                                                    padding: "4px 8px",
+                                                                    background: if binary_format() == BinaryFormat::EscapedText { COLOR_PRIMARY } else { COLOR_BG_TERTIARY },
+                                                                    color: if binary_format() == BinaryFormat::EscapedText { COLOR_TEXT_CONTRAST } else { COLOR_TEXT },
+                                                                    border: "none",
+                                                                    border_radius: "4px",
+                                                                    cursor: "pointer",
+                                                                    font_size: "12px",
+                                                                    onclick: move |_| binary_format.set(BinaryFormat::EscapedText),
+
+                                                                    "Escaped"
+                                                                }
+
                                                                 {
                                                                     let bytes = binary_bytes();
                                                                     let is_image = detect_image_format(&bytes).is_some();
@@ -1493,7 +1510,7 @@ pub fn ValueViewer(
                                                         EditableField {
                                                                             label: i18n.read().t("Value"),
                                                             value: str_val.clone(),
-                                                            editable: !is_binary(),
+                                                            editable: !is_binary() || binary_format() == BinaryFormat::EscapedText,
                                                             multiline: true,
                                                             on_change: {
                                                                 let pool = pool_for_edit.clone();
@@ -1502,10 +1519,28 @@ pub fn ValueViewer(
                                                                     let pool = pool.clone();
                                                                     let key = key_sig.read().clone();
                                                                     let val = new_val.clone();
+                                                                    let format = binary_format();
                                                                     spawn(async move {
                                                                         saving.set(true);
-                                                                        if pool.set_string_value(&key, &val).await.is_ok() {
-                                                                            string_value.set(val);
+                                                                        let result = if format == BinaryFormat::EscapedText {
+                                                                            match unescape_text(&val) {
+                                                                                Ok(bytes) => pool
+                                                                                    .set_string_bytes(&key, &bytes)
+                                                                                    .await
+                                                                                    .map_err(|error| error.to_string()),
+                                                                                Err(error) => Err(error.to_string()),
+                                                                            }
+                                                                        } else {
+                                                                            pool.set_string_value(&key, &val)
+                                                                                .await
+                                                                                .map_err(|error| error.to_string())
+                                                                        };
+                                                                        if result.is_ok() {
+                                                                            string_value.set(if format == BinaryFormat::EscapedText {
+                                                                                val
+                                                                            } else {
+                                                                                val
+                                                                            });
                                                                             on_refresh.call(());
                                                                         }
                                                                         saving.set(false);
@@ -1683,7 +1718,7 @@ pub fn ValueViewer(
                                                 editing_zset_score,
                                             }
                                         },
-                                        KeyType::Stream => rsx! {
+                                         KeyType::Stream => rsx! {
                                             StreamPanel {
                                                 connection_pool: connection_pool.clone(),
                                                 display_key: display_key.clone(),
@@ -1695,7 +1730,8 @@ pub fn ValueViewer(
                                                 list_value,
                                                 set_value,
                                                 zset_value,
-                                                stream_value,
+                                                 stream_value,
+                                                 stream_loading_more,
                                                 is_binary,
                                                 binary_format,
                                                 serialization_data,
